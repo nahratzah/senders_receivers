@@ -1,4 +1,5 @@
-use crate::traits::{OperationState, ReceiverOf, ReceiverOfError, TypedSender};
+use crate::traits::{BindSender, OperationState, ReceiverOf, ReceiverOfError, TypedSender};
+use core::ops::BitOr;
 
 pub struct Just<Tuple> {
     values: Tuple,
@@ -10,7 +11,10 @@ impl<Tuple> Just<Tuple> {
     }
 }
 
-impl<Tuple> TypedSender<Tuple, ()> for Just<Tuple> {
+impl<Tuple> TypedSender for Just<Tuple> {
+    type Value = Tuple;
+    type Error = ();
+
     fn connect<ReceiverType>(self, receiver: ReceiverType) -> impl OperationState
     where
         ReceiverType: ReceiverOf<Tuple> + ReceiverOfError<()>,
@@ -36,6 +40,17 @@ where
 {
     fn start(self) {
         self.receiver.set_value(self.values)
+    }
+}
+
+impl<Tuple, BindSenderImpl> BitOr<BindSenderImpl> for Just<Tuple>
+where
+    BindSenderImpl: BindSender<Just<Tuple>>,
+{
+    type Output = BindSenderImpl::Output;
+
+    fn bitor(self, rhs: BindSenderImpl) -> Self::Output {
+        rhs.bind(self)
     }
 }
 

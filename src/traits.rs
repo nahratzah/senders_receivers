@@ -17,8 +17,17 @@ pub trait OperationState {
 
 pub trait Sender {}
 
-pub trait TypedSender<Value, Error> {
+pub trait TypedSender {
+    type Value;
+    type Error;
+
     fn connect<ReceiverType>(self, receiver: ReceiverType) -> impl OperationState
     where
-        ReceiverType: ReceiverOf<Value> + ReceiverOfError<Error>;
+        ReceiverType: ReceiverOf<Self::Value> + ReceiverOfError<Self::Error>;
+}
+
+pub trait BindSender<NestedSender: TypedSender>: Sender {
+    type Output: TypedSender;
+
+    fn bind(self, nested: NestedSender) -> Self::Output;
 }

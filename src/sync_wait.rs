@@ -27,11 +27,16 @@ impl<Tuple, Error> ReceiverOfError<Error> for SyncWaitAcceptorReceiver<'_, Tuple
     }
 }
 
-pub fn sync_wait<SenderImpl, Value, Error>(sender: SenderImpl) -> Result<Option<Value>, Error>
+pub fn sync_wait<SenderImpl>(
+    sender: SenderImpl,
+) -> Result<Option<<SenderImpl as TypedSender>::Value>, <SenderImpl as TypedSender>::Error>
 where
-    SenderImpl: TypedSender<Value, Error>,
+    SenderImpl: TypedSender,
 {
-    let mut acceptor: SyncWaitAcceptor<Value, Error> = SyncWaitAcceptor::Uninitialized;
+    let mut acceptor: SyncWaitAcceptor<
+        <SenderImpl as TypedSender>::Value,
+        <SenderImpl as TypedSender>::Error,
+    > = SyncWaitAcceptor::Uninitialized;
 
     let acceptor_receiver = SyncWaitAcceptorReceiver {
         acceptor: &mut acceptor,
