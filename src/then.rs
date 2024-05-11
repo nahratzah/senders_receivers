@@ -22,15 +22,12 @@ where
         }
     }
 
-    pub fn bind<NestedSender, Error>(
+    pub fn bind<Error>(
         self,
-        nested_sender: NestedSender,
-    ) -> impl TypedSender<Out, Error>
-    where
-        NestedSender: TypedSender<ArgTuple, Error>,
-    {
+        nested: impl TypedSender<ArgTuple, Error>,
+    ) -> impl TypedSender<Out, Error> {
         ThenSender {
-            nested: nested_sender,
+            nested,
             fn_impl: self.fn_impl,
             phantom1: PhantomData,
             phantom2: PhantomData,
