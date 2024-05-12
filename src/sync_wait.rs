@@ -1,42 +1,41 @@
-use crate::traits::{OperationState, Receiver, ReceiverOf, ReceiverOfError, TypedSender};
+use crate::errors::Error;
+use crate::traits::{OperationState, Receiver, ReceiverOf, TypedSender};
 
-enum SyncWaitAcceptor<Tuple, Error> {
+enum SyncWaitAcceptor<Tuple> {
     Uninitialized,
     Value(Tuple),
     Error(Error),
     Done,
 }
 
-struct SyncWaitAcceptorReceiver<'a, Tuple, Error> {
-    acceptor: &'a mut SyncWaitAcceptor<Tuple, Error>,
+struct SyncWaitAcceptorReceiver<'a, Tuple> {
+    acceptor: &'a mut SyncWaitAcceptor<Tuple>,
 }
 
-impl<Tuple, Error> Receiver for SyncWaitAcceptorReceiver<'_, Tuple, Error> {
+impl<Tuple> Receiver for SyncWaitAcceptorReceiver<'_, Tuple> {
     fn set_done(self) {
         *self.acceptor = SyncWaitAcceptor::Done;
     }
-}
-impl<Tuple, Error> ReceiverOf<Tuple> for SyncWaitAcceptorReceiver<'_, Tuple, Error> {
-    fn set_value(self, values: Tuple) {
-        *self.acceptor = SyncWaitAcceptor::Value(values);
-    }
-}
-impl<Tuple, Error> ReceiverOfError<Error> for SyncWaitAcceptorReceiver<'_, Tuple, Error> {
+
     fn set_error(self, error: Error) {
         *self.acceptor = SyncWaitAcceptor::Error(error);
     }
 }
 
+impl<Tuple> ReceiverOf<Tuple> for SyncWaitAcceptorReceiver<'_, Tuple> {
+    fn set_value(self, values: Tuple) {
+        *self.acceptor = SyncWaitAcceptor::Value(values);
+    }
+}
+
 pub fn sync_wait<SenderImpl>(
     sender: SenderImpl,
-) -> Result<Option<<SenderImpl as TypedSender>::Value>, <SenderImpl as TypedSender>::Error>
+) -> Result<Option<<SenderImpl as TypedSender>::Value>, Error>
 where
     SenderImpl: TypedSender,
 {
-    let mut acceptor: SyncWaitAcceptor<
-        <SenderImpl as TypedSender>::Value,
-        <SenderImpl as TypedSender>::Error,
-    > = SyncWaitAcceptor::Uninitialized;
+    let mut acceptor: SyncWaitAcceptor<<SenderImpl as TypedSender>::Value> =
+        SyncWaitAcceptor::Uninitialized;
 
     let acceptor_receiver = SyncWaitAcceptorReceiver {
         acceptor: &mut acceptor,

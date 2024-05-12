@@ -1,4 +1,4 @@
-use crate::traits::{BindSender, OperationState, ReceiverOf, ReceiverOfError, TypedSender};
+use crate::traits::{BindSender, OperationState, ReceiverOf, TypedSender};
 use core::ops::BitOr;
 
 pub struct Just<Tuple> {
@@ -13,11 +13,10 @@ impl<Tuple> Just<Tuple> {
 
 impl<Tuple> TypedSender for Just<Tuple> {
     type Value = Tuple;
-    type Error = ();
 
     fn connect<ReceiverType>(self, receiver: ReceiverType) -> impl OperationState
     where
-        ReceiverType: ReceiverOf<Tuple> + ReceiverOfError<()>,
+        ReceiverType: ReceiverOf<Tuple>,
     {
         JustOperationState {
             values: self.values,
@@ -28,7 +27,7 @@ impl<Tuple> TypedSender for Just<Tuple> {
 
 pub struct JustOperationState<Tuple, ReceiverImpl>
 where
-    ReceiverImpl: ReceiverOf<Tuple> + ReceiverOfError<()>,
+    ReceiverImpl: ReceiverOf<Tuple>,
 {
     values: Tuple,
     receiver: ReceiverImpl,
@@ -36,7 +35,7 @@ where
 
 impl<Tuple, ReceiverImpl> OperationState for JustOperationState<Tuple, ReceiverImpl>
 where
-    ReceiverImpl: ReceiverOf<Tuple> + ReceiverOfError<()>,
+    ReceiverImpl: ReceiverOf<Tuple>,
 {
     fn start(self) {
         self.receiver.set_value(self.values)
@@ -61,6 +60,9 @@ mod tests {
 
     #[test]
     fn it_works() {
-        assert_eq!(Ok(Some((4, 5, 6))), sync_wait(Just::new((4, 5, 6))))
+        assert_eq!(
+            Some((4, 5, 6)),
+            sync_wait(Just::new((4, 5, 6))).expect("just() should not fail")
+        )
     }
 }

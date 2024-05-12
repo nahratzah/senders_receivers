@@ -1,14 +1,13 @@
+use crate::errors::Error;
+
+// Common receiver logic.
 pub trait Receiver {
-    // Common receiver logic.
     fn set_done(self);
+    fn set_error(self, error: Error);
 }
 
 pub trait ReceiverOf<Tuple>: Receiver {
     fn set_value(self, values: Tuple);
-}
-
-pub trait ReceiverOfError<Error>: Receiver {
-    fn set_error(self, error: Error);
 }
 
 pub trait OperationState {
@@ -19,11 +18,10 @@ pub trait Sender {}
 
 pub trait TypedSender {
     type Value;
-    type Error;
 
     fn connect<ReceiverType>(self, receiver: ReceiverType) -> impl OperationState
     where
-        ReceiverType: ReceiverOf<Self::Value> + ReceiverOfError<Self::Error>;
+        ReceiverType: ReceiverOf<Self::Value>;
 }
 
 pub trait BindSender<NestedSender: TypedSender>: Sender {
