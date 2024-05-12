@@ -1,17 +1,18 @@
+use crate::errors::IsTuple;
 use crate::traits::{BindSender, OperationState, ReceiverOf, TypedSender};
 use core::ops::BitOr;
 
-pub struct Just<Tuple> {
+pub struct Just<Tuple: IsTuple> {
     values: Tuple,
 }
 
-impl<Tuple> Just<Tuple> {
+impl<Tuple: IsTuple> Just<Tuple> {
     pub fn new(init: Tuple) -> Just<Tuple> {
         Just::<Tuple> { values: init }
     }
 }
 
-impl<Tuple> TypedSender for Just<Tuple> {
+impl<Tuple: IsTuple> TypedSender for Just<Tuple> {
     type Value = Tuple;
 
     fn connect<ReceiverType>(self, receiver: ReceiverType) -> impl OperationState
@@ -25,7 +26,7 @@ impl<Tuple> TypedSender for Just<Tuple> {
     }
 }
 
-pub struct JustOperationState<Tuple, ReceiverImpl>
+pub struct JustOperationState<Tuple: IsTuple, ReceiverImpl>
 where
     ReceiverImpl: ReceiverOf<Tuple>,
 {
@@ -33,7 +34,7 @@ where
     receiver: ReceiverImpl,
 }
 
-impl<Tuple, ReceiverImpl> OperationState for JustOperationState<Tuple, ReceiverImpl>
+impl<Tuple: IsTuple, ReceiverImpl> OperationState for JustOperationState<Tuple, ReceiverImpl>
 where
     ReceiverImpl: ReceiverOf<Tuple>,
 {
@@ -42,7 +43,7 @@ where
     }
 }
 
-impl<Tuple, BindSenderImpl> BitOr<BindSenderImpl> for Just<Tuple>
+impl<Tuple: IsTuple, BindSenderImpl> BitOr<BindSenderImpl> for Just<Tuple>
 where
     BindSenderImpl: BindSender<Just<Tuple>>,
 {

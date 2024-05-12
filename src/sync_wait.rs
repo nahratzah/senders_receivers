@@ -1,18 +1,18 @@
-use crate::errors::Error;
+use crate::errors::{Error, IsTuple};
 use crate::traits::{OperationState, Receiver, ReceiverOf, TypedSender};
 
-enum SyncWaitAcceptor<Tuple> {
+enum SyncWaitAcceptor<Tuple: IsTuple> {
     Uninitialized,
     Value(Tuple),
     Error(Error),
     Done,
 }
 
-struct SyncWaitAcceptorReceiver<'a, Tuple> {
+struct SyncWaitAcceptorReceiver<'a, Tuple: IsTuple> {
     acceptor: &'a mut SyncWaitAcceptor<Tuple>,
 }
 
-impl<Tuple> Receiver for SyncWaitAcceptorReceiver<'_, Tuple> {
+impl<Tuple: IsTuple> Receiver for SyncWaitAcceptorReceiver<'_, Tuple> {
     fn set_done(self) {
         *self.acceptor = SyncWaitAcceptor::Done;
     }
@@ -22,7 +22,7 @@ impl<Tuple> Receiver for SyncWaitAcceptorReceiver<'_, Tuple> {
     }
 }
 
-impl<Tuple> ReceiverOf<Tuple> for SyncWaitAcceptorReceiver<'_, Tuple> {
+impl<Tuple: IsTuple> ReceiverOf<Tuple> for SyncWaitAcceptorReceiver<'_, Tuple> {
     fn set_value(self, values: Tuple) {
         *self.acceptor = SyncWaitAcceptor::Value(values);
     }

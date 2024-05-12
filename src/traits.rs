@@ -1,4 +1,4 @@
-use crate::errors::Error;
+use crate::errors::{Error, IsTuple};
 
 // Common receiver logic.
 pub trait Receiver {
@@ -6,7 +6,7 @@ pub trait Receiver {
     fn set_error(self, error: Error);
 }
 
-pub trait ReceiverOf<Tuple>: Receiver {
+pub trait ReceiverOf<Tuple: IsTuple>: Receiver {
     fn set_value(self, values: Tuple);
 }
 
@@ -17,7 +17,7 @@ pub trait OperationState {
 pub trait Sender {}
 
 pub trait TypedSender {
-    type Value;
+    type Value: IsTuple;
 
     fn connect<ReceiverType>(self, receiver: ReceiverType) -> impl OperationState
     where
