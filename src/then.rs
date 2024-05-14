@@ -1,85 +1,142 @@
-use crate::errors::{IsTuple, NoError};
+use crate::errors::{Error, IsTuple};
+use crate::functor::{Closure, Functor};
 use crate::traits::{BindSender, OperationState, Receiver, ReceiverOf, Sender, TypedSender};
 use core::ops::BitOr;
 use std::marker::PhantomData;
 
-pub struct Then<FnType, ArgTuple: IsTuple, Out: IsTuple, Error>
+pub struct Then<FnType, ArgTuple, Out>
 where
-    FnType: FnOnce(ArgTuple) -> Result<Out, Error>,
-    Error: 'static,
+    FnType: Functor<ArgTuple, Output = Result<Out, Error>>,
+    ArgTuple: IsTuple,
+    Out: IsTuple,
 {
     fn_impl: FnType,
     phantom1: PhantomData<ArgTuple>,
     phantom2: PhantomData<Out>,
-    phantom3: PhantomData<Error>,
 }
 
-impl<FnType, ArgTuple: IsTuple, Out: IsTuple, Error> Then<FnType, ArgTuple, Out, Error>
+impl<FnType, ArgTuple, Out> Then<FnType, ArgTuple, Out>
 where
-    FnType: FnOnce(ArgTuple) -> Result<Out, Error>,
+    FnType: Functor<ArgTuple, Output = Result<Out, Error>>,
+    ArgTuple: IsTuple,
+    Out: IsTuple,
 {
-    pub fn new_err(fn_impl: FnType) -> Then<FnType, ArgTuple, Out, Error> {
+    pub fn new_err(fn_impl: FnType) -> Then<FnType, ArgTuple, Out> {
         Then {
             fn_impl,
             phantom1: PhantomData,
             phantom2: PhantomData,
-            phantom3: PhantomData,
         }
     }
 }
 
-// When we have a function that doesn't return an error, we wrap it, to return an error anyway.
-// (Yeah, it's inefficient, I know.) :/
-type BoxedWrappedFnType<ArgTuple, Out> = Box<dyn FnOnce(ArgTuple) -> Result<Out, NoError>>;
+type ClosureThen<FnType, Out, ArgTuple> =
+    Then<Closure<FnType, Result<Out, Error>, ArgTuple>, ArgTuple, Out>;
 
-impl<ArgTuple: IsTuple, Out: IsTuple>
-    Then<Box<dyn FnOnce(ArgTuple) -> Result<Out, NoError>>, ArgTuple, Out, NoError>
+impl<FnType, ArgTuple, Out> ClosureThen<FnType, Out, ArgTuple>
+where
+    FnType: FnOnce(ArgTuple) -> Result<Out, Error>,
+    ArgTuple: IsTuple,
+    Out: IsTuple,
 {
-    pub fn new<NoErrFnType>(
-        fn_impl: NoErrFnType,
-    ) -> Then<BoxedWrappedFnType<ArgTuple, Out>, ArgTuple, Out, NoError>
-    where
-        NoErrFnType: 'static + FnOnce(ArgTuple) -> Out,
-    {
-        Then {
-            fn_impl: Box::new(move |arg| Ok(fn_impl(arg))),
+    pub fn new_fn_err(fn_impl: FnType) -> ClosureThen<FnType, Out, ArgTuple> {
+        Self::new_err(Closure::new(fn_impl))
+    }
+}
+
+type NoErrThen<FunctorType, Out, ArgTuple> =
+    Then<NoErrFunctor<FunctorType, Out, ArgTuple>, ArgTuple, Out>;
+
+struct NoErrFunctor<FunctorType, Out, ArgTuple>
+where
+    FunctorType: Functor<ArgTuple, Output = Out>,
+    ArgTuple: IsTuple,
+    Out: IsTuple,
+{
+    functor: FunctorType,
+    phantom1: PhantomData<ArgTuple>,
+    phantom2: PhantomData<Out>,
+}
+
+impl<FunctorType, Out, ArgTuple> Functor<ArgTuple> for NoErrFunctor<FunctorType, Out, ArgTuple>
+where
+    FunctorType: Functor<ArgTuple, Output = Out>,
+    ArgTuple: IsTuple,
+    Out: IsTuple,
+{
+    type Output = Result<Out, Error>;
+
+    fn tuple_invoke(self, args: ArgTuple) -> Self::Output {
+        Ok(self.functor.tuple_invoke(args))
+    }
+}
+
+impl<FnImpl, ArgTuple, Out> NoErrThen<FnImpl, Out, ArgTuple>
+where
+    FnImpl: Functor<ArgTuple, Output = Out>,
+    ArgTuple: IsTuple,
+    Out: IsTuple,
+{
+    pub fn new(fn_impl: FnImpl) -> Then<NoErrFunctor<FnImpl, Out, ArgTuple>, ArgTuple, Out> {
+        let fn_impl = NoErrFunctor {
+            functor: fn_impl,
             phantom1: PhantomData,
             phantom2: PhantomData,
-            phantom3: PhantomData,
+        };
+        Then {
+            fn_impl,
+            phantom1: PhantomData,
+            phantom2: PhantomData,
         }
     }
 }
 
-impl<FnType, ArgTuple: IsTuple, Out: IsTuple, Error> Sender for Then<FnType, ArgTuple, Out, Error> where
-    FnType: FnOnce(ArgTuple) -> Result<Out, Error>
+type NoErrClosureThen<FnImpl, Out, ArgTuple> =
+    NoErrThen<Closure<FnImpl, Out, ArgTuple>, Out, ArgTuple>;
+
+impl<FnImpl, ArgTuple, Out> NoErrClosureThen<FnImpl, Out, ArgTuple>
+where
+    FnImpl: FnOnce(ArgTuple) -> Out,
+    ArgTuple: IsTuple,
+    Out: IsTuple,
+{
+    pub fn new_fn(fn_impl: FnImpl) -> NoErrClosureThen<FnImpl, Out, ArgTuple> {
+        Self::new(Closure::new(fn_impl))
+    }
+}
+
+impl<FnType, ArgTuple: IsTuple, Out: IsTuple> Sender for Then<FnType, ArgTuple, Out> where
+    FnType: Functor<ArgTuple, Output = Result<Out, Error>>
 {
 }
 
-impl<FnType, Out: IsTuple, Error, NestedSender> BindSender<NestedSender>
-    for Then<FnType, <NestedSender as TypedSender>::Value, Out, Error>
+impl<FnType, Out, NestedSender> BindSender<NestedSender>
+    for Then<FnType, <NestedSender as TypedSender>::Value, Out>
 where
     NestedSender: TypedSender,
-    FnType: FnOnce(<NestedSender as TypedSender>::Value) -> Result<Out, Error>,
-    <NestedSender as TypedSender>::Value: IsTuple,
+    FnType: Functor<NestedSender::Value, Output = Result<Out, Error>>,
+    NestedSender::Value: IsTuple,
+    Out: IsTuple,
 {
-    type Output = ThenSender<NestedSender, FnType, Out, Error>;
+    type Output = ThenSender<NestedSender, FnType, Out>;
 
     fn bind(self, nested: NestedSender) -> Self::Output {
         ThenSender {
             nested,
             fn_impl: self.fn_impl,
             phantom2: PhantomData,
-            phantom3: PhantomData,
         }
     }
 }
 
-impl<NestedSender, FnType, Out: IsTuple, Error, BindSenderImpl> BitOr<BindSenderImpl>
-    for ThenSender<NestedSender, FnType, Out, Error>
+impl<NestedSender, FnType, Out: IsTuple, BindSenderImpl> BitOr<BindSenderImpl>
+    for ThenSender<NestedSender, FnType, Out>
 where
+    BindSenderImpl: BindSender<ThenSender<NestedSender, FnType, Out>>,
     NestedSender: TypedSender,
-    FnType: FnOnce(<NestedSender as TypedSender>::Value) -> Result<Out, Error>,
-    BindSenderImpl: BindSender<ThenSender<NestedSender, FnType, Out, Error>>,
+    FnType: Functor<NestedSender::Value, Output = Result<Out, Error>>,
+    NestedSender::Value: IsTuple,
+    Out: IsTuple,
 {
     type Output = BindSenderImpl::Output;
 
@@ -88,22 +145,21 @@ where
     }
 }
 
-pub struct ThenSender<NestedSender, FnType, Out: IsTuple, Error>
+pub struct ThenSender<NestedSender, FnType, Out>
 where
     NestedSender: TypedSender,
-    FnType: FnOnce(<NestedSender as TypedSender>::Value) -> Result<Out, Error>,
-    Error: 'static,
+    FnType: Functor<NestedSender::Value, Output = Result<Out, Error>>,
+    Out: IsTuple,
 {
     nested: NestedSender,
     fn_impl: FnType,
     phantom2: PhantomData<Out>,
-    phantom3: PhantomData<Error>,
 }
 
-impl<NestedSender, FnType, Out, Error> TypedSender for ThenSender<NestedSender, FnType, Out, Error>
+impl<NestedSender, FnType, Out> TypedSender for ThenSender<NestedSender, FnType, Out>
 where
     NestedSender: TypedSender,
-    FnType: FnOnce(<NestedSender as TypedSender>::Value) -> Result<Out, Error>,
+    FnType: Functor<NestedSender::Value, Output = Result<Out, Error>>,
     Out: IsTuple,
 {
     type Value = Out;
@@ -117,54 +173,52 @@ where
             fn_impl: self.fn_impl,
             phantom1: PhantomData,
             phantom2: PhantomData,
-            phantom3: PhantomData,
         };
 
         self.nested.connect(wrapped_receiver)
     }
 }
 
-struct ThenWrappedReceiver<ReceiverImpl, FnType, ArgTuple, Out, Error>
+struct ThenWrappedReceiver<ReceiverImpl, FnType, ArgTuple, Out>
 where
     ReceiverImpl: ReceiverOf<Out>,
-    FnType: FnOnce(ArgTuple) -> Result<Out, Error>,
+    FnType: Functor<ArgTuple, Output = Result<Out, Error>>,
+    ArgTuple: IsTuple,
     Out: IsTuple,
-    Error: 'static,
 {
     nested: ReceiverImpl,
     fn_impl: FnType,
     phantom1: PhantomData<ArgTuple>,
     phantom2: PhantomData<Out>,
-    phantom3: PhantomData<Error>,
 }
 
-impl<ReceiverImpl, FnType, ArgTuple, Out, Error> Receiver
-    for ThenWrappedReceiver<ReceiverImpl, FnType, ArgTuple, Out, Error>
+impl<ReceiverImpl, FnType, ArgTuple, Out> Receiver
+    for ThenWrappedReceiver<ReceiverImpl, FnType, ArgTuple, Out>
 where
     ReceiverImpl: ReceiverOf<Out>,
-    FnType: FnOnce(ArgTuple) -> Result<Out, Error>,
+    FnType: Functor<ArgTuple, Output = Result<Out, Error>>,
+    ArgTuple: IsTuple,
     Out: IsTuple,
 {
     fn set_done(self) {
         self.nested.set_done()
     }
 
-    fn set_error(self, error: crate::errors::Error) {
+    fn set_error(self, error: Error) {
         self.nested.set_error(error)
     }
 }
 
-impl<ReceiverImpl, FnType, ArgTuple, Out, Error> ReceiverOf<ArgTuple>
-    for ThenWrappedReceiver<ReceiverImpl, FnType, ArgTuple, Out, Error>
+impl<ReceiverImpl, FnType, ArgTuple, Out> ReceiverOf<ArgTuple>
+    for ThenWrappedReceiver<ReceiverImpl, FnType, ArgTuple, Out>
 where
     ReceiverImpl: ReceiverOf<Out>,
-    FnType: FnOnce(ArgTuple) -> Result<Out, Error>,
+    FnType: Functor<ArgTuple, Output = Result<Out, Error>>,
     ArgTuple: IsTuple,
     Out: IsTuple,
 {
     fn set_value(self, values: ArgTuple) {
-        let fn_impl = self.fn_impl;
-        match fn_impl(values) {
+        match self.fn_impl.tuple_invoke(values) {
             Ok(v) => self.nested.set_value(v),
             Err(e) => self.nested.set_error(Box::new(e)),
         }
@@ -174,6 +228,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::Then;
+    use crate::errors::Error;
     use crate::just::Just;
     use crate::sync_wait::sync_wait;
 
@@ -181,7 +236,7 @@ mod tests {
     fn it_works() {
         assert_eq!(
             Some((6, 7, 8)),
-            sync_wait(Just::new((4, 5, 6)) | Then::new(|(x, y, z)| (x + 2, y + 2, z + 2)))
+            sync_wait(Just::new((4, 5, 6)) | Then::new_fn(|(x, y, z)| (x + 2, y + 2, z + 2)))
                 .expect("should succeed")
         )
     }
@@ -192,7 +247,7 @@ mod tests {
             Some((6, 7, 8)),
             sync_wait(
                 Just::new((4, 5, 6))
-                    | Then::new_err(|(x, y, z)| -> Result<(i32, i32, i32), String> {
+                    | Then::new_fn_err(|(x, y, z)| -> Result<(i32, i32, i32), Error> {
                         Ok((x + 2, y + 2, z + 2))
                     })
             )

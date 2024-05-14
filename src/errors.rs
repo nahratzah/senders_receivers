@@ -1,15 +1,6 @@
 use core::any::Any;
 
-pub trait IsResult {
-    type Type;
-    type Error;
-}
 pub trait IsTuple {}
-
-impl<T, E> IsResult for Result<T, E> {
-    type Type = T;
-    type Error = E;
-}
 
 // Copying the trick from https://doc.rust-lang.org/src/core/tuple.rs.html to implement lots of implementations.
 macro_rules! tuple_impls_ {
@@ -19,15 +10,16 @@ macro_rules! tuple_impls_ {
     };
     // Running criteria (1-ary tuple)
     ($macro:ident $T:ident) => {
-        tuple_impls_!($macro);
+        crate::errors::tuple_impls_!($macro);
         $macro!($T);
     };
     // Running criteria (n-ary tuple)
     ($macro:ident $T:ident $($U:ident)+) => {
-        tuple_impls_!($macro $($U)+);
+        crate::errors::tuple_impls_!($macro $($U)+);
         $macro!($T $($U)+);
     };
 }
+pub(crate) use tuple_impls_;
 
 macro_rules! make_is_tuple {
     () => {
@@ -43,12 +35,11 @@ macro_rules! make_is_tuple {
 
 macro_rules! tuple_impls {
     ($macro:ident) => {
-	tuple_impls_!($macro T1 T2 T3 T4 T5 T6 T7 T8 T9 T10 T11 T12 T13 T14 T15);
+        crate::errors::tuple_impls_!($macro T1 T2 T3 T4 T5 T6 T7 T8 T9 T10 T11 T12 T13 T14 T15);
     };
 }
+pub(crate) use tuple_impls;
 
 tuple_impls!(make_is_tuple);
 
-pub type Error = Box<dyn Any>;
-
-pub struct NoError;
+pub type Error = Box<dyn Any + 'static>;
