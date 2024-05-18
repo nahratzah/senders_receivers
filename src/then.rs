@@ -4,7 +4,7 @@ use crate::traits::{BindSender, OperationState, Receiver, ReceiverOf, Sender, Ty
 use core::ops::BitOr;
 use std::marker::PhantomData;
 
-pub struct Then<FnType, ArgTuple, Out>
+pub struct Then<FnType, Out, ArgTuple>
 where
     FnType: Functor<ArgTuple, Output = Result<Out, Error>>,
     ArgTuple: IsTuple,
@@ -15,13 +15,13 @@ where
     phantom2: PhantomData<Out>,
 }
 
-impl<FnType, ArgTuple, Out> Then<FnType, ArgTuple, Out>
+impl<FnType, Out, ArgTuple> Then<FnType, Out, ArgTuple>
 where
     FnType: Functor<ArgTuple, Output = Result<Out, Error>>,
     ArgTuple: IsTuple,
     Out: IsTuple,
 {
-    pub fn new_err(fn_impl: FnType) -> Then<FnType, ArgTuple, Out> {
+    pub fn new_err(fn_impl: FnType) -> Then<FnType, Out, ArgTuple> {
         Then {
             fn_impl,
             phantom1: PhantomData,
@@ -31,7 +31,7 @@ where
 }
 
 type ClosureThen<FnType, Out, ArgTuple> =
-    Then<Closure<FnType, Result<Out, Error>, ArgTuple>, ArgTuple, Out>;
+    Then<Closure<FnType, Result<Out, Error>, ArgTuple>, Out, ArgTuple>;
 
 impl<FnType, ArgTuple, Out> ClosureThen<FnType, Out, ArgTuple>
 where
@@ -45,7 +45,7 @@ where
 }
 
 type NoErrThen<FunctorType, Out, ArgTuple> =
-    Then<NoErrFunctor<FunctorType, Out, ArgTuple>, ArgTuple, Out>;
+    Then<NoErrFunctor<FunctorType, Out, ArgTuple>, Out, ArgTuple>;
 
 struct NoErrFunctor<FunctorType, Out, ArgTuple>
 where
@@ -77,7 +77,7 @@ where
     ArgTuple: IsTuple,
     Out: IsTuple,
 {
-    pub fn new(fn_impl: FnImpl) -> Then<NoErrFunctor<FnImpl, Out, ArgTuple>, ArgTuple, Out> {
+    pub fn new(fn_impl: FnImpl) -> NoErrThen<FnImpl, Out, ArgTuple> {
         let fn_impl = NoErrFunctor {
             functor: fn_impl,
             phantom1: PhantomData,
@@ -105,13 +105,13 @@ where
     }
 }
 
-impl<FnType, ArgTuple: IsTuple, Out: IsTuple> Sender for Then<FnType, ArgTuple, Out> where
+impl<FnType, ArgTuple: IsTuple, Out: IsTuple> Sender for Then<FnType, Out, ArgTuple> where
     FnType: Functor<ArgTuple, Output = Result<Out, Error>>
 {
 }
 
 impl<FnType, Out, NestedSender> BindSender<NestedSender>
-    for Then<FnType, <NestedSender as TypedSender>::Value, Out>
+    for Then<FnType, Out, <NestedSender as TypedSender>::Value>
 where
     NestedSender: TypedSender,
     FnType: Functor<NestedSender::Value, Output = Result<Out, Error>>,
@@ -179,7 +179,7 @@ where
     }
 }
 
-struct ThenWrappedReceiver<ReceiverImpl, FnType, ArgTuple, Out>
+struct ThenWrappedReceiver<ReceiverImpl, FnType, Out, ArgTuple>
 where
     ReceiverImpl: ReceiverOf<Out>,
     FnType: Functor<ArgTuple, Output = Result<Out, Error>>,
@@ -193,7 +193,7 @@ where
 }
 
 impl<ReceiverImpl, FnType, ArgTuple, Out> Receiver
-    for ThenWrappedReceiver<ReceiverImpl, FnType, ArgTuple, Out>
+    for ThenWrappedReceiver<ReceiverImpl, FnType, Out, ArgTuple>
 where
     ReceiverImpl: ReceiverOf<Out>,
     FnType: Functor<ArgTuple, Output = Result<Out, Error>>,
@@ -210,7 +210,7 @@ where
 }
 
 impl<ReceiverImpl, FnType, ArgTuple, Out> ReceiverOf<ArgTuple>
-    for ThenWrappedReceiver<ReceiverImpl, FnType, ArgTuple, Out>
+    for ThenWrappedReceiver<ReceiverImpl, FnType, Out, ArgTuple>
 where
     ReceiverImpl: ReceiverOf<Out>,
     FnType: Functor<ArgTuple, Output = Result<Out, Error>>,
