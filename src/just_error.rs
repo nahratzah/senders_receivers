@@ -64,16 +64,21 @@ where
 #[cfg(test)]
 mod tests {
     use super::JustError;
+    use crate::errors::ErrorForTesting;
     use crate::sync_wait::sync_wait;
-    use std::any::TypeId;
 
     #[test]
     fn it_works() {
-        match sync_wait(JustError::<()>::new(Box::new(String::from("error")))) {
+        match sync_wait(JustError::<()>::new(Box::new(ErrorForTesting::from(
+            "error",
+        )))) {
             Ok(_) => panic!("expected an error"),
             Err(e) => {
-                assert_eq!(TypeId::of::<String>(), (&*e).type_id());
-                assert_eq!(String::from("error"), *e.downcast_ref::<String>().unwrap());
+                //assert_eq!(TypeId::of::<ErrorForTesting>(), (&*e).type_id());
+                assert_eq!(
+                    ErrorForTesting::from("error"),
+                    *e.downcast_ref::<ErrorForTesting>().unwrap()
+                );
             }
         }
     }

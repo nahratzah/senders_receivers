@@ -224,11 +224,10 @@ where
 #[cfg(test)]
 mod tests {
     use super::Then;
-    use crate::errors::Error;
+    use crate::errors::{Error, ErrorForTesting};
     use crate::just::Just;
     use crate::just_error::JustError;
     use crate::sync_wait::sync_wait;
-    use std::any::TypeId;
 
     #[test]
     fn it_works() {
@@ -253,15 +252,17 @@ mod tests {
     #[test]
     fn errors_from_preceding_sender_are_propagated() {
         match sync_wait(
-            JustError::<()>::new(Box::new(String::from("error")))
+            JustError::<()>::new(Box::new(ErrorForTesting::from("error")))
                 | Then::new_fn(|()| -> (i32, i32) {
                     panic!("expect this function to not be invoked")
                 }),
         ) {
             Ok(_) => panic!("expected an error"),
             Err(e) => {
-                assert_eq!(TypeId::of::<String>(), (&*e).type_id());
-                assert_eq!(String::from("error"), *e.downcast_ref::<String>().unwrap());
+                assert_eq!(
+                    ErrorForTesting::from("error"),
+                    *e.downcast_ref::<ErrorForTesting>().unwrap()
+                );
             }
         }
     }
@@ -271,13 +272,15 @@ mod tests {
         match sync_wait(
             Just::new(())
                 | Then::new_fn_err(|()| -> Result<(), Error> {
-                    Err(Box::new(String::from("error")))
+                    Err(Box::new(ErrorForTesting::from("error")))
                 }),
         ) {
             Ok(_) => panic!("expected an error"),
             Err(e) => {
-                assert_eq!(TypeId::of::<String>(), (&*e).type_id());
-                assert_eq!(String::from("error"), *e.downcast_ref::<String>().unwrap());
+                assert_eq!(
+                    ErrorForTesting::from("error"),
+                    *e.downcast_ref::<ErrorForTesting>().unwrap()
+                );
             }
         }
     }

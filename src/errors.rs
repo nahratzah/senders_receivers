@@ -1,4 +1,4 @@
-use core::any::Any;
+use std::error;
 
 pub trait IsTuple {}
 
@@ -42,4 +42,36 @@ pub(crate) use tuple_impls;
 
 tuple_impls!(make_is_tuple);
 
-pub type Error = Box<dyn Any + 'static>;
+pub type Error = Box<dyn error::Error>;
+
+#[cfg(test)]
+mod for_testing {
+    use std::error;
+    use std::fmt;
+
+    #[derive(Debug, Clone, Eq, PartialEq)]
+    pub struct Error {
+        text: String,
+    }
+
+    impl Error {
+        pub fn new(text: String) -> Error {
+            Error { text }
+        }
+
+        pub fn from(text: &str) -> Error {
+            Self::new(String::from(text))
+        }
+    }
+
+    impl error::Error for Error {}
+
+    impl fmt::Display for Error {
+        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+            write!(f, "{}", self.text)
+        }
+    }
+}
+
+#[cfg(test)]
+pub type ErrorForTesting = for_testing::Error;
