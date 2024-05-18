@@ -2,12 +2,15 @@ use crate::errors::{Error, IsTuple};
 
 /// Common receiver logic.
 pub trait Receiver {
+    // Accept the `done` signal.
     fn set_done(self);
+    // Accept an `error` signal.
     fn set_error(self, error: Error);
 }
 
 /// Declare that this is a receiver that can accept a specific Value type.
 pub trait ReceiverOf<Tuple: IsTuple>: Receiver {
+    // Accept an `value` signal.
     fn set_value(self, values: Tuple);
 }
 
@@ -38,6 +41,7 @@ pub trait TypedSender {
 /// In order to do that, a function is invoked on that sender, with the typed sender as an argument.
 /// BindSender models the binding of the sender with a typed sender.
 pub trait BindSender<NestedSender: TypedSender>: Sender {
+    // Result type of the bind operation.
     type Output: TypedSender;
 
     /// Attach to a typed sender, creating a new typed sender.
