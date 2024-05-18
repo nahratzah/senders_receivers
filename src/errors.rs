@@ -1,5 +1,6 @@
 use std::error;
 
+/// Confirm if a type is a tuple.
 pub trait IsTuple {}
 
 // Copying the trick from https://doc.rust-lang.org/src/core/tuple.rs.html to implement lots of implementations.
@@ -9,14 +10,14 @@ macro_rules! tuple_impls_ {
         $macro!();
     };
     // Running criteria (1-ary tuple)
-    ($macro:ident $T:ident) => {
+    ($macro:ident, $v:ident : $T:ident) => {
         crate::errors::tuple_impls_!($macro);
-        $macro!($T);
+        $macro!($v: $T);
     };
     // Running criteria (n-ary tuple)
-    ($macro:ident $T:ident $($U:ident)+) => {
-        crate::errors::tuple_impls_!($macro $($U)+);
-        $macro!($T $($U)+);
+    ($macro:ident, $v:ident : $T:ident , $($tail_v:ident : $TailT:ident),*) => {
+        crate::errors::tuple_impls_!($macro, $($tail_v: $TailT),*);
+        $macro!($v: $T, $($tail_v: $TailT),*);
     };
 }
 pub(crate) use tuple_impls_;
@@ -25,17 +26,19 @@ macro_rules! make_is_tuple {
     () => {
         impl IsTuple for () {}
     };
-    ($T:ident) => {
+    ($v:ident : $T:ident) => {
         impl<$T> IsTuple for ($T,) {}
     };
-    ($T:ident $($U:ident)+) => {
-        impl<$T, $($U),+> IsTuple for ($T, $($U),+) {}
+    ($($v:ident: $T:ident),+) => {
+        impl<$($T),+> IsTuple for ($($T),+) {}
     };
 }
 
+/// This macro invokes another macro repeatedly, each time with one more `v: T` pair.
+/// This is used to generate tuple specializations.
 macro_rules! tuple_impls {
     ($macro:ident) => {
-        crate::errors::tuple_impls_!($macro T1 T2 T3 T4 T5 T6 T7 T8 T9 T10 T11 T12 T13 T14 T15);
+        crate::errors::tuple_impls_!($macro, v1: T1, v2: T2, v3: T3, v4: T4, v5: T5, v6: T6, v7: T7, v8: T8, v9: T9, v10: T10, v11: T11, v12: T12, v13: T13, v14: T14, v15: T15, v16: T16);
     };
 }
 pub(crate) use tuple_impls;
@@ -49,6 +52,7 @@ mod for_testing {
     use std::error;
     use std::fmt;
 
+    /// An implementation of Error, used during testing.
     #[derive(Debug, Clone, Eq, PartialEq)]
     pub struct Error {
         text: String,

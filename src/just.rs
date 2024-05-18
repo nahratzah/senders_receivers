@@ -2,11 +2,24 @@ use crate::errors::IsTuple;
 use crate::traits::{BindSender, OperationState, ReceiverOf, TypedSender};
 use core::ops::BitOr;
 
+/// A typed-sender that holds a tuple of values.
+///
+/// Typically, this is the starting point of a sender chain.
+///
+/// ```
+/// use senders_receivers::{Just, sync_wait};
+///
+/// let sender = Just::new((1, 2, 3));  // Create a typed sender returning a tuple of three values.
+/// assert_eq!(
+///     (1, 2, 3),
+///     sync_wait(sender).unwrap().unwrap());
+/// ```
 pub struct Just<Tuple: IsTuple> {
     values: Tuple,
 }
 
 impl<Tuple: IsTuple> Just<Tuple> {
+    /// Create a new typed sender, that emits the `init` value.
     pub fn new(init: Tuple) -> Just<Tuple> {
         Just::<Tuple> { values: init }
     }

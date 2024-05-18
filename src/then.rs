@@ -1,9 +1,33 @@
 use crate::errors::{Error, IsTuple};
-use crate::functor::{Closure, Functor};
+use crate::functor::{Closure, Functor, NoErrFunctor};
 use crate::traits::{BindSender, OperationState, Receiver, ReceiverOf, Sender, TypedSender};
 use core::ops::BitOr;
 use std::marker::PhantomData;
 
+/// A then operation takes the current `value` signal, and transforms it in some way.
+/// The result of the function is the new `value` signal.
+///
+/// To create a Then sender from a function/closure, use:
+/// ```
+/// use senders_receivers::{Error, Just, Then, sync_wait};
+///
+/// // If using a function that returns a tuple:
+/// let myFn = |(x, y, z): (i32, i32, i32)| (x + y + z,);
+/// let sender = Just::new((1, 2, 3)) | Then::new_fn(myFn);
+/// assert_eq!(
+///     (6,),
+///     sync_wait(sender).unwrap().unwrap());
+///
+/// // If using a function that returns a Result:
+/// let myFn = |(x,)| -> Result<(i32,), Error> { Ok((x,)) };
+/// let sender = Just::new((17,)) | Then::new_fn_err(myFn);  // if function returns a result
+/// assert_eq!(
+///     (17,),
+///     sync_wait(sender).unwrap().unwrap());
+/// ```
+///
+/// You probably don't want the non `_fn` versions of those functions:
+/// those operate on functors.
 pub struct Then<FnType, Out, ArgTuple>
 where
     FnType: Functor<ArgTuple, Output = Result<Out, Error>>,
@@ -21,6 +45,7 @@ where
     ArgTuple: IsTuple,
     Out: IsTuple,
 {
+    /// Create a new Then operation, using a functor that returns an error.
     pub fn new_err(fn_impl: FnType) -> Then<FnType, Out, ArgTuple> {
         Then {
             fn_impl,
@@ -39,6 +64,9 @@ where
     ArgTuple: IsTuple,
     Out: IsTuple,
 {
+    /// Create a new Then operation, using the specified function.
+    /// Function must return a `Result`.
+    /// If the returned result holds an error, that'll be propagated via the error signal.
     pub fn new_fn_err(fn_impl: FnType) -> ClosureThen<FnType, Out, ArgTuple> {
         Self::new_err(Closure::new(fn_impl))
     }
@@ -47,43 +75,16 @@ where
 type NoErrThen<FunctorType, Out, ArgTuple> =
     Then<NoErrFunctor<FunctorType, Out, ArgTuple>, Out, ArgTuple>;
 
-struct NoErrFunctor<FunctorType, Out, ArgTuple>
-where
-    FunctorType: Functor<ArgTuple, Output = Out>,
-    ArgTuple: IsTuple,
-    Out: IsTuple,
-{
-    functor: FunctorType,
-    phantom1: PhantomData<ArgTuple>,
-    phantom2: PhantomData<Out>,
-}
-
-impl<FunctorType, Out, ArgTuple> Functor<ArgTuple> for NoErrFunctor<FunctorType, Out, ArgTuple>
-where
-    FunctorType: Functor<ArgTuple, Output = Out>,
-    ArgTuple: IsTuple,
-    Out: IsTuple,
-{
-    type Output = Result<Out, Error>;
-
-    fn tuple_invoke(self, args: ArgTuple) -> Self::Output {
-        Ok(self.functor.tuple_invoke(args))
-    }
-}
-
 impl<FnImpl, Out, ArgTuple> NoErrThen<FnImpl, Out, ArgTuple>
 where
     FnImpl: Functor<ArgTuple, Output = Out>,
     ArgTuple: IsTuple,
     Out: IsTuple,
 {
+    /// Create a new then operation, from a functor.
+    /// The functor should return a tuple.
     pub fn new(fn_impl: FnImpl) -> NoErrThen<FnImpl, Out, ArgTuple> {
-        let fn_impl = NoErrFunctor {
-            functor: fn_impl,
-            phantom1: PhantomData,
-            phantom2: PhantomData,
-        };
-        Self::new_err(fn_impl)
+        Self::new_err(NoErrFunctor::new(fn_impl))
     }
 }
 
@@ -96,6 +97,8 @@ where
     ArgTuple: IsTuple,
     Out: IsTuple,
 {
+    /// Create a new then operation, from a function/closure.
+    /// The function/closure should return a tuple.
     pub fn new_fn(fn_impl: FnImpl) -> NoErrClosureThen<FnImpl, Out, ArgTuple> {
         Self::new(Closure::new(fn_impl))
     }
@@ -125,7 +128,7 @@ where
     }
 }
 
-impl<NestedSender, FnType, Out: IsTuple, BindSenderImpl> BitOr<BindSenderImpl>
+impl<NestedSender, FnType, Out, BindSenderImpl> BitOr<BindSenderImpl>
     for ThenSender<NestedSender, FnType, Out>
 where
     BindSenderImpl: BindSender<ThenSender<NestedSender, FnType, Out>>,

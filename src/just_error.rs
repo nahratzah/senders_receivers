@@ -3,12 +3,28 @@ use crate::traits::{BindSender, OperationState, ReceiverOf, TypedSender};
 use core::ops::BitOr;
 use std::marker::PhantomData;
 
+/// A typed sender that always generates an error.
+///
+/// Example:
+/// ```
+/// use senders_receivers::{JustError, sync_wait};
+///
+/// fn example(someError: impl std::error::Error + 'static) {
+///     // The `::<(i32, i32)>` turbo-fish is to declare the value-type of the created sender.
+///     let sender = JustError::<(i32, i32)>::new(Box::new(someError));
+///     match sync_wait(sender) {
+///         Ok(_) => panic!("there won't be a value"),
+///         Err(e) => println!("{:?}", e),  // `someError` ends up in `e`
+///     };
+/// }
+/// ```
 pub struct JustError<Tuple: IsTuple> {
     phantom: PhantomData<Tuple>,
     error: Error,
 }
 
 impl<Tuple: IsTuple> JustError<Tuple> {
+    /// Create a new typed sender that'll yield an error.
     pub fn new(error: Error) -> JustError<Tuple> {
         JustError {
             error,

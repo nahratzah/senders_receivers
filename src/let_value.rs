@@ -1,9 +1,36 @@
 use crate::errors::{Error, IsTuple};
-use crate::functor::{Closure, Functor};
+use crate::functor::{Closure, Functor, NoErrFunctor};
 use crate::traits::{BindSender, OperationState, Receiver, ReceiverOf, Sender, TypedSender};
 use core::ops::BitOr;
 use std::marker::PhantomData;
 
+/// Create a let-value sender.
+///
+/// A let-value sender is a sender, which, upon receiving a value, invokes a function.
+/// The function returns a new typed sender, which will be played out in this place of the chain.
+///
+/// Example:
+/// ```
+/// use senders_receivers::{Just, LetValue, sync_wait};
+///
+/// // If using a function that returns a sender:
+/// let sender = Just::new((String::from("world"),))
+///              | LetValue::new_fn(|(name,)| {
+///                  Just::new((format!("Hello {}!", name),))
+///              });
+/// assert_eq!(
+///     (String::from("Hello world!"),),
+///     sync_wait(sender).unwrap().unwrap());
+///
+/// // If using a function that returns a Result:
+/// let sender = Just::new((String::from("world"),))
+///              | LetValue::new_fn_err(|(name,)| {
+///                  Ok(Just::new((format!("Hello {}!", name),)))
+///              });
+/// assert_eq!(
+///     (String::from("Hello world!"),),
+///     sync_wait(sender).unwrap().unwrap());
+/// ```
 pub struct LetValue<FnType, Out, ArgTuple>
 where
     FnType: Functor<ArgTuple, Output = Result<Out, Error>>,
@@ -47,30 +74,6 @@ where
 type NoErrLetValue<FunctorType, Out, ArgTuple> =
     LetValue<NoErrFunctor<FunctorType, Out, ArgTuple>, Out, ArgTuple>;
 
-struct NoErrFunctor<FunctorType, Out, ArgTuple>
-where
-    FunctorType: Functor<ArgTuple, Output = Out>,
-    ArgTuple: IsTuple,
-    Out: TypedSender,
-{
-    functor: FunctorType,
-    phantom1: PhantomData<ArgTuple>,
-    phantom2: PhantomData<Out>,
-}
-
-impl<FunctorType, Out, ArgTuple> Functor<ArgTuple> for NoErrFunctor<FunctorType, Out, ArgTuple>
-where
-    FunctorType: Functor<ArgTuple, Output = Out>,
-    ArgTuple: IsTuple,
-    Out: TypedSender,
-{
-    type Output = Result<Out, Error>;
-
-    fn tuple_invoke(self, args: ArgTuple) -> Self::Output {
-        Ok(self.functor.tuple_invoke(args))
-    }
-}
-
 impl<FnImpl, Out, ArgTuple> NoErrLetValue<FnImpl, Out, ArgTuple>
 where
     FnImpl: Functor<ArgTuple, Output = Out>,
@@ -78,12 +81,7 @@ where
     Out: TypedSender,
 {
     pub fn new(fn_impl: FnImpl) -> NoErrLetValue<FnImpl, Out, ArgTuple> {
-        let fn_impl = NoErrFunctor {
-            functor: fn_impl,
-            phantom1: PhantomData,
-            phantom2: PhantomData,
-        };
-        Self::new_err(fn_impl)
+        Self::new_err(NoErrFunctor::new(fn_impl))
     }
 }
 

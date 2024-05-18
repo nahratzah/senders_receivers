@@ -28,6 +28,24 @@ impl<Tuple: IsTuple> ReceiverOf<Tuple> for SyncWaitAcceptorReceiver<'_, Tuple> {
     }
 }
 
+/// Execute a typed sender, and yield the outcome of the operation.
+///
+/// The return type is a `Result<Option<..>, Error>`.  
+/// If the typed sender yields an error, it'll be in the error position of the Result.  
+/// Otherwise, if the operation is canceled (`done` signal), an empty Option will be returned.  
+/// Otherwise the operation succeeds, and an `Ok(Some(..))` is returned.
+///
+/// Example:
+/// ```
+/// use senders_receivers::{Just, sync_wait};
+///
+/// let sender = Just::new(("bla",));
+/// match sync_wait(sender) {
+///     Err(e) => println!("error signal: {:?}", e),
+///     Ok(None) => println!("done signal"),
+///     Ok(Some(tuple)) => println!("value signal: {:?}", tuple), // tuple: &str "bla"
+/// };
+/// ```
 pub fn sync_wait<SenderImpl>(
     sender: SenderImpl,
 ) -> Result<Option<<SenderImpl as TypedSender>::Value>, Error>

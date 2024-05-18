@@ -1,12 +1,26 @@
-use crate::errors::IsTuple;
+//! The `functors` mod holds functions.
+//!
+//! The reason we need those, is because we need to have composible functions.
+//! The `Functor` trait provides something we can invoke.
+
+use crate::errors::{Error, IsTuple};
 use std::marker::PhantomData;
 
+/// A functor can be invoked.
+///
+/// Args represents a tuple of arguments.
 pub trait Functor<Args>
 where
     Args: IsTuple,
 {
+    /// The result type of the functor.
     type Output;
 
+    /// Invoke this functor.
+    ///
+    /// The function name is `tuple_invoke`, because:
+    /// - we invoke it with tuple only;
+    /// - I wanted a name that wouldn't clash, if in the future variadic traits became a thing.
     fn tuple_invoke(self, args: Args) -> Self::Output;
 
     fn then(self, next_fn: impl Functor<(Self::Output,)>) -> impl Functor<Args>
@@ -21,6 +35,9 @@ where
     }
 }
 
+/// Composition functor.
+///
+/// A composition functor takes two functors (`f` and `g`, and creates a new functor `n`, such that: `n(x) -> g(f(x))`.
 struct Composition<FirstFn, NextFn, Args>
 where
     Args: IsTuple,
@@ -46,6 +63,9 @@ where
     }
 }
 
+/// Functor for a function/closure.
+///
+/// The functor will delegate to the contained function.
 pub struct Closure<FnType, Out, Args>
 where
     Args: IsTuple,
@@ -87,20 +107,107 @@ where
     }
 }
 
-//macro_rules! tuple_invoke {
-//    ($($i:ident)*) => {
-//        impl<FnType, Out, $($i),*> Functor<($($i),*)> for Closure<FnType, Out, $($i),*>
-//        where
-//            FnType: FnOnce($($i),*) -> Out
-//        {
-//            type Output = Out;
+// If we had `Fn`-family traits, we could do this:
 //
-//            fn invoke(self, ($(concat_idents!(value_for_, $i)),*): ($($i),*)) -> Self::Output {
-//                let fn_impl = self.fn_impl;
-//                fn_impl($(concat_idents!(value_for_, $i)),*)
-//            }
-//        }
-//    };
-//}
+// ```
+// pub struct XClosure<FnType, Out, Args>
+// where
+//     Args: IsTuple+std::marker::Tuple,
+//     FnType: FnOnce<Args, Output=Out>,
+// {
+//     phantom_args: PhantomData<Args>,
+//     phantom_out: PhantomData<Out>,
+//     fn_impl: FnType,
+// }
 //
-//crate::errors::tuple_impls!(tuple_invoke);
+// macro_rules! closure_invoke {
+//     () => {
+//         impl<FnType, Out> Functor<()> for XClosure<FnType, Out, ()>
+//         where
+//             (): IsTuple,
+//             FnType: FnOnce() -> Out
+//         {
+//             type Output = Out;
+//
+//             fn tuple_invoke(self, _: ()) -> Self::Output {
+//                 let fn_impl = self.fn_impl;
+//                 fn_impl()
+//             }
+//         }
+//     };
+//     ($i:ident : $T:ident) => {
+//         impl<FnType, Out, $T> Functor<($T,)> for XClosure<FnType, Out, ($T,)>
+//         where
+//             (): IsTuple,
+//             FnType: FnOnce($T) -> Out
+//         {
+//             type Output = Out;
+//
+//             fn tuple_invoke(self, $i: ($T,)) -> Self::Output {
+//                 let fn_impl = self.fn_impl;
+//                 fn_impl($i)
+//             }
+//         }
+//     };
+//     ($i:ident : $T:ident) => {
+//         panic!("Please don't!");
+//     };
+//     ($($i:ident : $T:ident),*) => {
+//         impl<FnType, Out, $($T),*> Functor<($($T),*)> for XClosure<FnType, Out, ($($T),*)>
+//         where
+//             ($($T),*): IsTuple,
+//             FnType: FnOnce($($T),*) -> Out
+//         {
+//             type Output = Out;
+//
+//             fn tuple_invoke(self, ($($i),*): ($($T),*)) -> Self::Output {
+//                 let fn_impl = self.fn_impl;
+//                 fn_impl($($i),*)
+//             }
+//         }
+//     };
+// }
+//
+// crate::errors::tuple_impls!(closure_invoke);
+// ```
+
+/// Wrapper for functors that don't return a `Result`.
+/// This wrapper wraps the functor into something that will return a `Result`.
+///
+/// We need to use an actual struct, because we need to declare types.
+/// With closures, we cannot capture the closure type, and thus not create a specialization.
+pub struct NoErrFunctor<FunctorType, Out, ArgTuple>
+where
+    FunctorType: Functor<ArgTuple, Output = Out>,
+    ArgTuple: IsTuple,
+{
+    functor: FunctorType,
+    phantom1: PhantomData<ArgTuple>,
+    phantom2: PhantomData<Out>,
+}
+
+impl<FunctorType, Out, ArgTuple> NoErrFunctor<FunctorType, Out, ArgTuple>
+where
+    FunctorType: Functor<ArgTuple, Output = Out>,
+    ArgTuple: IsTuple,
+{
+    pub fn new(functor: FunctorType) -> NoErrFunctor<FunctorType, Out, ArgTuple> {
+        NoErrFunctor {
+            functor,
+            phantom1: PhantomData,
+            phantom2: PhantomData,
+        }
+    }
+}
+
+impl<FunctorType, Out, ArgTuple> Functor<ArgTuple> for NoErrFunctor<FunctorType, Out, ArgTuple>
+where
+    FunctorType: Functor<ArgTuple, Output = Out>,
+    ArgTuple: IsTuple,
+{
+    type Output = Result<Out, Error>;
+
+    fn tuple_invoke(self, args: ArgTuple) -> Self::Output {
+        Ok(self.functor.tuple_invoke(args))
+    }
+}
