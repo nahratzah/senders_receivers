@@ -4,25 +4,25 @@ use crate::traits::{BindSender, OperationState, Receiver, ReceiverOf, Sender, Ty
 use core::ops::BitOr;
 use std::marker::PhantomData;
 
-pub struct Then<FnType, Out, ArgTuple>
+pub struct LetValue<FnType, Out, ArgTuple>
 where
     FnType: Functor<ArgTuple, Output = Result<Out, Error>>,
     ArgTuple: IsTuple,
-    Out: IsTuple,
+    Out: TypedSender,
 {
     fn_impl: FnType,
     phantom1: PhantomData<ArgTuple>,
     phantom2: PhantomData<Out>,
 }
 
-impl<FnType, Out, ArgTuple> Then<FnType, Out, ArgTuple>
+impl<FnType, Out, ArgTuple> LetValue<FnType, Out, ArgTuple>
 where
     FnType: Functor<ArgTuple, Output = Result<Out, Error>>,
     ArgTuple: IsTuple,
-    Out: IsTuple,
+    Out: TypedSender,
 {
-    pub fn new_err(fn_impl: FnType) -> Then<FnType, Out, ArgTuple> {
-        Then {
+    pub fn new_err(fn_impl: FnType) -> LetValue<FnType, Out, ArgTuple> {
+        LetValue {
             fn_impl,
             phantom1: PhantomData,
             phantom2: PhantomData,
@@ -30,28 +30,28 @@ where
     }
 }
 
-type ClosureThen<FnType, Out, ArgTuple> =
-    Then<Closure<FnType, Result<Out, Error>, ArgTuple>, Out, ArgTuple>;
+type ClosureLetValue<FnType, Out, ArgTuple> =
+    LetValue<Closure<FnType, Result<Out, Error>, ArgTuple>, Out, ArgTuple>;
 
-impl<FnType, ArgTuple, Out> ClosureThen<FnType, Out, ArgTuple>
+impl<FnType, Out, ArgTuple> ClosureLetValue<FnType, Out, ArgTuple>
 where
     FnType: FnOnce(ArgTuple) -> Result<Out, Error>,
     ArgTuple: IsTuple,
-    Out: IsTuple,
+    Out: TypedSender,
 {
-    pub fn new_fn_err(fn_impl: FnType) -> ClosureThen<FnType, Out, ArgTuple> {
+    pub fn new_fn_err(fn_impl: FnType) -> ClosureLetValue<FnType, Out, ArgTuple> {
         Self::new_err(Closure::new(fn_impl))
     }
 }
 
-type NoErrThen<FunctorType, Out, ArgTuple> =
-    Then<NoErrFunctor<FunctorType, Out, ArgTuple>, Out, ArgTuple>;
+type NoErrLetValue<FunctorType, Out, ArgTuple> =
+    LetValue<NoErrFunctor<FunctorType, Out, ArgTuple>, Out, ArgTuple>;
 
 struct NoErrFunctor<FunctorType, Out, ArgTuple>
 where
     FunctorType: Functor<ArgTuple, Output = Out>,
     ArgTuple: IsTuple,
-    Out: IsTuple,
+    Out: TypedSender,
 {
     functor: FunctorType,
     phantom1: PhantomData<ArgTuple>,
@@ -62,7 +62,7 @@ impl<FunctorType, Out, ArgTuple> Functor<ArgTuple> for NoErrFunctor<FunctorType,
 where
     FunctorType: Functor<ArgTuple, Output = Out>,
     ArgTuple: IsTuple,
-    Out: IsTuple,
+    Out: TypedSender,
 {
     type Output = Result<Out, Error>;
 
@@ -71,13 +71,13 @@ where
     }
 }
 
-impl<FnImpl, Out, ArgTuple> NoErrThen<FnImpl, Out, ArgTuple>
+impl<FnImpl, Out, ArgTuple> NoErrLetValue<FnImpl, Out, ArgTuple>
 where
     FnImpl: Functor<ArgTuple, Output = Out>,
     ArgTuple: IsTuple,
-    Out: IsTuple,
+    Out: TypedSender,
 {
-    pub fn new(fn_impl: FnImpl) -> NoErrThen<FnImpl, Out, ArgTuple> {
+    pub fn new(fn_impl: FnImpl) -> NoErrLetValue<FnImpl, Out, ArgTuple> {
         let fn_impl = NoErrFunctor {
             functor: fn_impl,
             phantom1: PhantomData,
@@ -87,37 +87,37 @@ where
     }
 }
 
-type NoErrClosureThen<FnImpl, Out, ArgTuple> =
-    NoErrThen<Closure<FnImpl, Out, ArgTuple>, Out, ArgTuple>;
+type NoErrClosureLetValue<FnImpl, Out, ArgTuple> =
+    NoErrLetValue<Closure<FnImpl, Out, ArgTuple>, Out, ArgTuple>;
 
-impl<FnImpl, Out, ArgTuple> NoErrClosureThen<FnImpl, Out, ArgTuple>
+impl<FnImpl, Out, ArgTuple> NoErrClosureLetValue<FnImpl, Out, ArgTuple>
 where
     FnImpl: FnOnce(ArgTuple) -> Out,
     ArgTuple: IsTuple,
-    Out: IsTuple,
+    Out: TypedSender,
 {
-    pub fn new_fn(fn_impl: FnImpl) -> NoErrClosureThen<FnImpl, Out, ArgTuple> {
+    pub fn new_fn(fn_impl: FnImpl) -> NoErrClosureLetValue<FnImpl, Out, ArgTuple> {
         Self::new(Closure::new(fn_impl))
     }
 }
 
-impl<FnType, Out: IsTuple, ArgTuple: IsTuple> Sender for Then<FnType, Out, ArgTuple> where
+impl<FnType, Out: TypedSender, ArgTuple: IsTuple> Sender for LetValue<FnType, Out, ArgTuple> where
     FnType: Functor<ArgTuple, Output = Result<Out, Error>>
 {
 }
 
 impl<FnType, Out, NestedSender> BindSender<NestedSender>
-    for Then<FnType, Out, <NestedSender as TypedSender>::Value>
+    for LetValue<FnType, Out, <NestedSender as TypedSender>::Value>
 where
     NestedSender: TypedSender,
     FnType: Functor<NestedSender::Value, Output = Result<Out, Error>>,
     NestedSender::Value: IsTuple,
-    Out: IsTuple,
+    Out: TypedSender,
 {
-    type Output = ThenSender<NestedSender, FnType, Out>;
+    type Output = LetValueSender<NestedSender, FnType, Out>;
 
     fn bind(self, nested: NestedSender) -> Self::Output {
-        ThenSender {
+        LetValueSender {
             nested,
             fn_impl: self.fn_impl,
             phantom2: PhantomData,
@@ -125,14 +125,14 @@ where
     }
 }
 
-impl<NestedSender, FnType, Out: IsTuple, BindSenderImpl> BitOr<BindSenderImpl>
-    for ThenSender<NestedSender, FnType, Out>
+impl<NestedSender, FnType, Out: TypedSender, BindSenderImpl> BitOr<BindSenderImpl>
+    for LetValueSender<NestedSender, FnType, Out>
 where
-    BindSenderImpl: BindSender<ThenSender<NestedSender, FnType, Out>>,
+    BindSenderImpl: BindSender<LetValueSender<NestedSender, FnType, Out>>,
     NestedSender: TypedSender,
     FnType: Functor<NestedSender::Value, Output = Result<Out, Error>>,
     NestedSender::Value: IsTuple,
-    Out: IsTuple,
+    Out: TypedSender,
 {
     type Output = BindSenderImpl::Output;
 
@@ -141,46 +141,45 @@ where
     }
 }
 
-pub struct ThenSender<NestedSender, FnType, Out>
+pub struct LetValueSender<NestedSender, FnType, Out>
 where
     NestedSender: TypedSender,
     FnType: Functor<NestedSender::Value, Output = Result<Out, Error>>,
-    Out: IsTuple,
+    Out: TypedSender,
 {
     nested: NestedSender,
     fn_impl: FnType,
     phantom2: PhantomData<Out>,
 }
 
-impl<NestedSender, FnType, Out> TypedSender for ThenSender<NestedSender, FnType, Out>
+impl<NestedSender, FnType, Out> TypedSender for LetValueSender<NestedSender, FnType, Out>
 where
     NestedSender: TypedSender,
     FnType: Functor<NestedSender::Value, Output = Result<Out, Error>>,
-    Out: IsTuple,
+    Out: TypedSender,
 {
-    type Value = Out;
+    type Value = Out::Value;
 
     fn connect<ReceiverImpl>(self, receiver: ReceiverImpl) -> impl OperationState
     where
-        ReceiverImpl: ReceiverOf<Out>,
+        ReceiverImpl: ReceiverOf<Out::Value>,
     {
-        let wrapped_receiver = ThenWrappedReceiver {
+        let wrapped_receiver = LetValueWrappedReceiver {
             nested: receiver,
             fn_impl: self.fn_impl,
             phantom1: PhantomData,
             phantom2: PhantomData,
         };
-
         self.nested.connect(wrapped_receiver)
     }
 }
 
-struct ThenWrappedReceiver<ReceiverImpl, FnType, Out, ArgTuple>
+struct LetValueWrappedReceiver<ReceiverImpl, FnType, Out, ArgTuple>
 where
-    ReceiverImpl: ReceiverOf<Out>,
+    ReceiverImpl: ReceiverOf<Out::Value>,
     FnType: Functor<ArgTuple, Output = Result<Out, Error>>,
     ArgTuple: IsTuple,
-    Out: IsTuple,
+    Out: TypedSender,
 {
     nested: ReceiverImpl,
     fn_impl: FnType,
@@ -188,13 +187,13 @@ where
     phantom2: PhantomData<Out>,
 }
 
-impl<ReceiverImpl, FnType, ArgTuple, Out> Receiver
-    for ThenWrappedReceiver<ReceiverImpl, FnType, Out, ArgTuple>
+impl<ReceiverImpl, FnType, Out, ArgTuple> Receiver
+    for LetValueWrappedReceiver<ReceiverImpl, FnType, Out, ArgTuple>
 where
-    ReceiverImpl: ReceiverOf<Out>,
+    ReceiverImpl: ReceiverOf<Out::Value>,
     FnType: Functor<ArgTuple, Output = Result<Out, Error>>,
     ArgTuple: IsTuple,
-    Out: IsTuple,
+    Out: TypedSender,
 {
     fn set_done(self) {
         self.nested.set_done();
@@ -205,17 +204,20 @@ where
     }
 }
 
-impl<ReceiverImpl, FnType, ArgTuple, Out> ReceiverOf<ArgTuple>
-    for ThenWrappedReceiver<ReceiverImpl, FnType, Out, ArgTuple>
+impl<ReceiverImpl, FnType, Out, ArgTuple> ReceiverOf<ArgTuple>
+    for LetValueWrappedReceiver<ReceiverImpl, FnType, Out, ArgTuple>
 where
-    ReceiverImpl: ReceiverOf<Out>,
+    ReceiverImpl: ReceiverOf<Out::Value>,
     FnType: Functor<ArgTuple, Output = Result<Out, Error>>,
     ArgTuple: IsTuple,
-    Out: IsTuple,
+    Out: TypedSender,
 {
     fn set_value(self, values: ArgTuple) {
         match self.fn_impl.tuple_invoke(values) {
-            Ok(v) => self.nested.set_value(v),
+            Ok(sender) => {
+                let nested_state = sender.connect(self.nested);
+                nested_state.start()
+            }
             Err(e) => self.nested.set_error(e),
         };
     }
@@ -223,7 +225,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::Then;
+    use super::LetValue;
     use crate::errors::Error;
     use crate::just::Just;
     use crate::just_error::JustError;
@@ -234,8 +236,14 @@ mod tests {
     fn it_works() {
         assert_eq!(
             Some((6, 7, 8)),
-            sync_wait(Just::new((4, 5, 6)) | Then::new_fn(|(x, y, z)| (x + 2, y + 2, z + 2)))
-                .expect("should succeed")
+            sync_wait(
+                Just::new((6,))
+                    | LetValue::new_fn(|(x,)| {
+                        assert_eq!(x, 6);
+                        Just::new((x, 7, 8))
+                    })
+            )
+            .expect("should succeed")
         )
     }
 
@@ -243,10 +251,8 @@ mod tests {
     fn it_works_with_errors() {
         assert_eq!(
             Some((6, 7, 8)),
-            sync_wait(
-                Just::new((4, 5, 6)) | Then::new_fn_err(|(x, y, z)| Ok((x + 2, y + 2, z + 2)))
-            )
-            .expect("should succeed")
+            sync_wait(Just::new((6,)) | LetValue::new_fn_err(|(x,)| Ok(Just::new((x, 7, 8)))))
+                .expect("should succeed")
         )
     }
 
@@ -254,7 +260,7 @@ mod tests {
     fn errors_from_preceding_sender_are_propagated() {
         match sync_wait(
             JustError::<()>::new(Box::new(String::from("error")))
-                | Then::new_fn(|()| -> (i32, i32) {
+                | LetValue::new_fn(|()| -> Just<(i32,)> {
                     panic!("expect this function to not be invoked")
                 }),
         ) {
@@ -270,9 +276,24 @@ mod tests {
     fn errors_from_functor_are_propagated() {
         match sync_wait(
             Just::new(())
-                | Then::new_fn_err(|()| -> Result<(), Error> {
+                | LetValue::new_fn_err(|()| -> Result<Just<(i32,)>, Error> {
                     Err(Box::new(String::from("error")))
                 }),
+        ) {
+            Ok(_) => panic!("expected an error"),
+            Err(e) => {
+                assert_eq!(TypeId::of::<String>(), (&*e).type_id());
+                assert_eq!(String::from("error"), *e.downcast_ref::<String>().unwrap());
+            }
+        }
+    }
+
+    #[test]
+    fn errors_from_nested_sender_are_propagated() {
+        // nested_sender refers to the sender returned by the functor.
+        match sync_wait(
+            Just::new(())
+                | LetValue::new_fn(|()| JustError::<()>::new(Box::new(String::from("error")))),
         ) {
             Ok(_) => panic!("expected an error"),
             Err(e) => {
