@@ -48,11 +48,14 @@ mod scheduler;
 mod sync_wait;
 mod then;
 mod traits;
+mod transfer;
 
 pub use errors::{Error, IsTuple};
 pub use just::Just;
 pub use just_error::JustError;
 pub use let_value::LetValue;
+pub use scheduler::{ImmediateScheduler, Scheduler};
 pub use sync_wait::sync_wait;
 pub use then::Then;
 pub use traits::{BindSender, OperationState, Receiver, ReceiverOf, Sender, TypedSender};
+pub use transfer::Transfer;
