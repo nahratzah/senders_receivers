@@ -1,4 +1,5 @@
 use crate::errors::IsTuple;
+use crate::scheduler::ImmediateScheduler;
 use crate::traits::{BindSender, OperationState, ReceiverOf, TypedSender};
 use core::ops::BitOr;
 
@@ -27,10 +28,11 @@ impl<Tuple: IsTuple> Just<Tuple> {
 
 impl<Tuple: IsTuple> TypedSender for Just<Tuple> {
     type Value = Tuple;
+    type Scheduler = ImmediateScheduler;
 
     fn connect<ReceiverType>(self, receiver: ReceiverType) -> impl OperationState
     where
-        ReceiverType: ReceiverOf<Tuple>,
+        ReceiverType: ReceiverOf<ImmediateScheduler, Tuple>,
     {
         JustOperationState {
             values: self.values,
@@ -41,7 +43,7 @@ impl<Tuple: IsTuple> TypedSender for Just<Tuple> {
 
 pub struct JustOperationState<Tuple: IsTuple, ReceiverImpl>
 where
-    ReceiverImpl: ReceiverOf<Tuple>,
+    ReceiverImpl: ReceiverOf<ImmediateScheduler, Tuple>,
 {
     values: Tuple,
     receiver: ReceiverImpl,
@@ -49,10 +51,10 @@ where
 
 impl<Tuple: IsTuple, ReceiverImpl> OperationState for JustOperationState<Tuple, ReceiverImpl>
 where
-    ReceiverImpl: ReceiverOf<Tuple>,
+    ReceiverImpl: ReceiverOf<ImmediateScheduler, Tuple>,
 {
     fn start(self) {
-        self.receiver.set_value(self.values)
+        self.receiver.set_value(ImmediateScheduler {}, self.values)
     }
 }
 

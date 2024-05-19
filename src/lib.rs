@@ -44,6 +44,7 @@ pub mod functor;
 mod just;
 mod just_error;
 mod let_value;
+mod scheduler;
 mod sync_wait;
 mod then;
 mod traits;

@@ -1,4 +1,5 @@
 use crate::errors::{Error, IsTuple};
+use crate::scheduler::Scheduler;
 use crate::traits::{OperationState, Receiver, ReceiverOf, TypedSender};
 
 enum SyncWaitAcceptor<Tuple: IsTuple> {
@@ -22,8 +23,10 @@ impl<Tuple: IsTuple> Receiver for SyncWaitAcceptorReceiver<'_, Tuple> {
     }
 }
 
-impl<Tuple: IsTuple> ReceiverOf<Tuple> for SyncWaitAcceptorReceiver<'_, Tuple> {
-    fn set_value(self, values: Tuple) {
+impl<Sch: Scheduler, Tuple: IsTuple> ReceiverOf<Sch, Tuple>
+    for SyncWaitAcceptorReceiver<'_, Tuple>
+{
+    fn set_value(self, _: Sch, values: Tuple) {
         *self.acceptor = SyncWaitAcceptor::Value(values);
     }
 }

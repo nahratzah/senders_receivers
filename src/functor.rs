@@ -35,6 +35,20 @@ where
     }
 }
 
+/// A bi-functor can be invoked with two arguments.
+///
+/// The second argument represents a tuple of arguments.
+pub trait BiFunctor<FirstArg, Args>
+where
+    Args: IsTuple,
+{
+    /// The result type of the functor.
+    type Output;
+
+    /// Invoke this functor.
+    fn tuple_invoke(self, first_arg: FirstArg, args: Args) -> Self::Output;
+}
+
 /// Composition functor.
 ///
 /// A composition functor takes two functors (`f` and `g`, and creates a new functor `n`, such that: `n(x) -> g(f(x))`.
@@ -81,11 +95,7 @@ where
     Args: IsTuple,
     FnType: FnOnce(Args) -> Out,
 {
-    pub fn new(fn_impl: FnType) -> Closure<FnType, Out, Args>
-    where
-        Args: IsTuple,
-        FnType: FnOnce(Args) -> Out,
-    {
+    pub fn new(fn_impl: FnType) -> Closure<FnType, Out, Args> {
         Closure {
             phantom_args: PhantomData,
             phantom_out: PhantomData,
@@ -104,6 +114,49 @@ where
     fn tuple_invoke(self, args: Args) -> Self::Output {
         let fn_impl = self.fn_impl;
         fn_impl(args)
+    }
+}
+
+/// BiFunctor for a function/closure.
+///
+/// The functor will delegate to the contained function.
+pub struct BiClosure<FnType, Out, FirstArg, Args>
+where
+    Args: IsTuple,
+    FnType: FnOnce(FirstArg, Args) -> Out,
+{
+    phantom_first_arg: PhantomData<FirstArg>,
+    phantom_args: PhantomData<Args>,
+    phantom_out: PhantomData<Out>,
+    fn_impl: FnType,
+}
+
+impl<FnType, Out, FirstArg, Args> BiClosure<FnType, Out, FirstArg, Args>
+where
+    Args: IsTuple,
+    FnType: FnOnce(FirstArg, Args) -> Out,
+{
+    pub fn new(fn_impl: FnType) -> BiClosure<FnType, Out, FirstArg, Args> {
+        BiClosure {
+            phantom_first_arg: PhantomData,
+            phantom_args: PhantomData,
+            phantom_out: PhantomData,
+            fn_impl,
+        }
+    }
+}
+
+impl<FnType, Out, FirstArg, Args> BiFunctor<FirstArg, Args>
+    for BiClosure<FnType, Out, FirstArg, Args>
+where
+    Args: IsTuple,
+    FnType: FnOnce(FirstArg, Args) -> Out,
+{
+    type Output = Out;
+
+    fn tuple_invoke(self, first_arg: FirstArg, args: Args) -> Self::Output {
+        let fn_impl = self.fn_impl;
+        fn_impl(first_arg, args)
     }
 }
 
@@ -209,5 +262,49 @@ where
 
     fn tuple_invoke(self, args: ArgTuple) -> Self::Output {
         Ok(self.functor.tuple_invoke(args))
+    }
+}
+
+/// Wrapper for bi-functors that don't return a `Result`.
+/// This wrapper wraps the functor into something that will return a `Result`.
+///
+/// We need to use an actual struct, because we need to declare types.
+/// With closures, we cannot capture the closure type, and thus not create a specialization.
+pub struct NoErrBiFunctor<FunctorType, Out, FirstArg, ArgTuple>
+where
+    FunctorType: BiFunctor<FirstArg, ArgTuple, Output = Out>,
+    ArgTuple: IsTuple,
+{
+    functor: FunctorType,
+    phantom0: PhantomData<FirstArg>,
+    phantom1: PhantomData<ArgTuple>,
+    phantom2: PhantomData<Out>,
+}
+
+impl<FunctorType, Out, FirstArg, ArgTuple> NoErrBiFunctor<FunctorType, Out, FirstArg, ArgTuple>
+where
+    FunctorType: BiFunctor<FirstArg, ArgTuple, Output = Out>,
+    ArgTuple: IsTuple,
+{
+    pub fn new(functor: FunctorType) -> NoErrBiFunctor<FunctorType, Out, FirstArg, ArgTuple> {
+        NoErrBiFunctor {
+            functor,
+            phantom0: PhantomData,
+            phantom1: PhantomData,
+            phantom2: PhantomData,
+        }
+    }
+}
+
+impl<FunctorType, Out, FirstArg, ArgTuple> BiFunctor<FirstArg, ArgTuple>
+    for NoErrBiFunctor<FunctorType, Out, FirstArg, ArgTuple>
+where
+    FunctorType: BiFunctor<FirstArg, ArgTuple, Output = Out>,
+    ArgTuple: IsTuple,
+{
+    type Output = Result<Out, Error>;
+
+    fn tuple_invoke(self, first_arg: FirstArg, args: ArgTuple) -> Self::Output {
+        Ok(self.functor.tuple_invoke(first_arg, args))
     }
 }

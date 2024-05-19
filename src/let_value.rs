@@ -1,5 +1,6 @@
 use crate::errors::{Error, IsTuple};
-use crate::functor::{Closure, Functor, NoErrFunctor};
+use crate::functor::{BiClosure, BiFunctor, NoErrBiFunctor};
+use crate::scheduler::Scheduler;
 use crate::traits::{BindSender, OperationState, Receiver, ReceiverOf, Sender, TypedSender};
 use core::ops::BitOr;
 use std::marker::PhantomData;
@@ -15,7 +16,7 @@ use std::marker::PhantomData;
 ///
 /// // If using a function that returns a sender:
 /// let sender = Just::new((String::from("world"),))
-///              | LetValue::new_fn(|(name,)| {
+///              | LetValue::new_fn(|_, (name,)| {
 ///                  Just::new((format!("Hello {}!", name),))
 ///              });
 /// assert_eq!(
@@ -24,91 +25,105 @@ use std::marker::PhantomData;
 ///
 /// // If using a function that returns a Result:
 /// let sender = Just::new((String::from("world"),))
-///              | LetValue::new_fn_err(|(name,)| {
+///              | LetValue::new_fn_err(|_, (name,)| {
 ///                  Ok(Just::new((format!("Hello {}!", name),)))
 ///              });
 /// assert_eq!(
 ///     (String::from("Hello world!"),),
 ///     sync_wait(sender).unwrap().unwrap());
 /// ```
-pub struct LetValue<FnType, Out, ArgTuple>
+pub struct LetValue<FnType, Out, FirstArg, ArgTuple>
 where
-    FnType: Functor<ArgTuple, Output = Result<Out, Error>>,
+    FnType: BiFunctor<FirstArg, ArgTuple, Output = Result<Out, Error>>,
+    FirstArg: Scheduler,
     ArgTuple: IsTuple,
     Out: TypedSender,
 {
     fn_impl: FnType,
+    phantom0: PhantomData<FirstArg>,
     phantom1: PhantomData<ArgTuple>,
     phantom2: PhantomData<Out>,
 }
 
-impl<FnType, Out, ArgTuple> LetValue<FnType, Out, ArgTuple>
+impl<FnType, Out, FirstArg, ArgTuple> LetValue<FnType, Out, FirstArg, ArgTuple>
 where
-    FnType: Functor<ArgTuple, Output = Result<Out, Error>>,
+    FnType: BiFunctor<FirstArg, ArgTuple, Output = Result<Out, Error>>,
+    FirstArg: Scheduler,
     ArgTuple: IsTuple,
     Out: TypedSender,
 {
-    pub fn new_err(fn_impl: FnType) -> LetValue<FnType, Out, ArgTuple> {
+    pub fn new_err(fn_impl: FnType) -> LetValue<FnType, Out, FirstArg, ArgTuple> {
         LetValue {
             fn_impl,
+            phantom0: PhantomData,
             phantom1: PhantomData,
             phantom2: PhantomData,
         }
     }
 }
 
-type ClosureLetValue<FnType, Out, ArgTuple> =
-    LetValue<Closure<FnType, Result<Out, Error>, ArgTuple>, Out, ArgTuple>;
+type ClosureLetValue<FnType, Out, FirstArg, ArgTuple> =
+    LetValue<BiClosure<FnType, Result<Out, Error>, FirstArg, ArgTuple>, Out, FirstArg, ArgTuple>;
 
-impl<FnType, Out, ArgTuple> ClosureLetValue<FnType, Out, ArgTuple>
+impl<FnType, Out, FirstArg, ArgTuple> ClosureLetValue<FnType, Out, FirstArg, ArgTuple>
 where
-    FnType: FnOnce(ArgTuple) -> Result<Out, Error>,
+    FnType: FnOnce(FirstArg, ArgTuple) -> Result<Out, Error>,
+    FirstArg: Scheduler,
     ArgTuple: IsTuple,
     Out: TypedSender,
 {
-    pub fn new_fn_err(fn_impl: FnType) -> ClosureLetValue<FnType, Out, ArgTuple> {
-        Self::new_err(Closure::new(fn_impl))
+    pub fn new_fn_err(fn_impl: FnType) -> ClosureLetValue<FnType, Out, FirstArg, ArgTuple> {
+        Self::new_err(BiClosure::new(fn_impl))
     }
 }
 
-type NoErrLetValue<FunctorType, Out, ArgTuple> =
-    LetValue<NoErrFunctor<FunctorType, Out, ArgTuple>, Out, ArgTuple>;
+type NoErrLetValue<FunctorType, Out, FirstArg, ArgTuple> =
+    LetValue<NoErrBiFunctor<FunctorType, Out, FirstArg, ArgTuple>, Out, FirstArg, ArgTuple>;
 
-impl<FnImpl, Out, ArgTuple> NoErrLetValue<FnImpl, Out, ArgTuple>
+impl<FnImpl, Out, FirstArg, ArgTuple> NoErrLetValue<FnImpl, Out, FirstArg, ArgTuple>
 where
-    FnImpl: Functor<ArgTuple, Output = Out>,
+    FnImpl: BiFunctor<FirstArg, ArgTuple, Output = Out>,
+    FirstArg: Scheduler,
     ArgTuple: IsTuple,
     Out: TypedSender,
 {
-    pub fn new(fn_impl: FnImpl) -> NoErrLetValue<FnImpl, Out, ArgTuple> {
-        Self::new_err(NoErrFunctor::new(fn_impl))
+    pub fn new(fn_impl: FnImpl) -> NoErrLetValue<FnImpl, Out, FirstArg, ArgTuple> {
+        Self::new_err(NoErrBiFunctor::new(fn_impl))
     }
 }
 
-type NoErrClosureLetValue<FnImpl, Out, ArgTuple> =
-    NoErrLetValue<Closure<FnImpl, Out, ArgTuple>, Out, ArgTuple>;
+type NoErrClosureLetValue<FnImpl, Out, FirstArg, ArgTuple> =
+    NoErrLetValue<BiClosure<FnImpl, Out, FirstArg, ArgTuple>, Out, FirstArg, ArgTuple>;
 
-impl<FnImpl, Out, ArgTuple> NoErrClosureLetValue<FnImpl, Out, ArgTuple>
+impl<FnImpl, Out, FirstArg, ArgTuple> NoErrClosureLetValue<FnImpl, Out, FirstArg, ArgTuple>
 where
-    FnImpl: FnOnce(ArgTuple) -> Out,
+    FnImpl: FnOnce(FirstArg, ArgTuple) -> Out,
+    FirstArg: Scheduler,
     ArgTuple: IsTuple,
     Out: TypedSender,
 {
-    pub fn new_fn(fn_impl: FnImpl) -> NoErrClosureLetValue<FnImpl, Out, ArgTuple> {
-        Self::new(Closure::new(fn_impl))
+    pub fn new_fn(fn_impl: FnImpl) -> NoErrClosureLetValue<FnImpl, Out, FirstArg, ArgTuple> {
+        Self::new(BiClosure::new(fn_impl))
     }
 }
 
-impl<FnType, Out: TypedSender, ArgTuple: IsTuple> Sender for LetValue<FnType, Out, ArgTuple> where
-    FnType: Functor<ArgTuple, Output = Result<Out, Error>>
+impl<FnType, Out: TypedSender, FirstArg: Scheduler, ArgTuple: IsTuple> Sender
+    for LetValue<FnType, Out, FirstArg, ArgTuple>
+where
+    FnType: BiFunctor<FirstArg, ArgTuple, Output = Result<Out, Error>>,
 {
 }
 
 impl<FnType, Out, NestedSender> BindSender<NestedSender>
-    for LetValue<FnType, Out, <NestedSender as TypedSender>::Value>
+    for LetValue<
+        FnType,
+        Out,
+        <NestedSender as TypedSender>::Scheduler,
+        <NestedSender as TypedSender>::Value,
+    >
 where
     NestedSender: TypedSender,
-    FnType: Functor<NestedSender::Value, Output = Result<Out, Error>>,
+    FnType: BiFunctor<NestedSender::Scheduler, NestedSender::Value, Output = Result<Out, Error>>,
     NestedSender::Value: IsTuple,
     Out: TypedSender,
 {
@@ -128,7 +143,7 @@ impl<NestedSender, FnType, Out: TypedSender, BindSenderImpl> BitOr<BindSenderImp
 where
     BindSenderImpl: BindSender<LetValueSender<NestedSender, FnType, Out>>,
     NestedSender: TypedSender,
-    FnType: Functor<NestedSender::Value, Output = Result<Out, Error>>,
+    FnType: BiFunctor<NestedSender::Scheduler, NestedSender::Value, Output = Result<Out, Error>>,
     NestedSender::Value: IsTuple,
     Out: TypedSender,
 {
@@ -142,7 +157,7 @@ where
 pub struct LetValueSender<NestedSender, FnType, Out>
 where
     NestedSender: TypedSender,
-    FnType: Functor<NestedSender::Value, Output = Result<Out, Error>>,
+    FnType: BiFunctor<NestedSender::Scheduler, NestedSender::Value, Output = Result<Out, Error>>,
     Out: TypedSender,
 {
     nested: NestedSender,
@@ -153,18 +168,20 @@ where
 impl<NestedSender, FnType, Out> TypedSender for LetValueSender<NestedSender, FnType, Out>
 where
     NestedSender: TypedSender,
-    FnType: Functor<NestedSender::Value, Output = Result<Out, Error>>,
+    FnType: BiFunctor<NestedSender::Scheduler, NestedSender::Value, Output = Result<Out, Error>>,
     Out: TypedSender,
 {
     type Value = Out::Value;
+    type Scheduler = Out::Scheduler;
 
     fn connect<ReceiverImpl>(self, receiver: ReceiverImpl) -> impl OperationState
     where
-        ReceiverImpl: ReceiverOf<Out::Value>,
+        ReceiverImpl: ReceiverOf<Out::Scheduler, Out::Value>,
     {
         let wrapped_receiver = LetValueWrappedReceiver {
             nested: receiver,
             fn_impl: self.fn_impl,
+            phantom0: PhantomData,
             phantom1: PhantomData,
             phantom2: PhantomData,
         };
@@ -172,24 +189,27 @@ where
     }
 }
 
-struct LetValueWrappedReceiver<ReceiverImpl, FnType, Out, ArgTuple>
+struct LetValueWrappedReceiver<ReceiverImpl, FnType, Out, FirstArg, ArgTuple>
 where
-    ReceiverImpl: ReceiverOf<Out::Value>,
-    FnType: Functor<ArgTuple, Output = Result<Out, Error>>,
+    ReceiverImpl: ReceiverOf<Out::Scheduler, Out::Value>,
+    FnType: BiFunctor<FirstArg, ArgTuple, Output = Result<Out, Error>>,
+    FirstArg: Scheduler,
     ArgTuple: IsTuple,
     Out: TypedSender,
 {
     nested: ReceiverImpl,
     fn_impl: FnType,
+    phantom0: PhantomData<FirstArg>,
     phantom1: PhantomData<ArgTuple>,
     phantom2: PhantomData<Out>,
 }
 
-impl<ReceiverImpl, FnType, Out, ArgTuple> Receiver
-    for LetValueWrappedReceiver<ReceiverImpl, FnType, Out, ArgTuple>
+impl<ReceiverImpl, FnType, Out, FirstArg, ArgTuple> Receiver
+    for LetValueWrappedReceiver<ReceiverImpl, FnType, Out, FirstArg, ArgTuple>
 where
-    ReceiverImpl: ReceiverOf<Out::Value>,
-    FnType: Functor<ArgTuple, Output = Result<Out, Error>>,
+    ReceiverImpl: ReceiverOf<Out::Scheduler, Out::Value>,
+    FnType: BiFunctor<FirstArg, ArgTuple, Output = Result<Out, Error>>,
+    FirstArg: Scheduler,
     ArgTuple: IsTuple,
     Out: TypedSender,
 {
@@ -202,16 +222,17 @@ where
     }
 }
 
-impl<ReceiverImpl, FnType, Out, ArgTuple> ReceiverOf<ArgTuple>
-    for LetValueWrappedReceiver<ReceiverImpl, FnType, Out, ArgTuple>
+impl<ReceiverImpl, FnType, Out, FirstArg, ArgTuple> ReceiverOf<FirstArg, ArgTuple>
+    for LetValueWrappedReceiver<ReceiverImpl, FnType, Out, FirstArg, ArgTuple>
 where
-    ReceiverImpl: ReceiverOf<Out::Value>,
-    FnType: Functor<ArgTuple, Output = Result<Out, Error>>,
+    ReceiverImpl: ReceiverOf<Out::Scheduler, Out::Value>,
+    FnType: BiFunctor<FirstArg, ArgTuple, Output = Result<Out, Error>>,
+    FirstArg: Scheduler,
     ArgTuple: IsTuple,
     Out: TypedSender,
 {
-    fn set_value(self, values: ArgTuple) {
-        match self.fn_impl.tuple_invoke(values) {
+    fn set_value(self, scheduler: FirstArg, values: ArgTuple) {
+        match self.fn_impl.tuple_invoke(scheduler, values) {
             Ok(sender) => {
                 let nested_state = sender.connect(self.nested);
                 nested_state.start()
@@ -235,7 +256,7 @@ mod tests {
             Some((6, 7, 8)),
             sync_wait(
                 Just::new((6,))
-                    | LetValue::new_fn(|(x,)| {
+                    | LetValue::new_fn(|_, (x,)| {
                         assert_eq!(x, 6);
                         Just::new((x, 7, 8))
                     })
@@ -248,7 +269,7 @@ mod tests {
     fn it_works_with_errors() {
         assert_eq!(
             Some((6, 7, 8)),
-            sync_wait(Just::new((6,)) | LetValue::new_fn_err(|(x,)| Ok(Just::new((x, 7, 8)))))
+            sync_wait(Just::new((6,)) | LetValue::new_fn_err(|_, (x,)| Ok(Just::new((x, 7, 8)))))
                 .expect("should succeed")
         )
     }
@@ -257,7 +278,7 @@ mod tests {
     fn errors_from_preceding_sender_are_propagated() {
         match sync_wait(
             JustError::<()>::new(Box::new(ErrorForTesting::from("error")))
-                | LetValue::new_fn(|()| -> Just<(i32,)> {
+                | LetValue::new_fn(|_, ()| -> Just<(i32,)> {
                     panic!("expect this function to not be invoked")
                 }),
         ) {
@@ -275,7 +296,7 @@ mod tests {
     fn errors_from_functor_are_propagated() {
         match sync_wait(
             Just::new(())
-                | LetValue::new_fn_err(|()| -> Result<Just<(i32,)>, Error> {
+                | LetValue::new_fn_err(|_, ()| -> Result<Just<(i32,)>, Error> {
                     Err(Box::new(ErrorForTesting::from("error")))
                 }),
         ) {
@@ -294,7 +315,7 @@ mod tests {
         // nested_sender refers to the sender returned by the functor.
         match sync_wait(
             Just::new(())
-                | LetValue::new_fn(|()| {
+                | LetValue::new_fn(|_, ()| {
                     JustError::<()>::new(Box::new(ErrorForTesting::from("error")))
                 }),
         ) {

@@ -1,4 +1,5 @@
 use crate::errors::{Error, IsTuple};
+use crate::scheduler::Scheduler;
 
 /// Common receiver logic.
 pub trait Receiver {
@@ -9,9 +10,9 @@ pub trait Receiver {
 }
 
 /// Declare that this is a receiver that can accept a specific Value type.
-pub trait ReceiverOf<Tuple: IsTuple>: Receiver {
+pub trait ReceiverOf<Sch: Scheduler, Tuple: IsTuple>: Receiver {
     // Accept an `value` signal.
-    fn set_value(self, values: Tuple);
+    fn set_value(self, scheduler: Sch, values: Tuple);
 }
 
 /// An operation state is a typed-sender with matching receiver.
@@ -29,12 +30,14 @@ pub trait Sender {}
 pub trait TypedSender {
     /// The type of the value signal.
     type Value: IsTuple;
+    /// The scheduler for this sender.
+    type Scheduler: Scheduler;
 
     /// Attach a receiver.
     /// Will produce an operation state, that, once started, will invoke the receiver exactly once.
     fn connect<ReceiverType>(self, receiver: ReceiverType) -> impl OperationState
     where
-        ReceiverType: ReceiverOf<Self::Value>;
+        ReceiverType: ReceiverOf<Self::Scheduler, Self::Value>;
 }
 
 /// Senders can extend typed senders.

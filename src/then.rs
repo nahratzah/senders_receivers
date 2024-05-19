@@ -1,5 +1,6 @@
 use crate::errors::{Error, IsTuple};
 use crate::functor::{Closure, Functor, NoErrFunctor};
+use crate::scheduler::Scheduler;
 use crate::traits::{BindSender, OperationState, Receiver, ReceiverOf, Sender, TypedSender};
 use core::ops::BitOr;
 use std::marker::PhantomData;
@@ -162,14 +163,16 @@ where
     Out: IsTuple,
 {
     type Value = Out;
+    type Scheduler = NestedSender::Scheduler;
 
     fn connect<ReceiverImpl>(self, receiver: ReceiverImpl) -> impl OperationState
     where
-        ReceiverImpl: ReceiverOf<Out>,
+        ReceiverImpl: ReceiverOf<Self::Scheduler, Out>,
     {
         let wrapped_receiver = ThenWrappedReceiver {
             nested: receiver,
             fn_impl: self.fn_impl,
+            phantom0: PhantomData,
             phantom1: PhantomData,
             phantom2: PhantomData,
         };
@@ -178,24 +181,27 @@ where
     }
 }
 
-struct ThenWrappedReceiver<ReceiverImpl, FnType, Out, ArgTuple>
+struct ThenWrappedReceiver<ReceiverImpl, FnType, Sch, Out, ArgTuple>
 where
-    ReceiverImpl: ReceiverOf<Out>,
+    ReceiverImpl: ReceiverOf<Sch, Out>,
     FnType: Functor<ArgTuple, Output = Result<Out, Error>>,
+    Sch: Scheduler,
     ArgTuple: IsTuple,
     Out: IsTuple,
 {
     nested: ReceiverImpl,
     fn_impl: FnType,
+    phantom0: PhantomData<Sch>,
     phantom1: PhantomData<ArgTuple>,
     phantom2: PhantomData<Out>,
 }
 
-impl<ReceiverImpl, FnType, ArgTuple, Out> Receiver
-    for ThenWrappedReceiver<ReceiverImpl, FnType, Out, ArgTuple>
+impl<ReceiverImpl, FnType, Sch, ArgTuple, Out> Receiver
+    for ThenWrappedReceiver<ReceiverImpl, FnType, Sch, Out, ArgTuple>
 where
-    ReceiverImpl: ReceiverOf<Out>,
+    ReceiverImpl: ReceiverOf<Sch, Out>,
     FnType: Functor<ArgTuple, Output = Result<Out, Error>>,
+    Sch: Scheduler,
     ArgTuple: IsTuple,
     Out: IsTuple,
 {
@@ -208,17 +214,18 @@ where
     }
 }
 
-impl<ReceiverImpl, FnType, ArgTuple, Out> ReceiverOf<ArgTuple>
-    for ThenWrappedReceiver<ReceiverImpl, FnType, Out, ArgTuple>
+impl<ReceiverImpl, FnType, Sch, ArgTuple, Out> ReceiverOf<Sch, ArgTuple>
+    for ThenWrappedReceiver<ReceiverImpl, FnType, Sch, Out, ArgTuple>
 where
-    ReceiverImpl: ReceiverOf<Out>,
+    ReceiverImpl: ReceiverOf<Sch, Out>,
     FnType: Functor<ArgTuple, Output = Result<Out, Error>>,
+    Sch: Scheduler,
     ArgTuple: IsTuple,
     Out: IsTuple,
 {
-    fn set_value(self, values: ArgTuple) {
+    fn set_value(self, sch: Sch, values: ArgTuple) {
         match self.fn_impl.tuple_invoke(values) {
-            Ok(v) => self.nested.set_value(v),
+            Ok(v) => self.nested.set_value(sch, v),
             Err(e) => self.nested.set_error(e),
         };
     }

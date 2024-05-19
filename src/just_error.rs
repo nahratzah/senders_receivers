@@ -1,4 +1,5 @@
 use crate::errors::{Error, IsTuple};
+use crate::scheduler::ImmediateScheduler;
 use crate::traits::{BindSender, OperationState, ReceiverOf, TypedSender};
 use core::ops::BitOr;
 use std::marker::PhantomData;
@@ -35,10 +36,11 @@ impl<Tuple: IsTuple> JustError<Tuple> {
 
 impl<Tuple: IsTuple> TypedSender for JustError<Tuple> {
     type Value = Tuple;
+    type Scheduler = ImmediateScheduler;
 
     fn connect<ReceiverType>(self, receiver: ReceiverType) -> impl OperationState
     where
-        ReceiverType: ReceiverOf<Tuple>,
+        ReceiverType: ReceiverOf<ImmediateScheduler, Tuple>,
     {
         JustErrorOperationState {
             phantom: PhantomData,
@@ -50,7 +52,7 @@ impl<Tuple: IsTuple> TypedSender for JustError<Tuple> {
 
 pub struct JustErrorOperationState<Tuple: IsTuple, ReceiverImpl>
 where
-    ReceiverImpl: ReceiverOf<Tuple>,
+    ReceiverImpl: ReceiverOf<ImmediateScheduler, Tuple>,
 {
     phantom: PhantomData<Tuple>,
     error: Error,
@@ -59,7 +61,7 @@ where
 
 impl<Tuple: IsTuple, ReceiverImpl> OperationState for JustErrorOperationState<Tuple, ReceiverImpl>
 where
-    ReceiverImpl: ReceiverOf<Tuple>,
+    ReceiverImpl: ReceiverOf<ImmediateScheduler, Tuple>,
 {
     fn start(self) {
         self.receiver.set_error(self.error)
