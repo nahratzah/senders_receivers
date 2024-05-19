@@ -42,6 +42,7 @@
 mod errors;
 pub mod functor;
 mod just;
+mod just_done;
 mod just_error;
 mod let_value;
 mod scheduler;
@@ -52,6 +53,7 @@ mod transfer;
 
 pub use errors::{Error, IsTuple};
 pub use just::Just;
+pub use just_done::JustDone;
 pub use just_error::JustError;
 pub use let_value::LetValue;
 pub use scheduler::{ImmediateScheduler, Scheduler};
