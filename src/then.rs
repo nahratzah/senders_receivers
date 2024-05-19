@@ -8,7 +8,7 @@ use std::marker::PhantomData;
 /// A then operation takes the current `value` signal, and transforms it in some way.
 /// The result of the function is the new `value` signal.
 ///
-/// To create a Then sender from a function/closure, use:
+/// To create a Then [Sender] from a [function/closure](FnOnce), use:
 /// ```
 /// use senders_receivers::{Error, Just, Then, sync_wait};
 ///
@@ -46,7 +46,7 @@ where
     ArgTuple: IsTuple,
     Out: IsTuple,
 {
-    /// Create a new Then operation, using a functor that returns an error.
+    /// Create a new Then operation, using a [Functor] that returns an [Result].
     pub fn new_err(fn_impl: FnType) -> Then<FnType, Out, ArgTuple> {
         Then {
             fn_impl,
@@ -65,8 +65,8 @@ where
     ArgTuple: IsTuple,
     Out: IsTuple,
 {
-    /// Create a new Then operation, using the specified function.
-    /// Function must return a `Result`.
+    /// Create a new Then operation, using the specified [function](FnOnce).
+    /// The function must return a [Result].
     /// If the returned result holds an error, that'll be propagated via the error signal.
     pub fn new_fn_err(fn_impl: FnType) -> ClosureThen<FnType, Out, ArgTuple> {
         Self::new_err(Closure::new(fn_impl))
@@ -82,8 +82,8 @@ where
     ArgTuple: IsTuple,
     Out: IsTuple,
 {
-    /// Create a new then operation, from a functor.
-    /// The functor should return a tuple.
+    /// Create a new then operation, from a [Functor].
+    /// The functor should return a [tuple](IsTuple).
     pub fn new(fn_impl: FnImpl) -> NoErrThen<FnImpl, Out, ArgTuple> {
         Self::new_err(NoErrFunctor::new(fn_impl))
     }
@@ -98,8 +98,8 @@ where
     ArgTuple: IsTuple,
     Out: IsTuple,
 {
-    /// Create a new then operation, from a function/closure.
-    /// The function/closure should return a tuple.
+    /// Create a new then operation, from a [function/closure](FnOnce).
+    /// The function/closure should return a [tuple](IsTuple).
     pub fn new_fn(fn_impl: FnImpl) -> NoErrClosureThen<FnImpl, Out, ArgTuple> {
         Self::new(Closure::new(fn_impl))
     }

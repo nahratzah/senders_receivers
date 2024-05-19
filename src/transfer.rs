@@ -5,9 +5,9 @@ use crate::traits::{BindSender, OperationState, Receiver, ReceiverOf, Sender, Ty
 use core::ops::BitOr;
 use std::marker::PhantomData;
 
-/// Transfer to a different scheduler.
+/// Transfer to a different [Scheduler].
 ///
-/// Further operations will run on the scheduler.
+/// Subsequent [Sender] operations will run on the scheduler.
 ///
 /// Example:
 /// ```

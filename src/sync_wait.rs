@@ -31,7 +31,7 @@ impl<Sch: Scheduler, Tuple: IsTuple> ReceiverOf<Sch, Tuple>
     }
 }
 
-/// Execute a typed sender, and yield the outcome of the operation.
+/// Execute a [TypedSender], and yield the outcome of the operation.
 ///
 /// The return type is a `Result<Option<..>, Error>`.  
 /// If the typed sender yields an error, it'll be in the error position of the Result.  
@@ -49,14 +49,11 @@ impl<Sch: Scheduler, Tuple: IsTuple> ReceiverOf<Sch, Tuple>
 ///     Ok(Some(tuple)) => println!("value signal: {:?}", tuple), // tuple: &str "bla"
 /// };
 /// ```
-pub fn sync_wait<SenderImpl>(
-    sender: SenderImpl,
-) -> Result<Option<<SenderImpl as TypedSender>::Value>, Error>
+pub fn sync_wait<SenderImpl>(sender: SenderImpl) -> Result<Option<SenderImpl::Value>, Error>
 where
     SenderImpl: TypedSender,
 {
-    let mut acceptor: SyncWaitAcceptor<<SenderImpl as TypedSender>::Value> =
-        SyncWaitAcceptor::Uninitialized;
+    let mut acceptor: SyncWaitAcceptor<SenderImpl::Value> = SyncWaitAcceptor::Uninitialized;
 
     let acceptor_receiver = SyncWaitAcceptorReceiver {
         acceptor: &mut acceptor,

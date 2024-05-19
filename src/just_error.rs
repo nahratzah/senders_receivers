@@ -4,7 +4,7 @@ use crate::traits::{BindSender, OperationState, ReceiverOf, TypedSender};
 use core::ops::BitOr;
 use std::marker::PhantomData;
 
-/// A typed sender that always generates an error.
+/// A [TypedSender] that always generates an [Error].
 ///
 /// Example:
 /// ```

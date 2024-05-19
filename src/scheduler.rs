@@ -4,18 +4,15 @@ use core::ops::BitOr;
 /// Schedulers are things that can do work.
 /// All sender chains run on a scheduler.
 ///
-/// Most of the time, you'll use a scheduler in combination with `Transfer`.
-/// But a scheduler can be used directly (which is what `Transfer` does under the hood).
-/// Unfortunately, I can't make the | operator work for scheduler, so we must use the `bind` function instead.
+/// Most of the time, you'll use a scheduler in combination with [Transfer](crate::Transfer).
+/// But a scheduler can be used directly (which is what [Transfer](crate::Transfer) does under the hood).
+/// Unfortunately, I can't make the `|` operator work for [Scheduler::Sender], so we must use the [`BindSender::bind`] function instead.
 /// ```
 /// use senders_receivers::{BindSender, Scheduler, Then, sync_wait};
 ///
-/// fn compute_expensive_thing<Sch, LocalSch>(myScheduler: Sch)
-/// where
-///     Sch: Scheduler<LocalScheduler = LocalSch>,
-///     LocalSch: Scheduler<LocalScheduler = LocalSch>,
-/// {
+/// fn compute_expensive_thing(myScheduler: impl Scheduler) {
 ///     let sender = Then::new_fn(|()| {
+///                      // This computation will run on the scheduler.
 ///                      let mut s = 0_i32;
 ///                      for n in 1..101 {
 ///                          s += n;
@@ -39,13 +36,14 @@ pub trait Scheduler {
     /// the LocalScheduler would represent the scheduler bound to the thread that was selected.
     type LocalScheduler: Scheduler<Sender = Self::Sender>;
 
-    /// The typed-sender returned by the scheduler.
+    /// The [TypedSender] returned by the scheduler.
     type Sender: TypedSender<Scheduler = Self::LocalScheduler, Value = ()>;
 
-    /// Create a sender that'll run on this scheduler.
+    /// Create a [Self::Sender] that'll run on this scheduler.
     fn schedule(self) -> Self::Sender;
 }
 
+/// An immediate-scheduler is a [Scheduler] which runs any tasks on it immediately.
 pub struct ImmediateScheduler {}
 
 /// This scheduler is a basic scheduler, that just runs everything immediately.

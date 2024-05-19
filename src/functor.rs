@@ -1,7 +1,9 @@
 //! The `functors` mod holds functions.
 //!
 //! The reason we need those, is because we need to have composible functions.
-//! The `Functor` trait provides something we can invoke.
+//! The [Functor] and [BiFunctor] traits provide something we can invoke.
+//!
+//! Note: we might erase this module in the future, if implementing `FnOnce` becomes doable.
 
 use crate::errors::{Error, IsTuple};
 use std::marker::PhantomData;
@@ -77,7 +79,7 @@ where
     }
 }
 
-/// Functor for a function/closure.
+/// Functor for a [function/closure](FnOnce).
 ///
 /// The functor will delegate to the contained function.
 pub struct Closure<FnType, Out, Args>
@@ -117,7 +119,7 @@ where
     }
 }
 
-/// BiFunctor for a function/closure.
+/// BiFunctor for a [function/closure](FnOnce).
 ///
 /// The functor will delegate to the contained function.
 pub struct BiClosure<FnType, Out, FirstArg, Args>
@@ -224,8 +226,8 @@ where
 // crate::errors::tuple_impls!(closure_invoke);
 // ```
 
-/// Wrapper for functors that don't return a `Result`.
-/// This wrapper wraps the functor into something that will return a `Result`.
+/// Wrapper for functors that don't return a [Result].
+/// This wrapper wraps the functor into something that will return a [Result].
 ///
 /// We need to use an actual struct, because we need to declare types.
 /// With closures, we cannot capture the closure type, and thus not create a specialization.
@@ -265,8 +267,8 @@ where
     }
 }
 
-/// Wrapper for bi-functors that don't return a `Result`.
-/// This wrapper wraps the functor into something that will return a `Result`.
+/// Wrapper for bi-functors that don't return a [Result].
+/// This wrapper wraps the functor into something that will return a [Result].
 ///
 /// We need to use an actual struct, because we need to declare types.
 /// With closures, we cannot capture the closure type, and thus not create a specialization.

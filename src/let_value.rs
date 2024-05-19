@@ -5,10 +5,10 @@ use crate::traits::{BindSender, OperationState, Receiver, ReceiverOf, Sender, Ty
 use core::ops::BitOr;
 use std::marker::PhantomData;
 
-/// Create a let-value sender.
+/// Create a let-value [Sender].
 ///
 /// A let-value sender is a sender, which, upon receiving a value, invokes a function.
-/// The function returns a new typed sender, which will be played out in this place of the chain.
+/// The function returns a new [TypedSender], which will be substitued in this place of the chain.
 ///
 /// Example:
 /// ```

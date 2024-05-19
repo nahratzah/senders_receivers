@@ -2,6 +2,7 @@ use crate::errors::{Error, IsTuple};
 use crate::scheduler::Scheduler;
 
 /// Common receiver logic.
+/// All receivers can accept the done signal, and the error signal.
 pub trait Receiver {
     // Accept the `done` signal.
     fn set_done(self);
@@ -10,23 +11,29 @@ pub trait Receiver {
 }
 
 /// Declare that this is a receiver that can accept a specific Value type.
+///
+/// The value will be received, while running on the [Scheduler].
 pub trait ReceiverOf<Sch: Scheduler, Tuple: IsTuple>: Receiver {
-    // Accept an `value` signal.
+    // Accept a `value` signal.
     fn set_value(self, scheduler: Sch, values: Tuple);
 }
 
-/// An operation state is a typed-sender with matching receiver.
+/// An operation state is a [TypedSender] with matching [ReceiverOf].
 /// It's ready to run, just waiting to be started.
 pub trait OperationState {
     /// Start the operation.
     fn start(self);
 }
 
-/// A sender is a type that can be part of a sender chain.
-/// A typed sender can be extended with senders, to create an operation.
+/// A sender is a type that describes a step in an operation.
+///
+/// A [TypedSender] can be extended with senders, creating a new [TypedSender].
+/// This binding is implemented via the [BindSender] trait.
 pub trait Sender {}
 
-/// A typed sender is a sender, which describes an operation.
+/// A typed sender is a sender, which describes an entire operation.
+///
+/// It can be extended with additional steps, by binding a [Sender] to it.
 pub trait TypedSender {
     /// The type of the value signal.
     type Value: IsTuple;
@@ -40,7 +47,7 @@ pub trait TypedSender {
         ReceiverType: ReceiverOf<Self::Scheduler, Self::Value>;
 }
 
-/// Senders can extend typed senders.
+/// [Sender] can extend [TypedSender].
 /// In order to do that, a function is invoked on that sender, with the typed sender as an argument.
 /// BindSender models the binding of the sender with a typed sender.
 pub trait BindSender<NestedSender: TypedSender>: Sender {
