@@ -1,7 +1,9 @@
 use crate::errors::{Error, IsTuple};
 use crate::functor::{BiClosure, BiFunctor, NoErrBiFunctor};
 use crate::scheduler::Scheduler;
-use crate::traits::{BindSender, OperationState, Receiver, ReceiverOf, Sender, TypedSender};
+use crate::traits::{
+    BindSender, OperationState, Receiver, ReceiverOf, Sender, TypedSender, TypedSenderConnect,
+};
 use core::ops::BitOr;
 use std::marker::PhantomData;
 
@@ -40,9 +42,7 @@ where
     Out: TypedSender,
 {
     fn_impl: FnType,
-    phantom0: PhantomData<FirstArg>,
-    phantom1: PhantomData<ArgTuple>,
-    phantom2: PhantomData<Out>,
+    phantom: PhantomData<fn(FirstArg, ArgTuple) -> Out>,
 }
 
 impl<FnType, Out, FirstArg, ArgTuple> LetValue<FnType, Out, FirstArg, ArgTuple>
@@ -55,9 +55,7 @@ where
     pub fn new_err(fn_impl: FnType) -> LetValue<FnType, Out, FirstArg, ArgTuple> {
         LetValue {
             fn_impl,
-            phantom0: PhantomData,
-            phantom1: PhantomData,
-            phantom2: PhantomData,
+            phantom: PhantomData,
         }
     }
 }
@@ -133,7 +131,7 @@ where
         LetValueSender {
             nested,
             fn_impl: self.fn_impl,
-            phantom2: PhantomData,
+            phantom: PhantomData,
         }
     }
 }
@@ -162,7 +160,7 @@ where
 {
     nested: NestedSender,
     fn_impl: FnType,
-    phantom2: PhantomData<Out>,
+    phantom: PhantomData<fn() -> Out>,
 }
 
 impl<NestedSender, FnType, Out> TypedSender for LetValueSender<NestedSender, FnType, Out>
@@ -173,19 +171,32 @@ where
 {
     type Value = Out::Value;
     type Scheduler = Out::Scheduler;
+}
 
-    fn connect<ReceiverImpl>(self, receiver: ReceiverImpl) -> impl OperationState
-    where
-        ReceiverImpl: ReceiverOf<Out::Scheduler, Out::Value>,
-    {
+impl<ReceiverImpl, NestedSender, FnType, Out> TypedSenderConnect<ReceiverImpl>
+    for LetValueSender<NestedSender, FnType, Out>
+where
+    ReceiverImpl: ReceiverOf<Out::Scheduler, Out::Value>,
+    NestedSender: TypedSender
+        + TypedSenderConnect<
+            LetValueWrappedReceiver<
+                ReceiverImpl,
+                FnType,
+                Out,
+                <NestedSender as TypedSender>::Scheduler,
+                <NestedSender as TypedSender>::Value,
+            >,
+        >,
+    FnType: BiFunctor<NestedSender::Scheduler, NestedSender::Value, Output = Result<Out, Error>>,
+    Out: TypedSender + TypedSenderConnect<ReceiverImpl>,
+{
+    fn connect_two(self, receiver: ReceiverImpl) -> impl OperationState {
         let wrapped_receiver = LetValueWrappedReceiver {
             nested: receiver,
             fn_impl: self.fn_impl,
-            phantom0: PhantomData,
-            phantom1: PhantomData,
-            phantom2: PhantomData,
+            phantom: PhantomData,
         };
-        self.nested.connect(wrapped_receiver)
+        self.nested.connect_two(wrapped_receiver)
     }
 }
 
@@ -199,9 +210,7 @@ where
 {
     nested: ReceiverImpl,
     fn_impl: FnType,
-    phantom0: PhantomData<FirstArg>,
-    phantom1: PhantomData<ArgTuple>,
-    phantom2: PhantomData<Out>,
+    phantom: PhantomData<fn(FirstArg, ArgTuple) -> Out>,
 }
 
 impl<ReceiverImpl, FnType, Out, FirstArg, ArgTuple> Receiver
@@ -229,12 +238,12 @@ where
     FnType: BiFunctor<FirstArg, ArgTuple, Output = Result<Out, Error>>,
     FirstArg: Scheduler,
     ArgTuple: IsTuple,
-    Out: TypedSender,
+    Out: TypedSender + TypedSenderConnect<ReceiverImpl>,
 {
     fn set_value(self, scheduler: FirstArg, values: ArgTuple) {
         match self.fn_impl.tuple_invoke(scheduler, values) {
             Ok(sender) => {
-                let nested_state = sender.connect(self.nested);
+                let nested_state = sender.connect_two(self.nested);
                 nested_state.start()
             }
             Err(e) => self.nested.set_error(e),

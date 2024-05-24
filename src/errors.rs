@@ -48,7 +48,7 @@ tuple_impls!(make_is_tuple);
 /// Errors as passed as opaque types.
 ///
 /// If you want to handle specific errors, you can downcast the relevant error to a type.
-pub type Error = Box<dyn error::Error>;
+pub type Error = Box<dyn error::Error + Send>;
 
 #[cfg(test)]
 mod for_testing {

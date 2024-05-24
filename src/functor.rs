@@ -60,7 +60,7 @@ where
     FirstFn: Functor<Args>,
     NextFn: Functor<(<FirstFn as Functor<Args>>::Output,)>,
 {
-    phantom: PhantomData<Args>,
+    phantom: PhantomData<fn(Args)>,
     first_fn: FirstFn,
     next_fn: NextFn,
 }
@@ -87,8 +87,7 @@ where
     Args: IsTuple,
     FnType: FnOnce(Args) -> Out,
 {
-    phantom_args: PhantomData<Args>,
-    phantom_out: PhantomData<Out>,
+    phantom: PhantomData<fn(Args) -> Out>,
     fn_impl: FnType,
 }
 
@@ -99,8 +98,7 @@ where
 {
     pub fn new(fn_impl: FnType) -> Closure<FnType, Out, Args> {
         Closure {
-            phantom_args: PhantomData,
-            phantom_out: PhantomData,
+            phantom: PhantomData,
             fn_impl,
         }
     }
@@ -127,9 +125,7 @@ where
     Args: IsTuple,
     FnType: FnOnce(FirstArg, Args) -> Out,
 {
-    phantom_first_arg: PhantomData<FirstArg>,
-    phantom_args: PhantomData<Args>,
-    phantom_out: PhantomData<Out>,
+    phantom: PhantomData<fn(FirstArg, Args) -> Out>,
     fn_impl: FnType,
 }
 
@@ -140,9 +136,7 @@ where
 {
     pub fn new(fn_impl: FnType) -> BiClosure<FnType, Out, FirstArg, Args> {
         BiClosure {
-            phantom_first_arg: PhantomData,
-            phantom_args: PhantomData,
-            phantom_out: PhantomData,
+            phantom: PhantomData,
             fn_impl,
         }
     }
@@ -170,8 +164,7 @@ where
 //     Args: IsTuple+std::marker::Tuple,
 //     FnType: FnOnce<Args, Output=Out>,
 // {
-//     phantom_args: PhantomData<Args>,
-//     phantom_out: PhantomData<Out>,
+//     phantoms: PhantomData<fn(Args) -> Out>,
 //     fn_impl: FnType,
 // }
 //
@@ -237,8 +230,7 @@ where
     ArgTuple: IsTuple,
 {
     functor: FunctorType,
-    phantom1: PhantomData<ArgTuple>,
-    phantom2: PhantomData<Out>,
+    phantom: PhantomData<fn(ArgTuple) -> Out>,
 }
 
 impl<FunctorType, Out, ArgTuple> NoErrFunctor<FunctorType, Out, ArgTuple>
@@ -249,8 +241,7 @@ where
     pub fn new(functor: FunctorType) -> NoErrFunctor<FunctorType, Out, ArgTuple> {
         NoErrFunctor {
             functor,
-            phantom1: PhantomData,
-            phantom2: PhantomData,
+            phantom: PhantomData,
         }
     }
 }
@@ -278,9 +269,7 @@ where
     ArgTuple: IsTuple,
 {
     functor: FunctorType,
-    phantom0: PhantomData<FirstArg>,
-    phantom1: PhantomData<ArgTuple>,
-    phantom2: PhantomData<Out>,
+    phantom: PhantomData<fn(FirstArg, ArgTuple) -> Out>,
 }
 
 impl<FunctorType, Out, FirstArg, ArgTuple> NoErrBiFunctor<FunctorType, Out, FirstArg, ArgTuple>
@@ -291,9 +280,7 @@ where
     pub fn new(functor: FunctorType) -> NoErrBiFunctor<FunctorType, Out, FirstArg, ArgTuple> {
         NoErrBiFunctor {
             functor,
-            phantom0: PhantomData,
-            phantom1: PhantomData,
-            phantom2: PhantomData,
+            phantom: PhantomData,
         }
     }
 }

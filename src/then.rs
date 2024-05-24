@@ -1,7 +1,9 @@
 use crate::errors::{Error, IsTuple};
 use crate::functor::{Closure, Functor, NoErrFunctor};
 use crate::scheduler::Scheduler;
-use crate::traits::{BindSender, OperationState, Receiver, ReceiverOf, Sender, TypedSender};
+use crate::traits::{
+    BindSender, OperationState, Receiver, ReceiverOf, Sender, TypedSender, TypedSenderConnect,
+};
 use core::ops::BitOr;
 use std::marker::PhantomData;
 
@@ -36,8 +38,7 @@ where
     Out: IsTuple,
 {
     fn_impl: FnType,
-    phantom1: PhantomData<ArgTuple>,
-    phantom2: PhantomData<Out>,
+    phantom: PhantomData<fn(ArgTuple) -> Out>,
 }
 
 impl<FnType, Out, ArgTuple> Then<FnType, Out, ArgTuple>
@@ -50,8 +51,7 @@ where
     pub fn new_err(fn_impl: FnType) -> Then<FnType, Out, ArgTuple> {
         Then {
             fn_impl,
-            phantom1: PhantomData,
-            phantom2: PhantomData,
+            phantom: PhantomData,
         }
     }
 }
@@ -124,7 +124,7 @@ where
         ThenSender {
             nested,
             fn_impl: self.fn_impl,
-            phantom2: PhantomData,
+            phantom: PhantomData,
         }
     }
 }
@@ -153,7 +153,7 @@ where
 {
     nested: NestedSender,
     fn_impl: FnType,
-    phantom2: PhantomData<Out>,
+    phantom: PhantomData<fn() -> Out>,
 }
 
 impl<NestedSender, FnType, Out> TypedSender for ThenSender<NestedSender, FnType, Out>
@@ -164,20 +164,33 @@ where
 {
     type Value = Out;
     type Scheduler = NestedSender::Scheduler;
+}
 
-    fn connect<ReceiverImpl>(self, receiver: ReceiverImpl) -> impl OperationState
-    where
-        ReceiverImpl: ReceiverOf<Self::Scheduler, Out>,
-    {
+impl<ReceiverImpl, NestedSender, FnType, Out> TypedSenderConnect<ReceiverImpl>
+    for ThenSender<NestedSender, FnType, Out>
+where
+    ReceiverImpl: ReceiverOf<Self::Scheduler, Out>,
+    NestedSender: TypedSender
+        + TypedSenderConnect<
+            ThenWrappedReceiver<
+                ReceiverImpl,
+                FnType,
+                Self::Scheduler,
+                Out,
+                <NestedSender as TypedSender>::Value,
+            >,
+        >,
+    FnType: Functor<NestedSender::Value, Output = Result<Out, Error>>,
+    Out: IsTuple,
+{
+    fn connect_two(self, receiver: ReceiverImpl) -> impl OperationState {
         let wrapped_receiver = ThenWrappedReceiver {
             nested: receiver,
             fn_impl: self.fn_impl,
-            phantom0: PhantomData,
-            phantom1: PhantomData,
-            phantom2: PhantomData,
+            phantom: PhantomData,
         };
 
-        self.nested.connect(wrapped_receiver)
+        self.nested.connect_two(wrapped_receiver)
     }
 }
 
@@ -191,9 +204,7 @@ where
 {
     nested: ReceiverImpl,
     fn_impl: FnType,
-    phantom0: PhantomData<Sch>,
-    phantom1: PhantomData<ArgTuple>,
-    phantom2: PhantomData<Out>,
+    phantom: PhantomData<fn(Sch, ArgTuple) -> Out>,
 }
 
 impl<ReceiverImpl, FnType, Sch, ArgTuple, Out> Receiver

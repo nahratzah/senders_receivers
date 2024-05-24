@@ -1,6 +1,6 @@
 use crate::errors::IsTuple;
 use crate::scheduler::ImmediateScheduler;
-use crate::traits::{BindSender, OperationState, ReceiverOf, TypedSender};
+use crate::traits::{BindSender, OperationState, ReceiverOf, TypedSender, TypedSenderConnect};
 use core::ops::BitOr;
 use std::marker::PhantomData;
 
@@ -21,7 +21,7 @@ use std::marker::PhantomData;
 /// }
 /// ```
 pub struct JustDone<Tuple: IsTuple> {
-    phantom: PhantomData<Tuple>,
+    phantom: PhantomData<fn() -> Tuple>,
 }
 
 impl<Tuple: IsTuple> JustDone<Tuple> {
@@ -36,11 +36,14 @@ impl<Tuple: IsTuple> JustDone<Tuple> {
 impl<Tuple: IsTuple> TypedSender for JustDone<Tuple> {
     type Value = Tuple;
     type Scheduler = ImmediateScheduler;
+}
 
-    fn connect<ReceiverType>(self, receiver: ReceiverType) -> impl OperationState
-    where
-        ReceiverType: ReceiverOf<ImmediateScheduler, Tuple>,
-    {
+impl<ReceiverType, Tuple> TypedSenderConnect<ReceiverType> for JustDone<Tuple>
+where
+    Tuple: IsTuple,
+    ReceiverType: ReceiverOf<ImmediateScheduler, Tuple>,
+{
+    fn connect_two(self, receiver: ReceiverType) -> impl OperationState {
         JustDoneOperationState {
             phantom: PhantomData,
             receiver,
@@ -52,7 +55,7 @@ pub struct JustDoneOperationState<Tuple: IsTuple, ReceiverImpl>
 where
     ReceiverImpl: ReceiverOf<ImmediateScheduler, Tuple>,
 {
-    phantom: PhantomData<Tuple>,
+    phantom: PhantomData<fn() -> Tuple>,
     receiver: ReceiverImpl,
 }
 

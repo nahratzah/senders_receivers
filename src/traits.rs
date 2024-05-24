@@ -34,17 +34,21 @@ pub trait Sender {}
 /// A typed sender is a sender, which describes an entire operation.
 ///
 /// It can be extended with additional steps, by binding a [Sender] to it.
+/// Can be connected with a receiver, which is handled by the [TypedSenderConnect] trait.
 pub trait TypedSender {
     /// The type of the value signal.
     type Value: IsTuple;
     /// The scheduler for this sender.
     type Scheduler: Scheduler;
+}
 
+pub trait TypedSenderConnect<ReceiverType>: TypedSender
+where
+    ReceiverType: ReceiverOf<Self::Scheduler, Self::Value>,
+{
     /// Attach a receiver.
     /// Will produce an operation state, that, once started, will invoke the receiver exactly once.
-    fn connect<ReceiverType>(self, receiver: ReceiverType) -> impl OperationState
-    where
-        ReceiverType: ReceiverOf<Self::Scheduler, Self::Value>;
+    fn connect_two(self, receiver: ReceiverType) -> impl OperationState;
 }
 
 /// [Sender] can extend [TypedSender].

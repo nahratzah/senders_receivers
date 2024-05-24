@@ -1,5 +1,6 @@
-use crate::traits::{BindSender, OperationState, ReceiverOf, TypedSender};
+use crate::traits::{BindSender, OperationState, ReceiverOf, TypedSender, TypedSenderConnect};
 use core::ops::BitOr;
+use threadpool::ThreadPool;
 
 /// Schedulers are things that can do work.
 /// All sender chains run on a scheduler.
@@ -7,24 +8,24 @@ use core::ops::BitOr;
 /// Most of the time, you'll use a scheduler in combination with [Transfer](crate::Transfer).
 /// But a scheduler can be used directly (which is what [Transfer](crate::Transfer) does under the hood).
 /// Unfortunately, I can't make the `|` operator work for [Scheduler::Sender], so we must use the [`BindSender::bind`] function instead.
-/// ```
+/// ---
 /// use senders_receivers::{BindSender, Scheduler, Then, sync_wait};
+/// use threadpool::ThreadPool;
 ///
-/// fn compute_expensive_thing(myScheduler: impl Scheduler) {
-///     let sender = Then::new_fn(|()| {
-///                      // This computation will run on the scheduler.
-///                      let mut s = 0_i32;
-///                      for n in 1..101 {
-///                          s += n;
-///                      }
-///                      (s,)
-///                  }).bind(myScheduler.schedule());
-///     assert_eq!(
-///         5050,
-///         sync_wait(sender).unwrap().unwrap().0);
-/// }
-/// ```
-pub trait Scheduler {
+/// let pool = ThreadPool::with_name("example".into(), 1)
+/// let sender = Then::new_fn(|()| {
+///                  // This computation will run on the scheduler.
+///                  let mut s = 0_i32;
+///                  for n in 1..101 {
+///                      s += n;
+///                  }
+///                  (s,)
+///              }).bind(pool.schedule());
+/// assert_eq!(
+///     5050,
+///     sync_wait(sender).unwrap().unwrap().0);
+/// ---
+pub trait Scheduler: Eq + Clone {
     /// Mark if the scheduler may block the caller, when started.
     /// If this is `false`, you are guaranteed that the sender will complete independently from the operation-state start method.
     /// But if it returns `true`, the scheduler will complete before returning from the operation-state start method.
@@ -44,6 +45,7 @@ pub trait Scheduler {
 }
 
 /// An immediate-scheduler is a [Scheduler] which runs any tasks on it immediately.
+#[derive(Eq, PartialEq, Clone)]
 pub struct ImmediateScheduler {}
 
 /// This scheduler is a basic scheduler, that just runs everything immediately.
@@ -62,11 +64,16 @@ pub struct ImmediateSender {}
 impl TypedSender for ImmediateSender {
     type Scheduler = ImmediateScheduler;
     type Value = ();
+}
 
-    fn connect<ReceiverType>(self, receiver: ReceiverType) -> impl OperationState
-    where
-        ReceiverType: ReceiverOf<Self::Scheduler, Self::Value>,
-    {
+impl<ReceiverType> TypedSenderConnect<ReceiverType> for ImmediateSender
+where
+    ReceiverType: ReceiverOf<
+        <ImmediateSender as TypedSender>::Scheduler,
+        <ImmediateSender as TypedSender>::Value,
+    >,
+{
+    fn connect_two(self, receiver: ReceiverType) -> impl OperationState {
         ImmediateOperationState { receiver }
     }
 }
@@ -95,5 +102,71 @@ where
 {
     fn start(self) {
         self.receiver.set_value(ImmediateScheduler {}, ());
+    }
+}
+
+impl Scheduler for ThreadPool {
+    const EXECUTION_BLOCKS_CALLER: bool = false;
+    type LocalScheduler = ThreadPool;
+    type Sender = ThreadPoolSender;
+
+    fn schedule(self) -> Self::Sender {
+        ThreadPoolSender { pool: self }
+    }
+}
+
+pub struct ThreadPoolSender {
+    pool: ThreadPool,
+}
+
+impl TypedSender for ThreadPoolSender {
+    type Value = ();
+    type Scheduler = ThreadPool;
+}
+
+impl<ReceiverType> TypedSenderConnect<ReceiverType> for ThreadPoolSender
+where
+    ReceiverType: Send
+        + 'static
+        + ReceiverOf<
+            <ThreadPoolSender as TypedSender>::Scheduler,
+            <ThreadPoolSender as TypedSender>::Value,
+        >,
+{
+    fn connect_two(self, receiver: ReceiverType) -> impl OperationState {
+        ThreadPoolOperationState {
+            pool: self.pool,
+            receiver,
+        }
+    }
+}
+
+impl<BindSenderImpl> BitOr<BindSenderImpl> for ThreadPoolSender
+where
+    BindSenderImpl: BindSender<ThreadPoolSender>,
+{
+    type Output = BindSenderImpl::Output;
+
+    fn bitor(self, rhs: BindSenderImpl) -> Self::Output {
+        rhs.bind(self)
+    }
+}
+
+struct ThreadPoolOperationState<Receiver>
+where
+    Receiver: ReceiverOf<ThreadPool, ()> + Send + 'static,
+{
+    pool: ThreadPool,
+    receiver: Receiver,
+}
+
+impl<Receiver> OperationState for ThreadPoolOperationState<Receiver>
+where
+    Receiver: ReceiverOf<ThreadPool, ()> + Send + 'static,
+{
+    fn start(self) {
+        let pool = self.pool.clone();
+        let receiver = self.receiver;
+        self.pool.execute(move || receiver.set_value(pool, ()));
     }
 }

@@ -1,6 +1,6 @@
 use crate::errors::IsTuple;
 use crate::scheduler::ImmediateScheduler;
-use crate::traits::{BindSender, OperationState, ReceiverOf, TypedSender};
+use crate::traits::{BindSender, OperationState, ReceiverOf, TypedSender, TypedSenderConnect};
 use core::ops::BitOr;
 
 /// A typed-sender that holds a tuple of values.
@@ -29,11 +29,14 @@ impl<Tuple: IsTuple> Just<Tuple> {
 impl<Tuple: IsTuple> TypedSender for Just<Tuple> {
     type Value = Tuple;
     type Scheduler = ImmediateScheduler;
+}
 
-    fn connect<ReceiverType>(self, receiver: ReceiverType) -> impl OperationState
-    where
-        ReceiverType: ReceiverOf<ImmediateScheduler, Tuple>,
-    {
+impl<ReceiverType, Tuple> TypedSenderConnect<ReceiverType> for Just<Tuple>
+where
+    Tuple: IsTuple,
+    ReceiverType: ReceiverOf<ImmediateScheduler, Tuple>,
+{
+    fn connect_two(self, receiver: ReceiverType) -> impl OperationState {
         JustOperationState {
             values: self.values,
             receiver,

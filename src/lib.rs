@@ -57,7 +57,9 @@ pub use just_done::JustDone;
 pub use just_error::JustError;
 pub use let_value::LetValue;
 pub use scheduler::{ImmediateScheduler, Scheduler};
-pub use sync_wait::sync_wait;
+pub use sync_wait::{sync_wait, sync_wait_send};
 pub use then::Then;
-pub use traits::{BindSender, OperationState, Receiver, ReceiverOf, Sender, TypedSender};
+pub use traits::{
+    BindSender, OperationState, Receiver, ReceiverOf, Sender, TypedSender, TypedSenderConnect,
+};
 pub use transfer::Transfer;

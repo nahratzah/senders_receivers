@@ -1,6 +1,6 @@
 use crate::errors::{Error, IsTuple};
 use crate::scheduler::ImmediateScheduler;
-use crate::traits::{BindSender, OperationState, ReceiverOf, TypedSender};
+use crate::traits::{BindSender, OperationState, ReceiverOf, TypedSender, TypedSenderConnect};
 use core::ops::BitOr;
 use std::marker::PhantomData;
 
@@ -10,7 +10,7 @@ use std::marker::PhantomData;
 /// ```
 /// use senders_receivers::{JustError, sync_wait};
 ///
-/// fn example(someError: impl std::error::Error + 'static) {
+/// fn example(someError: impl std::error::Error + Send + 'static) {
 ///     // The `::<(i32, i32)>` turbo-fish is to declare the value-type of the created sender.
 ///     let sender = JustError::<(i32, i32)>::new(Box::new(someError));
 ///     match sync_wait(sender) {
@@ -20,7 +20,7 @@ use std::marker::PhantomData;
 /// }
 /// ```
 pub struct JustError<Tuple: IsTuple> {
-    phantom: PhantomData<Tuple>,
+    phantom: PhantomData<fn() -> Tuple>,
     error: Error,
 }
 
@@ -37,11 +37,14 @@ impl<Tuple: IsTuple> JustError<Tuple> {
 impl<Tuple: IsTuple> TypedSender for JustError<Tuple> {
     type Value = Tuple;
     type Scheduler = ImmediateScheduler;
+}
 
-    fn connect<ReceiverType>(self, receiver: ReceiverType) -> impl OperationState
-    where
-        ReceiverType: ReceiverOf<ImmediateScheduler, Tuple>,
-    {
+impl<ReceiverType, Tuple> TypedSenderConnect<ReceiverType> for JustError<Tuple>
+where
+    Tuple: IsTuple,
+    ReceiverType: ReceiverOf<ImmediateScheduler, Tuple>,
+{
+    fn connect_two(self, receiver: ReceiverType) -> impl OperationState {
         JustErrorOperationState {
             phantom: PhantomData,
             error: self.error,
@@ -54,7 +57,7 @@ pub struct JustErrorOperationState<Tuple: IsTuple, ReceiverImpl>
 where
     ReceiverImpl: ReceiverOf<ImmediateScheduler, Tuple>,
 {
-    phantom: PhantomData<Tuple>,
+    phantom: PhantomData<fn() -> Tuple>,
     error: Error,
     receiver: ReceiverImpl,
 }

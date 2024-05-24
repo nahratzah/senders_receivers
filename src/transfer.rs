@@ -1,7 +1,8 @@
 use crate::errors::{Error, IsTuple};
 use crate::scheduler::Scheduler;
-use crate::then::Then;
-use crate::traits::{BindSender, OperationState, Receiver, ReceiverOf, Sender, TypedSender};
+use crate::traits::{
+    BindSender, OperationState, Receiver, ReceiverOf, Sender, TypedSender, TypedSenderConnect,
+};
 use core::ops::BitOr;
 use std::marker::PhantomData;
 
@@ -11,20 +12,21 @@ use std::marker::PhantomData;
 ///
 /// Example:
 /// ```
-/// use senders_receivers::{Just, Scheduler, Transfer, Then, sync_wait};
+/// use senders_receivers::{Just, Scheduler, Transfer, Then, sync_wait_send};
+/// use threadpool::ThreadPool;
 ///
-/// fn example(my_scheduler: impl Scheduler) {
-///     let sender = Just::new((2, 3, 7))
-///                  | Transfer::new(my_scheduler)
-///                  | Then::new_fn(|(x, y, z)| {
-///                      // This will run on `my_scheduler`.
-///                      (x * y * z,)
-///                  });
-///     // And via sync_wait, we acquire the value on our own thread.
-///     assert_eq!(
-///         (42,),
-///         sync_wait(sender).unwrap().unwrap());
-/// }
+/// let pool = ThreadPool::with_name("example".into(), 1);
+/// let sender = Just::new((2, 3, 7))
+///              | Transfer::new(pool)
+///              | Then::new_fn(|(x, y, z)| {
+///                  // This will run on `my_scheduler`.
+///                  (x * y * z,)
+///              });
+/// // And via sync_wait_send, we acquire the value on our own thread.
+/// // Note that we must use sync_wait_send, because ThreadPool will cross a thread boundary.
+/// assert_eq!(
+///     (42,),
+///     sync_wait_send(sender).unwrap().unwrap());
 /// ```
 pub struct Transfer<Sch>
 where
@@ -75,18 +77,26 @@ where
 {
     type Value = NestedSender::Value;
     type Scheduler = Sch::LocalScheduler;
+}
 
-    fn connect<ReceiverType>(self, receiver: ReceiverType) -> impl OperationState
-    where
-        ReceiverType: ReceiverOf<Self::Scheduler, Self::Value>,
-    {
-        let wrapped_receiver = ReceiverWrapper {
-            nested: receiver,
+impl<ReceiverType, NestedSender, Sch> TypedSenderConnect<ReceiverType>
+    for TransferTS<NestedSender, Sch>
+where
+    ReceiverType: ReceiverOf<Sch::LocalScheduler, NestedSender::Value>,
+    NestedSender: TypedSender
+        + TypedSenderConnect<ReceiverWrapper<ReceiverType, Sch, <NestedSender as TypedSender>::Value>>,
+    Sch: Scheduler,
+    Sch::Sender: TypedSenderConnect<
+        ContinuingReceiverWrapper<ReceiverType, Sch::LocalScheduler, NestedSender::Value>,
+    >,
+{
+    fn connect_two(self, nested: ReceiverType) -> impl OperationState {
+        let receiver: ReceiverWrapper<ReceiverType, Sch, NestedSender::Value> = ReceiverWrapper {
+            nested,
             target_scheduler: self.target_scheduler,
             phantom: PhantomData,
         };
-
-        self.nested.connect(wrapped_receiver)
+        self.nested.connect_two(receiver)
     }
 }
 
@@ -111,7 +121,7 @@ where
 {
     nested: NestedReceiver,
     target_scheduler: Sch,
-    phantom: PhantomData<Value>,
+    phantom: PhantomData<fn(Value) -> Value>,
 }
 
 impl<NestedReceiver, Sch, Value> Receiver for ReceiverWrapper<NestedReceiver, Sch, Value>
@@ -135,9 +145,54 @@ where
     Sch: Scheduler,
     PreviousScheduler: Scheduler,
     Value: IsTuple,
+    Sch::Sender:
+        TypedSenderConnect<ContinuingReceiverWrapper<NestedReceiver, Sch::LocalScheduler, Value>>,
 {
     fn set_value(self, _: PreviousScheduler, values: Value) {
-        let sender = Then::new_fn(move |()| values).bind(self.target_scheduler.schedule());
-        sender.connect(self.nested).start()
+        self.target_scheduler
+            .schedule()
+            .connect_two(ContinuingReceiverWrapper {
+                nested: self.nested,
+                phantom: PhantomData,
+                values,
+            })
+            .start();
+    }
+}
+
+struct ContinuingReceiverWrapper<NestedReceiver, Sch, Value>
+where
+    NestedReceiver: ReceiverOf<Sch, Value>,
+    Sch: Scheduler,
+    Value: IsTuple,
+{
+    nested: NestedReceiver,
+    phantom: PhantomData<Sch>,
+    values: Value,
+}
+
+impl<NestedReceiver, Sch, Value> Receiver for ContinuingReceiverWrapper<NestedReceiver, Sch, Value>
+where
+    NestedReceiver: ReceiverOf<Sch, Value>,
+    Sch: Scheduler,
+    Value: IsTuple,
+{
+    fn set_done(self) {
+        self.nested.set_done()
+    }
+    fn set_error(self, error: Error) {
+        self.nested.set_error(error)
+    }
+}
+
+impl<NestedReceiver, Sch, Value> ReceiverOf<Sch, ()>
+    for ContinuingReceiverWrapper<NestedReceiver, Sch, Value>
+where
+    NestedReceiver: ReceiverOf<Sch, Value>,
+    Sch: Scheduler,
+    Value: IsTuple,
+{
+    fn set_value(self, sch: Sch, _: ()) {
+        self.nested.set_value(sch, self.values)
     }
 }
