@@ -72,15 +72,21 @@ impl<Sch: Scheduler, Tuple: IsTuple + Send + 'static> ReceiverOf<Sch, Tuple>
 /// Otherwise, if the operation is canceled (`done` signal), an empty Option will be returned.  
 /// Otherwise the operation succeeds, and an `Ok(Some(..))` is returned.
 ///
+/// This function requires that the send operation completes on the same thread.
+/// (And without using a queue-scheduler.)
+/// It'll accept a value that doesn't implement [Send] (for example [Rc](std::rc::Rc) values).
+/// If you do need to cross threads, you'll need to use [sync_wait_send] instead.
+///
 /// Example:
 /// ```
 /// use senders_receivers::{Just, sync_wait};
+/// use std::rc::Rc;
 ///
-/// let sender = Just::new(("bla",));
+/// let sender = Just::new((Rc::new(String::from("bla")),));
 /// match sync_wait(sender) {
 ///     Err(e) => println!("error signal: {:?}", e),
 ///     Ok(None) => println!("done signal"),
-///     Ok(Some(tuple)) => println!("value signal: {:?}", tuple), // tuple: &str "bla"
+///     Ok(Some(tuple)) => println!("value signal: {:?}", tuple), // tuple: Rc<String> holding "bla"
 /// };
 /// ```
 pub fn sync_wait<SenderImpl>(sender: SenderImpl) -> Result<Option<SenderImpl::Value>, Error>
@@ -111,15 +117,21 @@ where
 /// Otherwise, if the operation is canceled (`done` signal), an empty Option will be returned.  
 /// Otherwise the operation succeeds, and an `Ok(Some(..))` is returned.
 ///
+/// This function allows the [TypedSender] to cross thread-boundaries,
+/// and requires the returned value to implement [Send].
+/// If you don't need to cross thread-boundaries,
+/// or can't (due to value not implementing [Send])
+/// using [sync_wait] might be a better choice.
+///
 /// Example:
 /// ```
 /// use senders_receivers::{Just, sync_wait_send};
 ///
-/// let sender = Just::new(("bla",));
+/// let sender = Just::new((String::from("bla"),));
 /// match sync_wait_send(sender) {
 ///     Err(e) => println!("error signal: {:?}", e),
 ///     Ok(None) => println!("done signal"),
-///     Ok(Some(tuple)) => println!("value signal: {:?}", tuple), // tuple: &str "bla"
+///     Ok(Some(tuple)) => println!("value signal: {:?}", tuple), // tuple: String holding "bla"
 /// };
 /// ```
 pub fn sync_wait_send<SenderImpl>(sender: SenderImpl) -> Result<Option<SenderImpl::Value>, Error>
