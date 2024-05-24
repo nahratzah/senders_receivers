@@ -44,7 +44,7 @@ where
     Tuple: IsTuple,
     ReceiverType: ReceiverOf<ImmediateScheduler, Tuple>,
 {
-    fn connect_two(self, receiver: ReceiverType) -> impl OperationState {
+    fn connect(self, receiver: ReceiverType) -> impl OperationState {
         JustErrorOperationState {
             phantom: PhantomData,
             error: self.error,

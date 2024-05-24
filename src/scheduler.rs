@@ -73,7 +73,7 @@ where
         <ImmediateSender as TypedSender>::Value,
     >,
 {
-    fn connect_two(self, receiver: ReceiverType) -> impl OperationState {
+    fn connect(self, receiver: ReceiverType) -> impl OperationState {
         ImmediateOperationState { receiver }
     }
 }
@@ -133,7 +133,7 @@ where
             <ThreadPoolSender as TypedSender>::Value,
         >,
 {
-    fn connect_two(self, receiver: ReceiverType) -> impl OperationState {
+    fn connect(self, receiver: ReceiverType) -> impl OperationState {
         ThreadPoolOperationState {
             pool: self.pool,
             receiver,

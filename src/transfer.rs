@@ -90,13 +90,13 @@ where
         ContinuingReceiverWrapper<ReceiverType, Sch::LocalScheduler, NestedSender::Value>,
     >,
 {
-    fn connect_two(self, nested: ReceiverType) -> impl OperationState {
+    fn connect(self, nested: ReceiverType) -> impl OperationState {
         let receiver: ReceiverWrapper<ReceiverType, Sch, NestedSender::Value> = ReceiverWrapper {
             nested,
             target_scheduler: self.target_scheduler,
             phantom: PhantomData,
         };
-        self.nested.connect_two(receiver)
+        self.nested.connect(receiver)
     }
 }
 
@@ -151,7 +151,7 @@ where
     fn set_value(self, _: PreviousScheduler, values: Value) {
         self.target_scheduler
             .schedule()
-            .connect_two(ContinuingReceiverWrapper {
+            .connect(ContinuingReceiverWrapper {
                 nested: self.nested,
                 phantom: PhantomData,
                 values,

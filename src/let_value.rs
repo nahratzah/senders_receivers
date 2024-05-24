@@ -190,13 +190,13 @@ where
     FnType: BiFunctor<NestedSender::Scheduler, NestedSender::Value, Output = Result<Out, Error>>,
     Out: TypedSender + TypedSenderConnect<ReceiverImpl>,
 {
-    fn connect_two(self, receiver: ReceiverImpl) -> impl OperationState {
+    fn connect(self, receiver: ReceiverImpl) -> impl OperationState {
         let wrapped_receiver = LetValueWrappedReceiver {
             nested: receiver,
             fn_impl: self.fn_impl,
             phantom: PhantomData,
         };
-        self.nested.connect_two(wrapped_receiver)
+        self.nested.connect(wrapped_receiver)
     }
 }
 
@@ -243,7 +243,7 @@ where
     fn set_value(self, scheduler: FirstArg, values: ArgTuple) {
         match self.fn_impl.tuple_invoke(scheduler, values) {
             Ok(sender) => {
-                let nested_state = sender.connect_two(self.nested);
+                let nested_state = sender.connect(self.nested);
                 nested_state.start()
             }
             Err(e) => self.nested.set_error(e),

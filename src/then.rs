@@ -183,14 +183,14 @@ where
     FnType: Functor<NestedSender::Value, Output = Result<Out, Error>>,
     Out: IsTuple,
 {
-    fn connect_two(self, receiver: ReceiverImpl) -> impl OperationState {
+    fn connect(self, receiver: ReceiverImpl) -> impl OperationState {
         let wrapped_receiver = ThenWrappedReceiver {
             nested: receiver,
             fn_impl: self.fn_impl,
             phantom: PhantomData,
         };
 
-        self.nested.connect_two(wrapped_receiver)
+        self.nested.connect(wrapped_receiver)
     }
 }
 

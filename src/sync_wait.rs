@@ -96,7 +96,7 @@ where
         ReceiverType<SenderImpl::Value>,
     ) = same_thread_channel::channel(1);
     let receiver = NoSendReceiver { tx };
-    sender.connect_two(receiver).start();
+    sender.connect(receiver).start();
     match rx.recv().expect("a single value must be delivered") {
         SyncWaitOutcome::Value(tuple) => Ok(Some(tuple)),
         SyncWaitOutcome::Error(error) => Err(error),
@@ -135,7 +135,7 @@ where
         ReceiverType<SenderImpl::Value>,
     ) = mpsc::sync_channel(1);
     let receiver = SendReceiver { tx };
-    sender.connect_two(receiver).start();
+    sender.connect(receiver).start();
     match rx.recv().expect("a single value must be delivered") {
         SyncWaitOutcome::Value(tuple) => Ok(Some(tuple)),
         SyncWaitOutcome::Error(error) => Err(error),

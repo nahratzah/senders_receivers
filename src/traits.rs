@@ -48,7 +48,7 @@ where
 {
     /// Attach a receiver.
     /// Will produce an operation state, that, once started, will invoke the receiver exactly once.
-    fn connect_two(self, receiver: ReceiverType) -> impl OperationState;
+    fn connect(self, receiver: ReceiverType) -> impl OperationState;
 }
 
 /// [Sender] can extend [TypedSender].
