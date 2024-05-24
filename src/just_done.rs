@@ -33,6 +33,12 @@ impl<Tuple: IsTuple> JustDone<Tuple> {
     }
 }
 
+impl<Tuple: IsTuple> Default for JustDone<Tuple> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<Tuple: IsTuple> TypedSender for JustDone<Tuple> {
     type Value = Tuple;
     type Scheduler = ImmediateScheduler;

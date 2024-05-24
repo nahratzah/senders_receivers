@@ -88,9 +88,12 @@ where
     SenderImpl:
         TypedSender + TypedSenderConnect<NoSendReceiver<<SenderImpl as TypedSender>::Value>>,
 {
+    type SenderType<Value> = same_thread_channel::Sender<SyncWaitOutcome<Value>>;
+    type ReceiverType<Value> = same_thread_channel::Receiver<SyncWaitOutcome<Value>>;
+
     let (tx, rx): (
-        same_thread_channel::Sender<SyncWaitOutcome<SenderImpl::Value>>,
-        same_thread_channel::Receiver<SyncWaitOutcome<SenderImpl::Value>>,
+        SenderType<SenderImpl::Value>,
+        ReceiverType<SenderImpl::Value>,
     ) = same_thread_channel::channel(1);
     let receiver = NoSendReceiver { tx };
     sender.connect_two(receiver).start();
@@ -124,9 +127,12 @@ where
     SenderImpl: TypedSender + TypedSenderConnect<SendReceiver<<SenderImpl as TypedSender>::Value>>,
     <SenderImpl as TypedSender>::Value: Send + 'static,
 {
+    type SenderType<Value> = mpsc::SyncSender<SyncWaitOutcome<Value>>;
+    type ReceiverType<Value> = mpsc::Receiver<SyncWaitOutcome<Value>>;
+
     let (tx, rx): (
-        mpsc::SyncSender<SyncWaitOutcome<SenderImpl::Value>>,
-        mpsc::Receiver<SyncWaitOutcome<SenderImpl::Value>>,
+        SenderType<SenderImpl::Value>,
+        ReceiverType<SenderImpl::Value>,
     ) = mpsc::sync_channel(1);
     let receiver = SendReceiver { tx };
     sender.connect_two(receiver).start();
