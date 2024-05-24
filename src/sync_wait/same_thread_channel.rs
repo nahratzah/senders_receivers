@@ -6,10 +6,10 @@ use std::sync::mpsc;
 
 // Re-export the SendError from mpsc.
 // The idea is to re-use the look of the mpsc interface.
-pub type SendError<T> = mpsc::SendError<T>;
+pub use mpsc::SendError;
 // Re-export the RecvError from mpsc.
 // The idea is to re-use the look of the mpsc interface.
-pub type RecvError = mpsc::RecvError;
+pub use mpsc::RecvError;
 
 /// Channel-receiver.
 ///
@@ -65,7 +65,7 @@ impl<T> Channel<T> {
     fn push(&mut self, v: T) -> Result<(), SendError<T>> {
         assert!(self.cnt_sender > 0);
         if !self.has_receiver {
-            return Err(mpsc::SendError(v));
+            return Err(SendError(v));
         }
         self.queue.push_back(v);
         Ok(())
@@ -73,7 +73,7 @@ impl<T> Channel<T> {
 
     fn pop(&mut self) -> Result<T, RecvError> {
         assert!(self.has_receiver);
-        self.queue.pop_front().ok_or(mpsc::RecvError)
+        self.queue.pop_front().ok_or(RecvError)
     }
 }
 
@@ -121,7 +121,7 @@ impl<T> Sender<T> {
 
 #[cfg(test)]
 mod tests {
-    use super::channel;
+    use super::{channel, RecvError, SendError};
 
     #[test]
     fn it_works() {
@@ -133,10 +133,7 @@ mod tests {
     #[test]
     fn empty_queue_yields_error() {
         let (tx, rx) = channel::<String>(1);
-        assert_eq!(
-            std::sync::mpsc::RecvError,
-            rx.recv().expect_err("receive to fail")
-        );
+        assert_eq!(RecvError, rx.recv().expect_err("receive to fail"));
         drop(tx)
     }
 
@@ -144,10 +141,7 @@ mod tests {
     fn sender_disconnected_queue_yields_error() {
         let (tx, rx) = channel::<String>(1);
         drop(tx);
-        assert_eq!(
-            std::sync::mpsc::RecvError,
-            rx.recv().expect_err("receive to fail")
-        );
+        assert_eq!(RecvError, rx.recv().expect_err("receive to fail"));
     }
 
     #[test]
@@ -155,7 +149,7 @@ mod tests {
         let (tx, rx) = channel::<String>(1);
         drop(rx);
         assert_eq!(
-            std::sync::mpsc::SendError(String::from("nope nope nope")),
+            SendError(String::from("nope nope nope")),
             tx.send(String::from("nope nope nope"))
                 .expect_err("send to fail")
         );
