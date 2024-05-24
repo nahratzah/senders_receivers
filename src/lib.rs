@@ -46,17 +46,19 @@ mod just_done;
 mod just_error;
 mod let_value;
 mod scheduler;
+mod start_detached;
 mod sync_wait;
 mod then;
 mod traits;
 mod transfer;
 
-pub use errors::{Error, IsTuple};
+pub use errors::{new_error, Error, IsTuple};
 pub use just::Just;
 pub use just_done::JustDone;
 pub use just_error::JustError;
 pub use let_value::LetValue;
 pub use scheduler::{ImmediateScheduler, Scheduler};
+pub use start_detached::start_detached;
 pub use sync_wait::{sync_wait, sync_wait_send};
 pub use then::Then;
 pub use traits::{
