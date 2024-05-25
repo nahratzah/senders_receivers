@@ -45,7 +45,7 @@ pub trait Scheduler: Eq + Clone {
 }
 
 /// An immediate-scheduler is a [Scheduler] which runs any tasks on it immediately.
-#[derive(Eq, PartialEq, Clone)]
+#[derive(Clone, Default, Eq, PartialEq)]
 pub struct ImmediateScheduler {}
 
 /// This scheduler is a basic scheduler, that just runs everything immediately.
@@ -169,4 +169,12 @@ where
         let receiver = self.receiver;
         self.pool.execute(move || receiver.set_value(pool, ()));
     }
+}
+
+/// This trait allows us to construct things from a scheduler and an argument.
+pub trait WithScheduler<Sch, Arg>
+where
+    Sch: Scheduler,
+{
+    fn with_scheduler(sch: Sch, arg: Arg) -> Self;
 }

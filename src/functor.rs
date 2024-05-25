@@ -8,6 +8,12 @@
 use crate::errors::{Error, IsTuple};
 use std::marker::PhantomData;
 
+pub trait NoArgFunctor {
+    type Output;
+
+    fn tuple_invoke(self) -> Self::Output;
+}
+
 /// A functor can be invoked.
 ///
 /// Args represents a tuple of arguments.
@@ -76,6 +82,40 @@ where
     fn tuple_invoke(self, args: Args) -> Self::Output {
         self.next_fn
             .tuple_invoke((self.first_fn.tuple_invoke(args),))
+    }
+}
+
+/// Functor for a [function/closure](FnOnce).
+///
+/// The functor will delegate to the contained function.
+pub struct NoArgClosure<FnType, Out>
+where
+    FnType: FnOnce() -> Out,
+{
+    phantom: PhantomData<fn() -> Out>,
+    fn_impl: FnType,
+}
+
+impl<FnType, Out> NoArgClosure<FnType, Out>
+where
+    FnType: FnOnce() -> Out,
+{
+    pub fn new(fn_impl: FnType) -> Self {
+        Self {
+            fn_impl,
+            phantom: PhantomData,
+        }
+    }
+}
+
+impl<FnType, Out> NoArgFunctor for NoArgClosure<FnType, Out>
+where
+    FnType: FnOnce() -> Out,
+{
+    type Output = Out;
+
+    fn tuple_invoke(self) -> Self::Output {
+        (self.fn_impl)()
     }
 }
 
@@ -218,6 +258,39 @@ where
 //
 // crate::errors::tuple_impls!(closure_invoke);
 // ```
+
+/// Wrapper for functors that don't return a [Result].
+/// This wrapper wraps the functor into something that will return a [Result].
+pub struct NoErrNoArgFunctor<FunctorType, Out>
+where
+    FunctorType: NoArgFunctor<Output = Out>,
+{
+    functor: FunctorType,
+    phantom: PhantomData<fn() -> Out>,
+}
+
+impl<FunctorType, Out> NoErrNoArgFunctor<FunctorType, Out>
+where
+    FunctorType: NoArgFunctor<Output = Out>,
+{
+    pub fn new(functor: FunctorType) -> Self {
+        Self {
+            functor,
+            phantom: PhantomData,
+        }
+    }
+}
+
+impl<FunctorType, Out> NoArgFunctor for NoErrNoArgFunctor<FunctorType, Out>
+where
+    FunctorType: NoArgFunctor<Output = Out>,
+{
+    type Output = Result<Out, Error>;
+
+    fn tuple_invoke(self) -> Self::Output {
+        Ok(self.functor.tuple_invoke())
+    }
+}
 
 /// Wrapper for functors that don't return a [Result].
 /// This wrapper wraps the functor into something that will return a [Result].
