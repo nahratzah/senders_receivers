@@ -116,6 +116,7 @@ mod then;
 mod traits;
 mod transfer;
 mod upon_done;
+mod upon_error;
 
 pub use errors::{new_error, Error, IsTuple};
 pub use just::Just;
@@ -131,3 +132,4 @@ pub use traits::{
 };
 pub use transfer::Transfer;
 pub use upon_done::UponDone;
+pub use upon_error::UponError;

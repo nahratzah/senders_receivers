@@ -5,7 +5,7 @@
 //!
 //! Note: we might erase this module in the future, if implementing [FnOnce] becomes doable.
 
-use crate::errors::{Error, IsTuple};
+use crate::errors::Error;
 use std::marker::PhantomData;
 
 pub trait NoArgFunctor {
@@ -17,10 +17,7 @@ pub trait NoArgFunctor {
 /// A functor can be invoked.
 ///
 /// Args represents a tuple of arguments.
-pub trait Functor<Args>
-where
-    Args: IsTuple,
-{
+pub trait Functor<Args> {
     /// The result type of the functor.
     type Output;
 
@@ -35,10 +32,7 @@ where
 /// A bi-functor can be invoked with two arguments.
 ///
 /// The second argument represents a tuple of arguments.
-pub trait BiFunctor<FirstArg, Args>
-where
-    Args: IsTuple,
-{
+pub trait BiFunctor<FirstArg, Args> {
     /// The result type of the functor.
     type Output;
 
@@ -85,7 +79,6 @@ where
 /// The functor will delegate to the contained function.
 pub struct Closure<FnType, Out, Args>
 where
-    Args: IsTuple,
     FnType: FnOnce(Args) -> Out,
 {
     phantom: PhantomData<fn(Args) -> Out>,
@@ -94,7 +87,6 @@ where
 
 impl<FnType, Out, Args> Closure<FnType, Out, Args>
 where
-    Args: IsTuple,
     FnType: FnOnce(Args) -> Out,
 {
     pub fn new(fn_impl: FnType) -> Closure<FnType, Out, Args> {
@@ -107,7 +99,6 @@ where
 
 impl<FnType, Out, Args> Functor<Args> for Closure<FnType, Out, Args>
 where
-    Args: IsTuple,
     FnType: FnOnce(Args) -> Out,
 {
     type Output = Out;
@@ -123,7 +114,6 @@ where
 /// The functor will delegate to the contained function.
 pub struct BiClosure<FnType, Out, FirstArg, Args>
 where
-    Args: IsTuple,
     FnType: FnOnce(FirstArg, Args) -> Out,
 {
     phantom: PhantomData<fn(FirstArg, Args) -> Out>,
@@ -132,7 +122,6 @@ where
 
 impl<FnType, Out, FirstArg, Args> BiClosure<FnType, Out, FirstArg, Args>
 where
-    Args: IsTuple,
     FnType: FnOnce(FirstArg, Args) -> Out,
 {
     pub fn new(fn_impl: FnType) -> BiClosure<FnType, Out, FirstArg, Args> {
@@ -146,7 +135,6 @@ where
 impl<FnType, Out, FirstArg, Args> BiFunctor<FirstArg, Args>
     for BiClosure<FnType, Out, FirstArg, Args>
 where
-    Args: IsTuple,
     FnType: FnOnce(FirstArg, Args) -> Out,
 {
     type Output = Out;
@@ -156,69 +144,6 @@ where
         fn_impl(first_arg, args)
     }
 }
-
-// If we had `Fn`-family traits, we could do this:
-//
-// ```
-// pub struct XClosure<FnType, Out, Args>
-// where
-//     Args: IsTuple+std::marker::Tuple,
-//     FnType: FnOnce<Args, Output=Out>,
-// {
-//     phantoms: PhantomData<fn(Args) -> Out>,
-//     fn_impl: FnType,
-// }
-//
-// macro_rules! closure_invoke {
-//     () => {
-//         impl<FnType, Out> Functor<()> for XClosure<FnType, Out, ()>
-//         where
-//             (): IsTuple,
-//             FnType: FnOnce() -> Out
-//         {
-//             type Output = Out;
-//
-//             fn tuple_invoke(self, _: ()) -> Self::Output {
-//                 let fn_impl = self.fn_impl;
-//                 fn_impl()
-//             }
-//         }
-//     };
-//     ($i:ident : $T:ident) => {
-//         impl<FnType, Out, $T> Functor<($T,)> for XClosure<FnType, Out, ($T,)>
-//         where
-//             (): IsTuple,
-//             FnType: FnOnce($T) -> Out
-//         {
-//             type Output = Out;
-//
-//             fn tuple_invoke(self, $i: ($T,)) -> Self::Output {
-//                 let fn_impl = self.fn_impl;
-//                 fn_impl($i)
-//             }
-//         }
-//     };
-//     ($i:ident : $T:ident) => {
-//         panic!("Please don't!");
-//     };
-//     ($($i:ident : $T:ident),*) => {
-//         impl<FnType, Out, $($T),*> Functor<($($T),*)> for XClosure<FnType, Out, ($($T),*)>
-//         where
-//             ($($T),*): IsTuple,
-//             FnType: FnOnce($($T),*) -> Out
-//         {
-//             type Output = Out;
-//
-//             fn tuple_invoke(self, ($($i),*): ($($T),*)) -> Self::Output {
-//                 let fn_impl = self.fn_impl;
-//                 fn_impl($($i),*)
-//             }
-//         }
-//     };
-// }
-//
-// crate::errors::tuple_impls!(closure_invoke);
-// ```
 
 /// Wrapper for functors that don't return a [Result].
 /// This wrapper wraps the functor into something that will return a [Result].
@@ -261,7 +186,6 @@ where
 pub struct NoErrFunctor<FunctorType, Out, ArgTuple>
 where
     FunctorType: Functor<ArgTuple, Output = Out>,
-    ArgTuple: IsTuple,
 {
     functor: FunctorType,
     phantom: PhantomData<fn(ArgTuple) -> Out>,
@@ -270,7 +194,6 @@ where
 impl<FunctorType, Out, ArgTuple> NoErrFunctor<FunctorType, Out, ArgTuple>
 where
     FunctorType: Functor<ArgTuple, Output = Out>,
-    ArgTuple: IsTuple,
 {
     pub fn new(functor: FunctorType) -> NoErrFunctor<FunctorType, Out, ArgTuple> {
         NoErrFunctor {
@@ -283,7 +206,6 @@ where
 impl<FunctorType, Out, ArgTuple> Functor<ArgTuple> for NoErrFunctor<FunctorType, Out, ArgTuple>
 where
     FunctorType: Functor<ArgTuple, Output = Out>,
-    ArgTuple: IsTuple,
 {
     type Output = Result<Out, Error>;
 
@@ -300,7 +222,6 @@ where
 pub struct NoErrBiFunctor<FunctorType, Out, FirstArg, ArgTuple>
 where
     FunctorType: BiFunctor<FirstArg, ArgTuple, Output = Out>,
-    ArgTuple: IsTuple,
 {
     functor: FunctorType,
     phantom: PhantomData<fn(FirstArg, ArgTuple) -> Out>,
@@ -309,7 +230,6 @@ where
 impl<FunctorType, Out, FirstArg, ArgTuple> NoErrBiFunctor<FunctorType, Out, FirstArg, ArgTuple>
 where
     FunctorType: BiFunctor<FirstArg, ArgTuple, Output = Out>,
-    ArgTuple: IsTuple,
 {
     pub fn new(functor: FunctorType) -> NoErrBiFunctor<FunctorType, Out, FirstArg, ArgTuple> {
         NoErrBiFunctor {
@@ -323,7 +243,6 @@ impl<FunctorType, Out, FirstArg, ArgTuple> BiFunctor<FirstArg, ArgTuple>
     for NoErrBiFunctor<FunctorType, Out, FirstArg, ArgTuple>
 where
     FunctorType: BiFunctor<FirstArg, ArgTuple, Output = Out>,
-    ArgTuple: IsTuple,
 {
     type Output = Result<Out, Error>;
 
