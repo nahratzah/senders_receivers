@@ -3,7 +3,6 @@
 //! This is an implementation (for certain value of implementation) of C++ senders/receivers.
 //!
 //! ## A Tiny Example
-//!
 //! ```
 //! use senders_receivers::*;
 //!
@@ -19,12 +18,44 @@
 //!
 //! None of the steps are run, until `sync_wait` is invoked.
 //!
+//! ## Senders? Receivers?
+//! The main concept of this code comes from having both senders and receivers.
+//! A sender is a type that produces a value signal (or an error signal, or a done signal).
+//! A receiver is a type that accepts this signal.
+//!
+//! Senders are composable: they can be chained together, creating a new sender.
+//! This is done with the `|` (pipe) symbol.
+//!
+//! If you are using the library, you will not spot any receivers, unless you're implementing your own extensions.
+//!
+//! ## Signals
+//! Each sender, produces either
+//! a `value signal`,
+//! an `error signal`,
+//! or a `done signal`.
+//! Exactly one of these will be produced.
+//!
+//! - A `value signal` indicates that the sender completed successfully, and produced a value.  
+//! - An `error signal` indicates that the sender failed, and produced an [Error].  
+//! - A `done signal` indicates that the sender canceled its work (producing neither a value, nor an error).
+//!
+//! ## Schedulers
+//! Each operation will run on a [Scheduler].
+//! (Sometimes more than one, for example if you [Transfer] to a different scheduler.)
+//!
+//! A scheduler encapsulates the concept of CPU-time.
+//! Different schedulers will have different characteristics, related to when/where things run.
+//!
+//! Currently, the following schedulers are implemented:
+//! - [ImmediateScheduler] runs every task immediately. This is more-or-less the default scheduler.
+//! - [ThreadPool](threadpool::ThreadPool) runs tasks using a threadpool.
+//!
 //! ## Comparison With C++
 //! An attempt is made to remain close the the usability of the C++ style,
 //! but sacrifices had to be made.
 //!
-//! - The `Error` type is dynamic.  
-//!    For a non-dynamic error type, we would require a variant-type with variadic type arguments.
+//! - The `Error` type is type-erased/dynamic.  
+//!   For a non-dynamic error type, we would require a variant-type with variadic type arguments.
 //! - The `Value` type is a tuple.  
 //!   For a non-tuple type, we would require variadic type arguments.
 //! - The `Value` is not a variant.  
