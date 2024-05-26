@@ -1,5 +1,5 @@
 use crate::traits::{BindSender, OperationState, ReceiverOf, TypedSender, TypedSenderConnect};
-use core::ops::BitOr;
+use std::ops::BitOr;
 use threadpool::ThreadPool;
 
 /// Schedulers are things that can do work.

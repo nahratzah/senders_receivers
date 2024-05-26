@@ -1,8 +1,8 @@
 use crate::errors::IsTuple;
 use crate::scheduler::ImmediateScheduler;
 use crate::traits::{BindSender, OperationState, ReceiverOf, TypedSender, TypedSenderConnect};
-use core::ops::BitOr;
 use std::marker::PhantomData;
+use std::ops::BitOr;
 
 /// A [TypedSender] that always generates a done-signal.
 ///

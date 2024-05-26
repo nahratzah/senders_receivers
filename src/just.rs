@@ -3,8 +3,8 @@ use crate::scheduler::{ImmediateScheduler, Scheduler, WithScheduler};
 use crate::traits::{
     BindSender, OperationState, Receiver, ReceiverOf, TypedSender, TypedSenderConnect,
 };
-use core::ops::BitOr;
 use std::marker::PhantomData;
+use std::ops::BitOr;
 
 /// A typed-sender that holds a tuple of values.
 ///

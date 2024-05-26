@@ -4,8 +4,8 @@ use crate::scheduler::Scheduler;
 use crate::traits::{
     BindSender, OperationState, Receiver, ReceiverOf, Sender, TypedSender, TypedSenderConnect,
 };
-use core::ops::BitOr;
 use std::marker::PhantomData;
+use std::ops::BitOr;
 
 /// A then operation takes the current `value` signal, and transforms it in some way.
 /// The result of the function is the new `value` signal.

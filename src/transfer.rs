@@ -3,8 +3,8 @@ use crate::scheduler::Scheduler;
 use crate::traits::{
     BindSender, OperationState, Receiver, ReceiverOf, Sender, TypedSender, TypedSenderConnect,
 };
-use core::ops::BitOr;
 use std::marker::PhantomData;
+use std::ops::BitOr;
 
 /// Transfer to a different [Scheduler].
 ///
