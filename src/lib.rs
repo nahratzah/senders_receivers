@@ -62,6 +62,8 @@
 //!    This allows for schedulers to declare follow-up code to run on a different scheduler.
 //!    For example, an embarrasingly-parallel scheduler could schedule on any thread the first time,
 //!    and then propagate a scheduler that'll always use the same thread for subsequent scheduling.
+//! 5. Error/done recovery operations must complete with the same scheduler-type and value-type, as what would be sent during the happy path.  
+//!    This is a consequence of us limiting things to a single type, and sending the scheduler along in the value-signal.
 //!
 //! The reason that `error` channels no longer have an associated scheduler,
 //! is because scheduler-transfers can fail, and this would break the invariant of an error-scheduler.
