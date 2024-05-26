@@ -64,6 +64,7 @@
 //!    and then propagate a scheduler that'll always use the same thread for subsequent scheduling.
 //! 5. Error/done recovery operations must complete with the same scheduler-type and value-type, as what would be sent during the happy path.  
 //!    This is a consequence of us limiting things to a single type, and sending the scheduler along in the value-signal.
+//!    (Note that the error and done signals don't propagate a scheduler alongside; this would be impossible without making [LetValue] a lot more cumbersome to use.)
 //!
 //! The reason that `error` channels no longer have an associated scheduler,
 //! is because scheduler-transfers can fail, and this would break the invariant of an error-scheduler.
