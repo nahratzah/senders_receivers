@@ -2,7 +2,7 @@
 
 //! This is an implementation (for certain value of implementation) of C++ senders/receivers.
 //!
-//! ## A Simple Example
+//! ## A Tiny Example
 //!
 //! ```
 //! use senders_receivers::*;

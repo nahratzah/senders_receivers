@@ -30,17 +30,6 @@ where
     /// - we invoke it with tuple only;
     /// - I wanted a name that wouldn't clash, if in the future variadic traits became a thing.
     fn tuple_invoke(self, args: Args) -> Self::Output;
-
-    fn then(self, next_fn: impl Functor<(Self::Output,)>) -> impl Functor<Args>
-    where
-        Self: Sized,
-    {
-        Composition {
-            phantom: PhantomData,
-            first_fn: self,
-            next_fn,
-        }
-    }
 }
 
 /// A bi-functor can be invoked with two arguments.
@@ -55,34 +44,6 @@ where
 
     /// Invoke this functor.
     fn tuple_invoke(self, first_arg: FirstArg, args: Args) -> Self::Output;
-}
-
-/// Composition functor.
-///
-/// A composition functor takes two functors (`f` and `g`, and creates a new functor `n`, such that: `n(x) -> g(f(x))`.
-struct Composition<FirstFn, NextFn, Args>
-where
-    Args: IsTuple,
-    FirstFn: Functor<Args>,
-    NextFn: Functor<(<FirstFn as Functor<Args>>::Output,)>,
-{
-    phantom: PhantomData<fn(Args)>,
-    first_fn: FirstFn,
-    next_fn: NextFn,
-}
-
-impl<FirstFn, NextFn, Args> Functor<Args> for Composition<FirstFn, NextFn, Args>
-where
-    Args: IsTuple,
-    FirstFn: Functor<Args>,
-    NextFn: Functor<(FirstFn::Output,)>,
-{
-    type Output = NextFn::Output;
-
-    fn tuple_invoke(self, args: Args) -> Self::Output {
-        self.next_fn
-            .tuple_invoke((self.first_fn.tuple_invoke(args),))
-    }
 }
 
 /// Functor for a [function/closure](FnOnce).
