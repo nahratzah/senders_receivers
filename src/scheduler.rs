@@ -13,7 +13,7 @@ use threadpool::ThreadPool;
 /// use threadpool::ThreadPool;
 ///
 /// let pool = ThreadPool::with_name("example".into(), 1)
-/// let sender = Then::new_fn(|()| {
+/// let sender = Then::from(|()| {
 ///                  // This computation will run on the scheduler.
 ///                  let mut s = 0_i32;
 ///                  for n in 1..101 {

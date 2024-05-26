@@ -47,8 +47,8 @@ mod test {
 
         start_detached(
             Just::new((String::from("dcba"),))
-                | Then::new_fn(|(x,): (String,)| (x.chars().rev().collect::<String>(),))
-                | Then::new_fn_err(move |(x,)| tx.send(x).map_err(|e| new_error(e))),
+                | Then::from(|(x,): (String,)| (x.chars().rev().collect::<String>(),))
+                | Then::from(move |(x,)| tx.send(x).map_err(|e| new_error(e))),
         );
 
         assert_eq!(
@@ -64,7 +64,7 @@ mod test {
     //     start_detached(
     //         Just::new((String::from("dcba"),))
     //         | LetValue::new_fn(|_, (_,): (String,)| JustDone::<(String,)>::default())
-    //         | Then::new_fn_err(move |(x,)| -> Result<(), Error> { // XXX change to something that handle 'done'
+    //         | Then::from(move |(x,)| -> Result<(), Error> { // XXX change to something that handle 'done'
     //     	tx.send(x).map_err(|e| new_error(e)) // Never runs.
     //     	}));
     //
@@ -78,8 +78,8 @@ mod test {
     fn handles_error() {
         start_detached(
             Just::new((String::from("dcba"),))
-                | Then::new_fn(|(x,): (String,)| (x.chars().rev().collect::<String>(),))
-                | Then::new_fn_err(move |(_,)| -> Result<(), Error> {
+                | Then::from(|(x,): (String,)| (x.chars().rev().collect::<String>(),))
+                | Then::from(move |(_,)| -> Result<(), Error> {
                     Err(new_error(ErrorForTesting::from(
                         "start_detached error signal test",
                     )))

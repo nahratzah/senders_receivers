@@ -16,14 +16,14 @@ use std::marker::PhantomData;
 ///
 /// // If using a function that returns a tuple:
 /// let myFn = |(x, y, z): (i32, i32, i32)| (x + y + z,);
-/// let sender = Just::new((1, 2, 3)) | Then::new_fn(myFn);
+/// let sender = Just::new((1, 2, 3)) | Then::from(myFn);
 /// assert_eq!(
 ///     (6,),
 ///     sync_wait(sender).unwrap().unwrap());
 ///
 /// // If using a function that returns a Result:
 /// let myFn = |(x,)| -> Result<(i32,), Error> { Ok((x,)) };
-/// let sender = Just::new((17,)) | Then::new_fn_err(myFn);  // if function returns a result
+/// let sender = Just::new((17,)) | Then::from(myFn);  // if function returns a result
 /// assert_eq!(
 ///     (17,),
 ///     sync_wait(sender).unwrap().unwrap());
@@ -41,14 +41,14 @@ where
     phantom: PhantomData<fn(ArgTuple) -> Out>,
 }
 
-impl<FnType, Out, ArgTuple> Then<FnType, Out, ArgTuple>
+impl<FnType, Out, ArgTuple> From<FnType> for Then<FnType, Out, ArgTuple>
 where
     FnType: Functor<ArgTuple, Output = Result<Out, Error>>,
     ArgTuple: IsTuple,
     Out: IsTuple,
 {
     /// Create a new Then operation, using a [Functor] that returns an [Result].
-    pub fn new_err(fn_impl: FnType) -> Then<FnType, Out, ArgTuple> {
+    fn from(fn_impl: FnType) -> Self {
         Then {
             fn_impl,
             phantom: PhantomData,
@@ -59,7 +59,7 @@ where
 type ClosureThen<FnType, Out, ArgTuple> =
     Then<Closure<FnType, Result<Out, Error>, ArgTuple>, Out, ArgTuple>;
 
-impl<FnType, ArgTuple, Out> ClosureThen<FnType, Out, ArgTuple>
+impl<FnType, ArgTuple, Out> From<FnType> for ClosureThen<FnType, Out, ArgTuple>
 where
     FnType: FnOnce(ArgTuple) -> Result<Out, Error>,
     ArgTuple: IsTuple,
@@ -68,15 +68,15 @@ where
     /// Create a new Then operation, using the specified [function](FnOnce).
     /// The function must return a [Result].
     /// If the returned result holds an error, that'll be propagated via the error signal.
-    pub fn new_fn_err(fn_impl: FnType) -> ClosureThen<FnType, Out, ArgTuple> {
-        Self::new_err(Closure::new(fn_impl))
+    fn from(fn_impl: FnType) -> Self {
+        Self::from(Closure::new(fn_impl))
     }
 }
 
 type NoErrThen<FunctorType, Out, ArgTuple> =
     Then<NoErrFunctor<FunctorType, Out, ArgTuple>, Out, ArgTuple>;
 
-impl<FnImpl, Out, ArgTuple> NoErrThen<FnImpl, Out, ArgTuple>
+impl<FnImpl, Out, ArgTuple> From<FnImpl> for NoErrThen<FnImpl, Out, ArgTuple>
 where
     FnImpl: Functor<ArgTuple, Output = Out>,
     ArgTuple: IsTuple,
@@ -84,15 +84,15 @@ where
 {
     /// Create a new then operation, from a [Functor].
     /// The functor should return a [tuple](IsTuple).
-    pub fn new(fn_impl: FnImpl) -> NoErrThen<FnImpl, Out, ArgTuple> {
-        Self::new_err(NoErrFunctor::new(fn_impl))
+    fn from(fn_impl: FnImpl) -> Self {
+        Self::from(NoErrFunctor::new(fn_impl))
     }
 }
 
 type NoErrClosureThen<FnImpl, Out, ArgTuple> =
     NoErrThen<Closure<FnImpl, Out, ArgTuple>, Out, ArgTuple>;
 
-impl<FnImpl, Out, ArgTuple> NoErrClosureThen<FnImpl, Out, ArgTuple>
+impl<FnImpl, Out, ArgTuple> From<FnImpl> for NoErrClosureThen<FnImpl, Out, ArgTuple>
 where
     FnImpl: FnOnce(ArgTuple) -> Out,
     ArgTuple: IsTuple,
@@ -100,8 +100,8 @@ where
 {
     /// Create a new then operation, from a [function/closure](FnOnce).
     /// The function/closure should return a [tuple](IsTuple).
-    pub fn new_fn(fn_impl: FnImpl) -> NoErrClosureThen<FnImpl, Out, ArgTuple> {
-        Self::new(Closure::new(fn_impl))
+    fn from(fn_impl: FnImpl) -> Self {
+        Self::from(Closure::new(fn_impl))
     }
 }
 
@@ -254,7 +254,7 @@ mod tests {
     fn it_works() {
         assert_eq!(
             Some((6, 7, 8)),
-            sync_wait(Just::new((4, 5, 6)) | Then::new_fn(|(x, y, z)| (x + 2, y + 2, z + 2)))
+            sync_wait(Just::new((4, 5, 6)) | Then::from(|(x, y, z)| (x + 2, y + 2, z + 2)))
                 .expect("should succeed")
         )
     }
@@ -263,10 +263,8 @@ mod tests {
     fn it_works_with_errors() {
         assert_eq!(
             Some((6, 7, 8)),
-            sync_wait(
-                Just::new((4, 5, 6)) | Then::new_fn_err(|(x, y, z)| Ok((x + 2, y + 2, z + 2)))
-            )
-            .expect("should succeed")
+            sync_wait(Just::new((4, 5, 6)) | Then::from(|(x, y, z)| Ok((x + 2, y + 2, z + 2))))
+                .expect("should succeed")
         )
     }
 
@@ -274,7 +272,7 @@ mod tests {
     fn errors_from_preceding_sender_are_propagated() {
         match sync_wait(
             JustError::<()>::new(Box::new(ErrorForTesting::from("error")))
-                | Then::new_fn(|()| -> (i32, i32) {
+                | Then::from(|()| -> (i32, i32) {
                     panic!("expect this function to not be invoked")
                 }),
         ) {
@@ -292,7 +290,7 @@ mod tests {
     fn errors_from_functor_are_propagated() {
         match sync_wait(
             Just::new(())
-                | Then::new_fn_err(|()| -> Result<(), Error> {
+                | Then::from(|()| -> Result<(), Error> {
                     Err(Box::new(ErrorForTesting::from("error")))
                 }),
         ) {

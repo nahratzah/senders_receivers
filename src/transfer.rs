@@ -18,7 +18,7 @@ use std::marker::PhantomData;
 /// let pool = ThreadPool::with_name("example".into(), 1);
 /// let sender = Just::new((2, 3, 7))
 ///              | Transfer::new(pool)
-///              | Then::new_fn(|(x, y, z)| {
+///              | Then::from(|(x, y, z)| {
 ///                  // This will run on `my_scheduler`.
 ///                  (x * y * z,)
 ///              });
