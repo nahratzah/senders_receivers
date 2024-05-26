@@ -17,18 +17,18 @@ use std::marker::PhantomData;
 /// use senders_receivers::{Just, LetValue, sync_wait};
 ///
 /// // If using a function that returns a sender:
-/// let sender = Just::new((String::from("world"),))
+/// let sender = Just::from((String::from("world"),))
 ///              | LetValue::from(|_, (name,)| {
-///                  Just::new((format!("Hello {}!", name),))
+///                  Just::from((format!("Hello {}!", name),))
 ///              });
 /// assert_eq!(
 ///     (String::from("Hello world!"),),
 ///     sync_wait(sender).unwrap().unwrap());
 ///
 /// // If using a function that returns a Result:
-/// let sender = Just::new((String::from("world"),))
+/// let sender = Just::from((String::from("world"),))
 ///              | LetValue::from(|_, (name,)| {
-///                  Ok(Just::new((format!("Hello {}!", name),)))
+///                  Ok(Just::from((format!("Hello {}!", name),)))
 ///              });
 /// assert_eq!(
 ///     (String::from("Hello world!"),),
@@ -260,6 +260,7 @@ mod tests {
     use crate::errors::{Error, ErrorForTesting};
     use crate::just::Just;
     use crate::just_error::JustError;
+    use crate::scheduler::ImmediateScheduler;
     use crate::sync_wait::sync_wait;
 
     #[test]
@@ -267,10 +268,10 @@ mod tests {
         assert_eq!(
             Some((6, 7, 8)),
             sync_wait(
-                Just::new((6,))
+                Just::from((6,))
                     | LetValue::from(|_, (x,)| {
                         assert_eq!(x, 6);
-                        Just::new((x, 7, 8))
+                        Just::from((x, 7, 8))
                     })
             )
             .expect("should succeed")
@@ -281,7 +282,7 @@ mod tests {
     fn it_works_with_errors() {
         assert_eq!(
             Some((6, 7, 8)),
-            sync_wait(Just::new((6,)) | LetValue::from(|_, (x,)| Ok(Just::new((x, 7, 8)))))
+            sync_wait(Just::from((6,)) | LetValue::from(|_, (x,)| Ok(Just::from((x, 7, 8)))))
                 .expect("should succeed")
         )
     }
@@ -290,7 +291,7 @@ mod tests {
     fn errors_from_preceding_sender_are_propagated() {
         match sync_wait(
             JustError::<()>::new(Box::new(ErrorForTesting::from("error")))
-                | LetValue::from(|_, ()| -> Just<(i32,)> {
+                | LetValue::from(|_, ()| -> Just<ImmediateScheduler, (i32,)> {
                     panic!("expect this function to not be invoked")
                 }),
         ) {
@@ -307,8 +308,8 @@ mod tests {
     #[test]
     fn errors_from_functor_are_propagated() {
         match sync_wait(
-            Just::new(())
-                | LetValue::from(|_, ()| -> Result<Just<(i32,)>, Error> {
+            Just::from(())
+                | LetValue::from(|_, ()| -> Result<Just<ImmediateScheduler, (i32,)>, Error> {
                     Err(Box::new(ErrorForTesting::from("error")))
                 }),
         ) {
@@ -326,7 +327,7 @@ mod tests {
     fn errors_from_nested_sender_are_propagated() {
         // nested_sender refers to the sender returned by the functor.
         match sync_wait(
-            Just::new(())
+            Just::from(())
                 | LetValue::from(|_, ()| {
                     JustError::<()>::new(Box::new(ErrorForTesting::from("error")))
                 }),

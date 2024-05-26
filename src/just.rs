@@ -1,7 +1,10 @@
-use crate::errors::IsTuple;
-use crate::scheduler::ImmediateScheduler;
-use crate::traits::{BindSender, OperationState, ReceiverOf, TypedSender, TypedSenderConnect};
+use crate::errors::{Error, IsTuple};
+use crate::scheduler::{ImmediateScheduler, Scheduler, WithScheduler};
+use crate::traits::{
+    BindSender, OperationState, Receiver, ReceiverOf, TypedSender, TypedSenderConnect,
+};
 use core::ops::BitOr;
+use std::marker::PhantomData;
 
 /// A typed-sender that holds a tuple of values.
 ///
@@ -10,65 +13,123 @@ use core::ops::BitOr;
 /// ```
 /// use senders_receivers::{Just, sync_wait};
 ///
-/// let sender = Just::new((1, 2, 3));  // Create a typed sender returning a tuple of three values.
+/// let sender = Just::from((1, 2, 3));  // Create a typed sender returning a tuple of three values.
 /// assert_eq!(
 ///     (1, 2, 3),
 ///     sync_wait(sender).unwrap().unwrap());
 /// ```
-pub struct Just<Tuple: IsTuple> {
+///
+/// If you want to start values on a specific scheduler, use [Just::with_scheduler]:
+/// ```
+/// use senders_receivers::{Just, WithScheduler, sync_wait_send};
+/// use threadpool::ThreadPool;
+///
+/// let pool = ThreadPool::with_name("example".into(), 1);
+/// let sender = Just::with_scheduler(pool, (1, 2, 3));
+/// assert_eq!(
+///     (1, 2, 3),
+///     sync_wait_send(sender).unwrap().unwrap());
+/// ```
+pub struct Just<Sch: Scheduler, Tuple: IsTuple> {
+    sch: Sch,
     values: Tuple,
 }
 
-impl<Tuple: IsTuple> Just<Tuple> {
-    /// Create a new typed sender, that emits the `init` value.
-    pub fn new(init: Tuple) -> Just<Tuple> {
-        Just::<Tuple> { values: init }
+impl Default for Just<ImmediateScheduler, ()> {
+    fn default() -> Self {
+        Just::from(())
     }
 }
 
-impl<Tuple: IsTuple> TypedSender for Just<Tuple> {
-    type Value = Tuple;
-    type Scheduler = ImmediateScheduler;
-}
-
-impl<ReceiverType, Tuple> TypedSenderConnect<ReceiverType> for Just<Tuple>
-where
-    Tuple: IsTuple,
-    ReceiverType: ReceiverOf<ImmediateScheduler, Tuple>,
-{
-    fn connect(self, receiver: ReceiverType) -> impl OperationState {
-        JustOperationState {
-            values: self.values,
-            receiver,
+impl<Tuple: IsTuple> From<Tuple> for Just<ImmediateScheduler, Tuple> {
+    /// Create a new typed sender, that emits the `init` value.
+    fn from(init: Tuple) -> Self {
+        Just {
+            sch: ImmediateScheduler::default(),
+            values: init,
         }
     }
 }
 
-pub struct JustOperationState<Tuple: IsTuple, ReceiverImpl>
-where
-    ReceiverImpl: ReceiverOf<ImmediateScheduler, Tuple>,
-{
-    values: Tuple,
-    receiver: ReceiverImpl,
-}
-
-impl<Tuple: IsTuple, ReceiverImpl> OperationState for JustOperationState<Tuple, ReceiverImpl>
-where
-    ReceiverImpl: ReceiverOf<ImmediateScheduler, Tuple>,
-{
-    fn start(self) {
-        self.receiver.set_value(ImmediateScheduler {}, self.values)
+impl<Sch: Scheduler, Tuple: IsTuple> WithScheduler<Sch, Tuple> for Just<Sch, Tuple> {
+    /// Create a new typed sender, that emits the `init` value.
+    fn with_scheduler(sch: Sch, init: Tuple) -> Self {
+        Just {
+            sch: sch,
+            values: init,
+        }
     }
 }
 
-impl<Tuple: IsTuple, BindSenderImpl> BitOr<BindSenderImpl> for Just<Tuple>
+impl<Sch: Scheduler, Tuple: IsTuple> TypedSender for Just<Sch, Tuple> {
+    type Value = Tuple;
+    type Scheduler = Sch::LocalScheduler;
+}
+
+impl<ReceiverType, Sch, Tuple> TypedSenderConnect<ReceiverType> for Just<Sch, Tuple>
 where
-    BindSenderImpl: BindSender<Just<Tuple>>,
+    Sch: Scheduler,
+    Tuple: IsTuple,
+    ReceiverType: ReceiverOf<Sch::LocalScheduler, Tuple>,
+    Sch::Sender: TypedSenderConnect<ReceiverWrapper<ReceiverType, Sch::LocalScheduler, Tuple>>,
+{
+    fn connect(self, receiver: ReceiverType) -> impl OperationState {
+        let receiver = ReceiverWrapper {
+            phantom: PhantomData,
+            receiver,
+            values: self.values,
+        };
+        self.sch.schedule().connect(receiver)
+    }
+}
+
+impl<BindSenderImpl, Sch, Tuple> BitOr<BindSenderImpl> for Just<Sch, Tuple>
+where
+    Sch: Scheduler,
+    Tuple: IsTuple,
+    BindSenderImpl: BindSender<Self>,
 {
     type Output = BindSenderImpl::Output;
 
     fn bitor(self, rhs: BindSenderImpl) -> Self::Output {
         rhs.bind(self)
+    }
+}
+
+struct ReceiverWrapper<ReceiverImpl, Sch, Tuple>
+where
+    ReceiverImpl: ReceiverOf<Sch, Tuple>,
+    Tuple: IsTuple,
+    Sch: Scheduler,
+{
+    phantom: PhantomData<fn(Sch)>,
+    receiver: ReceiverImpl,
+    values: Tuple,
+}
+
+impl<ReceiverImpl, Sch, Tuple> Receiver for ReceiverWrapper<ReceiverImpl, Sch, Tuple>
+where
+    ReceiverImpl: ReceiverOf<Sch, Tuple>,
+    Tuple: IsTuple,
+    Sch: Scheduler,
+{
+    fn set_done(self) {
+        self.receiver.set_done();
+    }
+
+    fn set_error(self, error: Error) {
+        self.receiver.set_error(error);
+    }
+}
+
+impl<ReceiverImpl, Sch, Tuple> ReceiverOf<Sch, ()> for ReceiverWrapper<ReceiverImpl, Sch, Tuple>
+where
+    ReceiverImpl: ReceiverOf<Sch, Tuple>,
+    Tuple: IsTuple,
+    Sch: Scheduler,
+{
+    fn set_value(self, sch: Sch, _: ()) {
+        self.receiver.set_value(sch, self.values);
     }
 }
 
@@ -81,7 +142,7 @@ mod tests {
     fn it_works() {
         assert_eq!(
             Some((4, 5, 6)),
-            sync_wait(Just::new((4, 5, 6))).expect("just() should not fail")
+            sync_wait(Just::from((4, 5, 6))).expect("just() should not fail")
         )
     }
 }

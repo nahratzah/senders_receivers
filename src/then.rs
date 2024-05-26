@@ -16,14 +16,14 @@ use std::marker::PhantomData;
 ///
 /// // If using a function that returns a tuple:
 /// let myFn = |(x, y, z): (i32, i32, i32)| (x + y + z,);
-/// let sender = Just::new((1, 2, 3)) | Then::from(myFn);
+/// let sender = Just::from((1, 2, 3)) | Then::from(myFn);
 /// assert_eq!(
 ///     (6,),
 ///     sync_wait(sender).unwrap().unwrap());
 ///
 /// // If using a function that returns a Result:
 /// let myFn = |(x,)| -> Result<(i32,), Error> { Ok((x,)) };
-/// let sender = Just::new((17,)) | Then::from(myFn);  // if function returns a result
+/// let sender = Just::from((17,)) | Then::from(myFn);  // if function returns a result
 /// assert_eq!(
 ///     (17,),
 ///     sync_wait(sender).unwrap().unwrap());
@@ -254,7 +254,7 @@ mod tests {
     fn it_works() {
         assert_eq!(
             Some((6, 7, 8)),
-            sync_wait(Just::new((4, 5, 6)) | Then::from(|(x, y, z)| (x + 2, y + 2, z + 2)))
+            sync_wait(Just::from((4, 5, 6)) | Then::from(|(x, y, z)| (x + 2, y + 2, z + 2)))
                 .expect("should succeed")
         )
     }
@@ -263,7 +263,7 @@ mod tests {
     fn it_works_with_errors() {
         assert_eq!(
             Some((6, 7, 8)),
-            sync_wait(Just::new((4, 5, 6)) | Then::from(|(x, y, z)| Ok((x + 2, y + 2, z + 2))))
+            sync_wait(Just::from((4, 5, 6)) | Then::from(|(x, y, z)| Ok((x + 2, y + 2, z + 2))))
                 .expect("should succeed")
         )
     }
@@ -289,7 +289,7 @@ mod tests {
     #[test]
     fn errors_from_functor_are_propagated() {
         match sync_wait(
-            Just::new(())
+            Just::from(())
                 | Then::from(|()| -> Result<(), Error> {
                     Err(Box::new(ErrorForTesting::from("error")))
                 }),

@@ -82,7 +82,7 @@ impl<Sch: Scheduler, Tuple: IsTuple + Send + 'static> ReceiverOf<Sch, Tuple>
 /// use senders_receivers::{Just, sync_wait};
 /// use std::rc::Rc;
 ///
-/// let sender = Just::new((Rc::new(String::from("bla")),));
+/// let sender = Just::from((Rc::new(String::from("bla")),));
 /// match sync_wait(sender) {
 ///     Err(e) => println!("error signal: {:?}", e),
 ///     Ok(None) => println!("done signal"),
@@ -127,7 +127,7 @@ where
 /// ```
 /// use senders_receivers::{Just, sync_wait_send};
 ///
-/// let sender = Just::new((String::from("bla"),));
+/// let sender = Just::from((String::from("bla"),));
 /// match sync_wait_send(sender) {
 ///     Err(e) => println!("error signal: {:?}", e),
 ///     Ok(None) => println!("done signal"),

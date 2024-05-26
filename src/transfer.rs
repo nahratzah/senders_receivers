@@ -16,7 +16,7 @@ use std::marker::PhantomData;
 /// use threadpool::ThreadPool;
 ///
 /// let pool = ThreadPool::with_name("example".into(), 1);
-/// let sender = Just::new((2, 3, 7))
+/// let sender = Just::from((2, 3, 7))
 ///              | Transfer::new(pool)
 ///              | Then::from(|(x, y, z)| {
 ///                  // This will run on `my_scheduler`.

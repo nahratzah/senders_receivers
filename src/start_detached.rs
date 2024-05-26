@@ -46,7 +46,7 @@ mod test {
         let (tx, rx) = mpsc::channel();
 
         start_detached(
-            Just::new((String::from("dcba"),))
+            Just::from((String::from("dcba"),))
                 | Then::from(|(x,): (String,)| (x.chars().rev().collect::<String>(),))
                 | Then::from(move |(x,)| tx.send(x).map_err(|e| new_error(e))),
         );
@@ -62,7 +62,7 @@ mod test {
     //     let (tx, rx) = mpsc::channel();
     //
     //     start_detached(
-    //         Just::new((String::from("dcba"),))
+    //         Just::from((String::from("dcba"),))
     //         | LetValue::new_fn(|_, (_,): (String,)| JustDone::<(String,)>::default())
     //         | Then::from(move |(x,)| -> Result<(), Error> { // XXX change to something that handle 'done'
     //     	tx.send(x).map_err(|e| new_error(e)) // Never runs.
@@ -77,7 +77,7 @@ mod test {
     #[should_panic]
     fn handles_error() {
         start_detached(
-            Just::new((String::from("dcba"),))
+            Just::from((String::from("dcba"),))
                 | Then::from(|(x,): (String,)| (x.chars().rev().collect::<String>(),))
                 | Then::from(move |(_,)| -> Result<(), Error> {
                     Err(new_error(ErrorForTesting::from(
