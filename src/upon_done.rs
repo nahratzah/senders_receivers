@@ -6,6 +6,7 @@ use crate::traits::{
 };
 use std::convert::From;
 use std::marker::PhantomData;
+use std::ops::BitOr;
 
 /// Handle a done-signal, by transforming it into a value signal.
 ///
@@ -220,6 +221,22 @@ where
             phantom: PhantomData,
         };
         self.nested.connect(receiver)
+    }
+}
+
+impl<NestedSender, FnType, Sch, Out, BindSenderImpl> BitOr<BindSenderImpl>
+    for UponDoneTS<NestedSender, FnType, Sch, Out>
+where
+    BindSenderImpl: BindSender<UponDoneTS<NestedSender, FnType, Sch, Out>>,
+    NestedSender: TypedSender<Scheduler = Sch::LocalScheduler, Value = Out>,
+    FnType: NoArgFunctor<Output = Result<Out, Error>>,
+    Out: IsTuple,
+    Sch: Scheduler,
+{
+    type Output = BindSenderImpl::Output;
+
+    fn bitor(self, rhs: BindSenderImpl) -> Self::Output {
+        rhs.bind(self)
     }
 }
 

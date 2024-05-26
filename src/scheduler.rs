@@ -46,23 +46,20 @@ pub trait Scheduler: Eq + Clone {
     type Sender: TypedSender<Scheduler = Self::LocalScheduler, Value = ()>;
 
     /// Create a [Self::Sender] that'll run on this scheduler.
-    fn schedule(self) -> Self::Sender;
+    fn schedule(&self) -> Self::Sender;
 
     /// Create a sender that'll run on this scheduler, that produces a value signal.
-    fn schedule_value<Tuple: IsTuple>(
-        self,
-        values: Tuple,
-    ) -> Just<Self, Tuple> {
-        Just::with_scheduler(self, values)
+    fn schedule_value<Tuple: IsTuple>(&self, values: Tuple) -> Just<Self, Tuple> {
+        Just::with_scheduler(self.clone(), values)
     }
 
     /// Create a sender associated with this scheduler, that produces an error signal.
-    fn schedule_error<Tuple: IsTuple>(self, error: Error) -> JustError<Self, Tuple> {
-        JustError::<Self, Tuple>::with_scheduler(self, error)
+    fn schedule_error<Tuple: IsTuple>(&self, error: Error) -> JustError<Self, Tuple> {
+        JustError::<Self, Tuple>::new(error)
     }
 
     /// Create a sender associated with this scheduler, that produces a done signal.
-    fn schedule_done<Tuple: IsTuple>(self) -> JustDone<Self, Tuple> {
+    fn schedule_done<Tuple: IsTuple>(&self) -> JustDone<Self, Tuple> {
         JustDone::<Self, Tuple>::new()
     }
 }
@@ -77,7 +74,7 @@ impl Scheduler for ImmediateScheduler {
     type LocalScheduler = ImmediateScheduler;
     type Sender = ImmediateSender;
 
-    fn schedule(self) -> Self::Sender {
+    fn schedule(&self) -> Self::Sender {
         ImmediateSender {}
     }
 }
@@ -133,8 +130,8 @@ impl Scheduler for ThreadPool {
     type LocalScheduler = ThreadPool;
     type Sender = ThreadPoolSender;
 
-    fn schedule(self) -> Self::Sender {
-        ThreadPoolSender { pool: self }
+    fn schedule(&self) -> Self::Sender {
+        ThreadPoolSender { pool: self.clone() }
     }
 }
 
