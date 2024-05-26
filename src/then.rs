@@ -245,9 +245,10 @@ where
 #[cfg(test)]
 mod tests {
     use super::Then;
-    use crate::errors::{Error, ErrorForTesting};
+    use crate::errors::{new_error, Error, ErrorForTesting};
     use crate::just::Just;
     use crate::just_error::JustError;
+    use crate::scheduler::ImmediateScheduler;
     use crate::sync_wait::sync_wait;
 
     #[test]
@@ -271,7 +272,7 @@ mod tests {
     #[test]
     fn errors_from_preceding_sender_are_propagated() {
         match sync_wait(
-            JustError::<()>::new(Box::new(ErrorForTesting::from("error")))
+            JustError::<ImmediateScheduler, ()>::from(new_error(ErrorForTesting::from("error")))
                 | Then::from(|()| -> (i32, i32) {
                     panic!("expect this function to not be invoked")
                 }),

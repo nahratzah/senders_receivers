@@ -70,13 +70,15 @@ mod for_testing {
         text: String,
     }
 
-    impl Error {
-        pub fn new(text: String) -> Error {
-            Error { text }
+    impl From<&'static str> for Error {
+        fn from(text: &'static str) -> Self {
+            Self::from(String::from(text))
         }
+    }
 
-        pub fn from(text: &str) -> Error {
-            Self::new(String::from(text))
+    impl From<String> for Error {
+        fn from(text: String) -> Self {
+            Error { text }
         }
     }
 

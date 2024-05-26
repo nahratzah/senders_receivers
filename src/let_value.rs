@@ -257,10 +257,10 @@ where
 #[cfg(test)]
 mod tests {
     use super::LetValue;
-    use crate::errors::{Error, ErrorForTesting};
+    use crate::errors::{new_error, Error, ErrorForTesting};
     use crate::just::Just;
     use crate::just_error::JustError;
-    use crate::scheduler::ImmediateScheduler;
+    use crate::scheduler::{ImmediateScheduler, WithScheduler};
     use crate::sync_wait::sync_wait;
 
     #[test]
@@ -290,7 +290,7 @@ mod tests {
     #[test]
     fn errors_from_preceding_sender_are_propagated() {
         match sync_wait(
-            JustError::<()>::new(Box::new(ErrorForTesting::from("error")))
+            JustError::<ImmediateScheduler, ()>::from(new_error(ErrorForTesting::from("error")))
                 | LetValue::from(|_, ()| -> Just<ImmediateScheduler, (i32,)> {
                     panic!("expect this function to not be invoked")
                 }),
@@ -310,7 +310,7 @@ mod tests {
         match sync_wait(
             Just::from(())
                 | LetValue::from(|_, ()| -> Result<Just<ImmediateScheduler, (i32,)>, Error> {
-                    Err(Box::new(ErrorForTesting::from("error")))
+                    Err(new_error(ErrorForTesting::from("error")))
                 }),
         ) {
             Ok(_) => panic!("expected an error"),
@@ -328,8 +328,11 @@ mod tests {
         // nested_sender refers to the sender returned by the functor.
         match sync_wait(
             Just::from(())
-                | LetValue::from(|_, ()| {
-                    JustError::<()>::new(Box::new(ErrorForTesting::from("error")))
+                | LetValue::from(|sch: ImmediateScheduler, ()| {
+                    JustError::<ImmediateScheduler, ()>::with_scheduler(
+                        sch,
+                        new_error(ErrorForTesting::from("error")),
+                    )
                 }),
         ) {
             Ok(_) => panic!("expected an error"),
