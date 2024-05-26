@@ -3,7 +3,7 @@
 //! The reason we need those, is because we need to have composible functions.
 //! The [Functor] and [BiFunctor] traits provide something we can invoke.
 //!
-//! Note: we might erase this module in the future, if implementing `FnOnce` becomes doable.
+//! Note: we might erase this module in the future, if implementing [FnOnce] becomes doable.
 
 use crate::errors::{Error, IsTuple};
 use std::marker::PhantomData;
