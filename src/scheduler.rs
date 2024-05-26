@@ -8,23 +8,24 @@ use threadpool::ThreadPool;
 /// Most of the time, you'll use a scheduler in combination with [Transfer](crate::Transfer).
 /// But a scheduler can be used directly (which is what [Transfer](crate::Transfer) does under the hood).
 /// Unfortunately, I can't make the `|` operator work for [Scheduler::Sender], so we must use the [`BindSender::bind`] function instead.
-/// ---
-/// use senders_receivers::{BindSender, Scheduler, Then, sync_wait};
+/// ```
+/// use senders_receivers::{BindSender, Scheduler, Then, sync_wait_send};
 /// use threadpool::ThreadPool;
 ///
-/// let pool = ThreadPool::with_name("example".into(), 1)
-/// let sender = Then::from(|()| {
+/// let pool = ThreadPool::with_name("example".into(), 1);
+/// let sender = pool.schedule()
+///              | Then::from(|()| {
 ///                  // This computation will run on the scheduler.
 ///                  let mut s = 0_i32;
 ///                  for n in 1..101 {
 ///                      s += n;
 ///                  }
 ///                  (s,)
-///              }).bind(pool.schedule());
+///              });
 /// assert_eq!(
 ///     5050,
-///     sync_wait(sender).unwrap().unwrap().0);
-/// ---
+///     sync_wait_send(sender).unwrap().unwrap().0);
+/// ```
 pub trait Scheduler: Eq + Clone {
     /// Mark if the scheduler may block the caller, when started.
     /// If this is `false`, you are guaranteed that the sender will complete independently from the operation-state start method.
