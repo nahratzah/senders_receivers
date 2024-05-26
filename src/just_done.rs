@@ -1,6 +1,8 @@
 use crate::errors::IsTuple;
-use crate::scheduler::ImmediateScheduler;
-use crate::traits::{BindSender, OperationState, ReceiverOf, TypedSender, TypedSenderConnect};
+use crate::scheduler::{ImmediateScheduler, Scheduler};
+use crate::traits::{
+    BindSender, OperationState, Receiver, ReceiverOf, TypedSender, TypedSenderConnect,
+};
 use std::marker::PhantomData;
 use std::ops::BitOr;
 
@@ -8,11 +10,11 @@ use std::ops::BitOr;
 ///
 /// Example:
 /// ```
-/// use senders_receivers::{JustDone, sync_wait};
+/// use senders_receivers::{ImmediateScheduler, JustDone, sync_wait};
 ///
 /// fn example() {
 ///     // The `::<(i32, i32)>` turbo-fish is to declare the value-type of the created sender.
-///     let sender = JustDone::<(i32, i32)>::new();
+///     let sender = JustDone::<ImmediateScheduler, (i32, i32)>::new();
 ///     match sync_wait(sender) {
 ///         Ok(Some(_)) => panic!("there won't be a value"),
 ///         Ok(None) => println!("completed with done signal"),  // This is returned.
@@ -20,63 +22,57 @@ use std::ops::BitOr;
 ///     };
 /// }
 /// ```
-pub struct JustDone<Tuple: IsTuple> {
-    phantom: PhantomData<fn() -> Tuple>,
+pub struct JustDone<Sch: Scheduler, Tuple: IsTuple> {
+    phantom: PhantomData<fn(Sch) -> Tuple>,
 }
 
-impl<Tuple: IsTuple> JustDone<Tuple> {
+impl<Sch: Scheduler, Tuple: IsTuple> JustDone<Sch, Tuple> {
     /// Create a new typed sender that'll yield an error.
-    pub fn new() -> JustDone<Tuple> {
+    ///
+    /// Since you usually need to use a turbo-fish to use this function,
+    /// you might prefer using [Scheduler::schedule_done] instead.
+    pub fn new() -> JustDone<Sch, Tuple> {
         JustDone {
             phantom: PhantomData,
         }
     }
 }
 
-impl<Tuple: IsTuple> Default for JustDone<Tuple> {
+impl<Tuple: IsTuple> Default for JustDone<ImmediateScheduler, Tuple> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<Tuple: IsTuple> TypedSender for JustDone<Tuple> {
+impl<Sch: Scheduler, Tuple: IsTuple> TypedSender for JustDone<Sch, Tuple> {
     type Value = Tuple;
-    type Scheduler = ImmediateScheduler;
+    type Scheduler = Sch::LocalScheduler;
 }
 
-impl<ReceiverType, Tuple> TypedSenderConnect<ReceiverType> for JustDone<Tuple>
+impl<Sch, ReceiverType, Tuple> TypedSenderConnect<ReceiverType> for JustDone<Sch, Tuple>
 where
+    Sch: Scheduler,
     Tuple: IsTuple,
-    ReceiverType: ReceiverOf<ImmediateScheduler, Tuple>,
+    ReceiverType: ReceiverOf<Sch::LocalScheduler, Tuple>,
 {
     fn connect(self, receiver: ReceiverType) -> impl OperationState {
-        JustDoneOperationState {
-            phantom: PhantomData,
-            receiver,
-        }
+        JustDoneOperationState { receiver }
     }
 }
 
-pub struct JustDoneOperationState<Tuple: IsTuple, ReceiverImpl>
-where
-    ReceiverImpl: ReceiverOf<ImmediateScheduler, Tuple>,
-{
-    phantom: PhantomData<fn() -> Tuple>,
+pub struct JustDoneOperationState<ReceiverImpl: Receiver> {
     receiver: ReceiverImpl,
 }
 
-impl<Tuple: IsTuple, ReceiverImpl> OperationState for JustDoneOperationState<Tuple, ReceiverImpl>
-where
-    ReceiverImpl: ReceiverOf<ImmediateScheduler, Tuple>,
-{
+impl<ReceiverImpl: Receiver> OperationState for JustDoneOperationState<ReceiverImpl> {
     fn start(self) {
         self.receiver.set_done()
     }
 }
 
-impl<Tuple: IsTuple, BindSenderImpl> BitOr<BindSenderImpl> for JustDone<Tuple>
+impl<Sch: Scheduler, Tuple: IsTuple, BindSenderImpl> BitOr<BindSenderImpl> for JustDone<Sch, Tuple>
 where
-    BindSenderImpl: BindSender<JustDone<Tuple>>,
+    BindSenderImpl: BindSender<JustDone<Sch, Tuple>>,
 {
     type Output = BindSenderImpl::Output;
 
@@ -88,10 +84,14 @@ where
 #[cfg(test)]
 mod tests {
     use super::JustDone;
+    use crate::scheduler::ImmediateScheduler;
     use crate::sync_wait::sync_wait;
 
     #[test]
     fn it_works() {
-        assert_eq!(None, sync_wait(JustDone::<()>::new()).unwrap())
+        assert_eq!(
+            None,
+            sync_wait(JustDone::<ImmediateScheduler, ()>::default()).unwrap()
+        )
     }
 }

@@ -15,26 +15,25 @@ use std::marker::PhantomData;
 ///
 /// The scheduler and value must match the current output of the signal, propagated via the sender chain.
 ///
-/// The [JustDone::from] implementations use [ImmediateSender] as their scheduler.
-///
+/// The [UponDone::from] implementations use [ImmediateScheduler] as their scheduler.
 /// Example:
 /// ```
-/// use senders_receivers::{JustDone, UponDone, sync_wait};
+/// use senders_receivers::{ImmediateScheduler, JustDone, UponDone, sync_wait};
 ///
-/// let sender = JustDone::<(String,)>::default()
+/// let sender = JustDone::<ImmediateScheduler, (String,)>::default()
 ///              | UponDone::from(|| (String::from("result"),));
 /// assert_eq!(
 ///     (String::from("result"),),
 ///     sync_wait(sender).unwrap().unwrap())
 /// ```
 ///
-/// If a specific scheduler is required, the [JustDone::with_scheduler] constructor is the one to use:
+/// If a specific scheduler is required, the [UponDone::with_scheduler] constructor is the one to use:
 /// ```
-/// use senders_receivers::{JustDone, UponDone, Transfer, WithScheduler, sync_wait_send};
+/// use senders_receivers::{ImmediateScheduler, JustDone, UponDone, Transfer, WithScheduler, sync_wait_send};
 /// use threadpool::ThreadPool;
 ///
 /// let pool = ThreadPool::with_name("example".into(), 1);
-/// let sender = JustDone::<(String,)>::default()
+/// let sender = JustDone::<ImmediateScheduler, (String,)>::default()
 ///              | Transfer::new(pool.clone())
 ///              | UponDone::with_scheduler(pool.clone(), || (String::from("result"),));
 /// assert_eq!(

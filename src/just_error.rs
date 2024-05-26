@@ -1,5 +1,5 @@
 use crate::errors::{Error, IsTuple};
-use crate::scheduler::{Scheduler, WithScheduler};
+use crate::scheduler::{ImmediateScheduler, Scheduler, WithScheduler};
 use crate::traits::{
     BindSender, OperationState, Receiver, ReceiverOf, TypedSender, TypedSenderConnect,
 };
@@ -26,13 +26,23 @@ pub struct JustError<Sch: Scheduler, Tuple: IsTuple> {
     error: Error,
 }
 
-impl<Sch: Scheduler, Tuple: IsTuple> From<Error> for JustError<Sch, Tuple> {
+impl<Sch: Scheduler, Tuple: IsTuple> JustError<Sch, Tuple> {
     /// Create a new typed sender that'll yield an error.
-    fn from(error: Error) -> Self {
+    ///
+    /// This function usually requires a turbo-fish to get the type right.
+    /// So you might prefer to use [Scheduler::schedule_error] instead.
+    pub fn new(error: Error) -> Self {
         JustError {
             error,
             phantom: PhantomData,
         }
+    }
+}
+
+impl<Tuple: IsTuple> From<Error> for JustError<ImmediateScheduler, Tuple> {
+    /// Create a new typed sender that'll yield an error.
+    fn from(error: Error) -> Self {
+        Self::new(error)
     }
 }
 
@@ -52,9 +62,9 @@ impl<Sch: Scheduler, Tuple: IsTuple> TypedSender for JustError<Sch, Tuple> {
 
 impl<ReceiverType, Sch, Tuple> TypedSenderConnect<ReceiverType> for JustError<Sch, Tuple>
 where
-    Sch: Scheduler<LocalScheduler = Sch>,
+    Sch: Scheduler,
     Tuple: IsTuple,
-    ReceiverType: ReceiverOf<Sch, Tuple>,
+    ReceiverType: ReceiverOf<Sch::LocalScheduler, Tuple>,
 {
     fn connect(self, receiver: ReceiverType) -> impl OperationState {
         JustErrorOperationState {

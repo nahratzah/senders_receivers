@@ -23,12 +23,12 @@ impl Receiver for DiscardingReceiver {
     }
 }
 
-impl<Sch, Value> ReceiverOf<Sch, Value> for DiscardingReceiver
+impl<Sch, Tuple> ReceiverOf<Sch, Tuple> for DiscardingReceiver
 where
     Sch: Scheduler,
-    Value: IsTuple,
+    Tuple: IsTuple,
 {
-    fn set_value(self, _: Sch, _: Value) {
+    fn set_value(self, _: Sch, _: Tuple) {
         // Since we run detached, we discard the arguments.
     }
 }
@@ -38,6 +38,8 @@ mod test {
     use super::start_detached;
     use crate::errors::{new_error, Error, ErrorForTesting};
     use crate::just::Just;
+    use crate::let_value::LetValue;
+    use crate::scheduler::{ImmediateScheduler, Scheduler};
     use crate::then::Then;
     use std::sync::mpsc;
 
@@ -57,21 +59,15 @@ mod test {
         );
     }
 
-    // #[test]
-    // fn handles_done() {
-    //     let (tx, rx) = mpsc::channel();
-    //
-    //     start_detached(
-    //         Just::from((String::from("dcba"),))
-    //         | LetValue::new_fn(|_, (_,): (String,)| JustDone::<(String,)>::default())
-    //         | Then::from(move |(x,)| -> Result<(), Error> { // XXX change to something that handle 'done'
-    //     	tx.send(x).map_err(|e| new_error(e)) // Never runs.
-    //     	}));
-    //
-    //     assert_eq!(
-    //         String::from("abcd"),
-    //         rx.recv().expect("done callback was invoked"));
-    // }
+    #[test]
+    fn handles_done() {
+        start_detached(
+            Just::from((String::from("dcba"),))
+                | LetValue::from(|sch: ImmediateScheduler, _| {
+                    sch.schedule_done::<(i32, i32, i32)>()
+                }),
+        );
+    }
 
     #[test]
     #[should_panic]

@@ -39,6 +39,9 @@ impl<Sch> Transfer<Sch>
 where
     Sch: Scheduler,
 {
+    /// Create a new transfer.
+    ///
+    /// Note: we don't use from, because it reads really weird to write `Transfer::from(sch)`, when you mean "transfer to `sch`".
     pub fn new(target_scheduler: Sch) -> Transfer<Sch> {
         Transfer { target_scheduler }
     }

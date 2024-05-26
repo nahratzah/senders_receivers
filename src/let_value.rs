@@ -209,7 +209,7 @@ where
     FnType: BiFunctor<FirstArg, ArgTuple, Output = Result<Out, Error>>,
     FirstArg: Scheduler,
     ArgTuple: IsTuple,
-    Out: TypedSender,
+    Out: TypedSender + TypedSenderConnect<ReceiverImpl>,
 {
     nested: ReceiverImpl,
     fn_impl: FnType,
@@ -223,7 +223,7 @@ where
     FnType: BiFunctor<FirstArg, ArgTuple, Output = Result<Out, Error>>,
     FirstArg: Scheduler,
     ArgTuple: IsTuple,
-    Out: TypedSender,
+    Out: TypedSender + TypedSenderConnect<ReceiverImpl>,
 {
     fn set_done(self) {
         self.nested.set_done();

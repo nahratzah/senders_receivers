@@ -1,3 +1,7 @@
+use crate::errors::{Error, IsTuple};
+use crate::just::Just;
+use crate::just_done::JustDone;
+use crate::just_error::JustError;
 use crate::traits::{BindSender, OperationState, ReceiverOf, TypedSender, TypedSenderConnect};
 use std::ops::BitOr;
 use threadpool::ThreadPool;
@@ -43,6 +47,24 @@ pub trait Scheduler: Eq + Clone {
 
     /// Create a [Self::Sender] that'll run on this scheduler.
     fn schedule(self) -> Self::Sender;
+
+    /// Create a sender that'll run on this scheduler, that produces a value signal.
+    fn schedule_value<Tuple: IsTuple>(
+        self,
+        values: Tuple,
+    ) -> impl TypedSender<Scheduler = Self::LocalScheduler, Value = Tuple> {
+        Just::with_scheduler(self, values)
+    }
+
+    /// Create a sender associated with this scheduler, that produces an error signal.
+    fn schedule_error<Tuple: IsTuple>(self, error: Error) -> JustError<Self, Tuple> {
+        JustError::<Self, Tuple>::with_scheduler(self, error)
+    }
+
+    /// Create a sender associated with this scheduler, that produces a done signal.
+    fn schedule_done<Tuple: IsTuple>(self) -> JustDone<Self, Tuple> {
+        JustDone::<Self, Tuple>::new()
+    }
 }
 
 /// An immediate-scheduler is a [Scheduler] which runs any tasks on it immediately.

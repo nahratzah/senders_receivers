@@ -53,11 +53,10 @@ impl<Tuple: IsTuple> From<Tuple> for Just<ImmediateScheduler, Tuple> {
 
 impl<Sch: Scheduler, Tuple: IsTuple> WithScheduler<Sch, Tuple> for Just<Sch, Tuple> {
     /// Create a new typed sender, that emits the `init` value.
+    ///
+    /// Instead of using this function, you could also use [Scheduler::schedule_value].
     fn with_scheduler(sch: Sch, init: Tuple) -> Self {
-        Just {
-            sch: sch,
-            values: init,
-        }
+        Just { sch, values: init }
     }
 }
 

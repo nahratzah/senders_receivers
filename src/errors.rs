@@ -45,7 +45,7 @@ pub(crate) use tuple_impls;
 
 tuple_impls!(make_is_tuple);
 
-/// Errors as passed as opaque types.
+/// Errors are passed as opaque types.
 ///
 /// If you want to handle specific errors, you can downcast the relevant error to a type.
 /// The [new_error] function is provided to more easily convert an error into an [Error].
