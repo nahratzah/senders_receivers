@@ -18,7 +18,7 @@ use std::marker::PhantomData;
 ///
 /// // If using a function that returns a sender:
 /// let sender = Just::new((String::from("world"),))
-///              | LetValue::new_fn(|_, (name,)| {
+///              | LetValue::from(|_, (name,)| {
 ///                  Just::new((format!("Hello {}!", name),))
 ///              });
 /// assert_eq!(
@@ -27,7 +27,7 @@ use std::marker::PhantomData;
 ///
 /// // If using a function that returns a Result:
 /// let sender = Just::new((String::from("world"),))
-///              | LetValue::new_fn_err(|_, (name,)| {
+///              | LetValue::from(|_, (name,)| {
 ///                  Ok(Just::new((format!("Hello {}!", name),)))
 ///              });
 /// assert_eq!(
@@ -45,14 +45,14 @@ where
     phantom: PhantomData<fn(FirstArg, ArgTuple) -> Out>,
 }
 
-impl<FnType, Out, FirstArg, ArgTuple> LetValue<FnType, Out, FirstArg, ArgTuple>
+impl<FnType, Out, FirstArg, ArgTuple> From<FnType> for LetValue<FnType, Out, FirstArg, ArgTuple>
 where
     FnType: BiFunctor<FirstArg, ArgTuple, Output = Result<Out, Error>>,
     FirstArg: Scheduler,
     ArgTuple: IsTuple,
     Out: TypedSender,
 {
-    pub fn new_err(fn_impl: FnType) -> LetValue<FnType, Out, FirstArg, ArgTuple> {
+    fn from(fn_impl: FnType) -> Self {
         LetValue {
             fn_impl,
             phantom: PhantomData,
@@ -63,45 +63,48 @@ where
 type ClosureLetValue<FnType, Out, FirstArg, ArgTuple> =
     LetValue<BiClosure<FnType, Result<Out, Error>, FirstArg, ArgTuple>, Out, FirstArg, ArgTuple>;
 
-impl<FnType, Out, FirstArg, ArgTuple> ClosureLetValue<FnType, Out, FirstArg, ArgTuple>
+impl<FnType, Out, FirstArg, ArgTuple> From<FnType>
+    for ClosureLetValue<FnType, Out, FirstArg, ArgTuple>
 where
     FnType: FnOnce(FirstArg, ArgTuple) -> Result<Out, Error>,
     FirstArg: Scheduler,
     ArgTuple: IsTuple,
     Out: TypedSender,
 {
-    pub fn new_fn_err(fn_impl: FnType) -> ClosureLetValue<FnType, Out, FirstArg, ArgTuple> {
-        Self::new_err(BiClosure::new(fn_impl))
+    fn from(fn_impl: FnType) -> Self {
+        Self::from(BiClosure::new(fn_impl))
     }
 }
 
 type NoErrLetValue<FunctorType, Out, FirstArg, ArgTuple> =
     LetValue<NoErrBiFunctor<FunctorType, Out, FirstArg, ArgTuple>, Out, FirstArg, ArgTuple>;
 
-impl<FnImpl, Out, FirstArg, ArgTuple> NoErrLetValue<FnImpl, Out, FirstArg, ArgTuple>
+impl<FnImpl, Out, FirstArg, ArgTuple> From<FnImpl>
+    for NoErrLetValue<FnImpl, Out, FirstArg, ArgTuple>
 where
     FnImpl: BiFunctor<FirstArg, ArgTuple, Output = Out>,
     FirstArg: Scheduler,
     ArgTuple: IsTuple,
     Out: TypedSender,
 {
-    pub fn new(fn_impl: FnImpl) -> NoErrLetValue<FnImpl, Out, FirstArg, ArgTuple> {
-        Self::new_err(NoErrBiFunctor::new(fn_impl))
+    fn from(fn_impl: FnImpl) -> Self {
+        Self::from(NoErrBiFunctor::new(fn_impl))
     }
 }
 
 type NoErrClosureLetValue<FnImpl, Out, FirstArg, ArgTuple> =
     NoErrLetValue<BiClosure<FnImpl, Out, FirstArg, ArgTuple>, Out, FirstArg, ArgTuple>;
 
-impl<FnImpl, Out, FirstArg, ArgTuple> NoErrClosureLetValue<FnImpl, Out, FirstArg, ArgTuple>
+impl<FnImpl, Out, FirstArg, ArgTuple> From<FnImpl>
+    for NoErrClosureLetValue<FnImpl, Out, FirstArg, ArgTuple>
 where
     FnImpl: FnOnce(FirstArg, ArgTuple) -> Out,
     FirstArg: Scheduler,
     ArgTuple: IsTuple,
     Out: TypedSender,
 {
-    pub fn new_fn(fn_impl: FnImpl) -> NoErrClosureLetValue<FnImpl, Out, FirstArg, ArgTuple> {
-        Self::new(BiClosure::new(fn_impl))
+    fn from(fn_impl: FnImpl) -> Self {
+        Self::from(BiClosure::new(fn_impl))
     }
 }
 
@@ -265,7 +268,7 @@ mod tests {
             Some((6, 7, 8)),
             sync_wait(
                 Just::new((6,))
-                    | LetValue::new_fn(|_, (x,)| {
+                    | LetValue::from(|_, (x,)| {
                         assert_eq!(x, 6);
                         Just::new((x, 7, 8))
                     })
@@ -278,7 +281,7 @@ mod tests {
     fn it_works_with_errors() {
         assert_eq!(
             Some((6, 7, 8)),
-            sync_wait(Just::new((6,)) | LetValue::new_fn_err(|_, (x,)| Ok(Just::new((x, 7, 8)))))
+            sync_wait(Just::new((6,)) | LetValue::from(|_, (x,)| Ok(Just::new((x, 7, 8)))))
                 .expect("should succeed")
         )
     }
@@ -287,7 +290,7 @@ mod tests {
     fn errors_from_preceding_sender_are_propagated() {
         match sync_wait(
             JustError::<()>::new(Box::new(ErrorForTesting::from("error")))
-                | LetValue::new_fn(|_, ()| -> Just<(i32,)> {
+                | LetValue::from(|_, ()| -> Just<(i32,)> {
                     panic!("expect this function to not be invoked")
                 }),
         ) {
@@ -305,7 +308,7 @@ mod tests {
     fn errors_from_functor_are_propagated() {
         match sync_wait(
             Just::new(())
-                | LetValue::new_fn_err(|_, ()| -> Result<Just<(i32,)>, Error> {
+                | LetValue::from(|_, ()| -> Result<Just<(i32,)>, Error> {
                     Err(Box::new(ErrorForTesting::from("error")))
                 }),
         ) {
@@ -324,7 +327,7 @@ mod tests {
         // nested_sender refers to the sender returned by the functor.
         match sync_wait(
             Just::new(())
-                | LetValue::new_fn(|_, ()| {
+                | LetValue::from(|_, ()| {
                     JustError::<()>::new(Box::new(ErrorForTesting::from("error")))
                 }),
         ) {
