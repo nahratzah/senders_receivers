@@ -35,9 +35,9 @@
 //! or a `done signal`.
 //! Exactly one of these will be produced.
 //!
-//! - A `value signal` indicates that the sender completed successfully, and produced a value.  
-//! - An `error signal` indicates that the sender failed, and produced an [Error].  
-//! - A `done signal` indicates that the sender canceled its work (producing neither a value, nor an error).
+//! A `value signal` indicates that the sender completed successfully, and produced a value.  
+//! An `error signal` indicates that the sender failed, and produced an [Error].  
+//! A `done signal` indicates that the sender canceled its work (producing neither a value, nor an error).
 //!
 //! ## Schedulers
 //! Each operation will run on a [Scheduler].
@@ -80,22 +80,22 @@
 //! But in practice, it was very hard to use, and my code, once async, always needed to grab the receiver-scheduler
 //! (because it was too common for the sender not to have a scheduler).
 //!
-//! 1. The `done` and `error` channels no longer have an associated scheduler.  
-//!    There is no way to properly guarantee which scheduler an error is propagated upon.
-//! 2. The `value` channel now always has an associated scheduler.  
-//!    This allows for example a non-blocking write (ex: `aio_write`) to suspend execution,
-//!    and resume on the same scheduler code was running on earlier.
-//! 3. The receiver no longer has a scheduler.  
-//!    Since the value signal now has a scheduler, we no longer need one.
-//!    (Also, the C++ receivers have an optional scheduler, which makes coding against them really cumbersome.)
-//! 4. Schedulers have a LocalScheduler type.  
-//!    For most schedulers, that will be the scheduler itself.
-//!    This allows for schedulers to declare follow-up code to run on a different scheduler.
-//!    For example, an embarrasingly-parallel scheduler could schedule on any thread the first time,
-//!    and then propagate a scheduler that'll always use the same thread for subsequent scheduling.
-//! 5. Error/done recovery operations must complete with the same scheduler-type and value-type, as what would be sent during the happy path.  
-//!    This is a consequence of us limiting things to a single type, and sending the scheduler along in the value-signal.
-//!    (Note that the error and done signals don't propagate a scheduler alongside; this would be impossible without making [LetValue] a lot more cumbersome to use.)
+//! - The `done` and `error` channels no longer have an associated scheduler.  
+//!   There is no way to properly guarantee which scheduler an error is propagated upon.
+//! - The `value` channel now always has an associated scheduler.  
+//!   This allows for example a non-blocking write (ex: `aio_write`) to suspend execution,
+//!   and resume on the same scheduler code was running on earlier.
+//! - The receiver no longer has a scheduler.  
+//!   Since the value signal now has a scheduler, we no longer need one.
+//!   (Also, the C++ receivers have an optional scheduler, which makes coding against them really cumbersome.)
+//! - Schedulers have a LocalScheduler type.  
+//!   For most schedulers, that will be the scheduler itself.
+//!   This allows for schedulers to declare follow-up code to run on a different scheduler.
+//!   For example, an embarrasingly-parallel scheduler could schedule on any thread the first time,
+//!   and then propagate a scheduler that'll always use the same thread for subsequent scheduling.
+//! - Error/done recovery operations must complete with the same scheduler-type and value-type, as what would be sent during the happy path.  
+//!   This is a consequence of us limiting things to a single type, and sending the scheduler along in the value-signal.
+//!   (Note that the error and done signals don't propagate a scheduler alongside; this would be impossible without making [LetValue] a lot more cumbersome to use.)
 //!
 //! The reason that `error` channels no longer have an associated scheduler,
 //! is because scheduler-transfers can fail, and this would break the invariant of an error-scheduler.
