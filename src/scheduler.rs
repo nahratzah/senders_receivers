@@ -52,7 +52,7 @@ pub trait Scheduler: Eq + Clone {
     fn schedule_value<Tuple: IsTuple>(
         self,
         values: Tuple,
-    ) -> impl TypedSender<Scheduler = Self::LocalScheduler, Value = Tuple> {
+    ) -> Just<Self, Tuple> {
         Just::with_scheduler(self, values)
     }
 
