@@ -50,7 +50,7 @@ mod test {
         start_detached(
             Just::from((String::from("dcba"),))
                 | Then::from(|(x,): (String,)| (x.chars().rev().collect::<String>(),))
-                | Then::from(move |(x,)| tx.send(x).map_err(|e| new_error(e))),
+                | Then::from(move |(x,)| tx.send(x).map_err(new_error)),
         );
 
         assert_eq!(

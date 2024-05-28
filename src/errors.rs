@@ -60,6 +60,9 @@ where
 }
 
 #[cfg(test)]
+pub type ErrorForTesting = for_testing::Error;
+
+#[cfg(test)]
 mod for_testing {
     use std::error;
     use std::fmt;
@@ -90,6 +93,3 @@ mod for_testing {
         }
     }
 }
-
-#[cfg(test)]
-pub type ErrorForTesting = for_testing::Error;

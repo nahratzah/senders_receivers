@@ -40,7 +40,7 @@ pub trait Scheduler: Eq + Clone {
     ///
     /// But if for example an embarrisingly-parallel scheduler is used,
     /// the LocalScheduler would represent the scheduler bound to the thread that was selected.
-    type LocalScheduler: Scheduler<Sender = Self::Sender>;
+    type LocalScheduler: Scheduler;
 
     /// The [TypedSender] returned by the scheduler.
     type Sender: TypedSender<Scheduler = Self::LocalScheduler, Value = ()>;

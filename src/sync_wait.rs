@@ -1,4 +1,4 @@
-mod same_thread_channel;
+pub mod same_thread_channel;
 
 use crate::errors::{Error, IsTuple};
 use crate::scheduler::Scheduler;

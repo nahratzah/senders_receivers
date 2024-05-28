@@ -9,3 +9,4 @@ license = "BSD-2-Clause"
 
 [dependencies]
 threadpool = "1.8"
+rand = "0.8"

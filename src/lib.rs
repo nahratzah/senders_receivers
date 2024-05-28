@@ -103,6 +103,7 @@
 //! Dropping the scheduler from `done` and `error` signals, means that scheduler switches will only happen on the happy path
 //! (and on recovery paths).
 
+pub mod embarrasingly_parallel;
 mod errors;
 pub mod functor;
 mod just;

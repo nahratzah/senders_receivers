@@ -4,12 +4,9 @@ use std::ops::Drop;
 use std::rc::Rc;
 use std::sync::mpsc;
 
-// Re-export the SendError from mpsc.
+// Re-export the errors from mpsc.
 // The idea is to re-use the look of the mpsc interface.
-pub use mpsc::SendError;
-// Re-export the RecvError from mpsc.
-// The idea is to re-use the look of the mpsc interface.
-pub use mpsc::RecvError;
+pub use mpsc::{RecvError, SendError, TryRecvError};
 
 /// Channel-receiver.
 ///
@@ -75,6 +72,14 @@ impl<T> Channel<T> {
         assert!(self.has_receiver);
         self.queue.pop_front().ok_or(RecvError)
     }
+
+    fn try_pop(&mut self) -> Result<T, TryRecvError> {
+        assert!(self.has_receiver);
+        self.queue.pop_front().ok_or(match self.cnt_sender {
+            0 => TryRecvError::Disconnected,
+            _ => TryRecvError::Empty,
+        })
+    }
 }
 
 impl<T> Drop for Receiver<T> {
@@ -109,6 +114,11 @@ impl<T> Receiver<T> {
     pub fn recv(&self) -> Result<T, RecvError> {
         let mut channel: RefMut<'_, _> = self.channel.borrow_mut();
         channel.pop()
+    }
+
+    pub fn try_recv(&self) -> Result<T, TryRecvError> {
+        let mut channel: RefMut<'_, _> = self.channel.borrow_mut();
+        channel.try_pop()
     }
 }
 
