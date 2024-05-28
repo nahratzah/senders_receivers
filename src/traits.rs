@@ -42,6 +42,11 @@ pub trait TypedSender {
     type Scheduler: Scheduler;
 }
 
+/// Trait for implementing `connect` functionality.
+///
+/// Senders are allowed to be arbitrarily restrictive about what type of receiver they'll accept.
+/// (This is how we can make cross-thread schedulers require a receiver to implement [Send],
+/// without requiring this trait on receivers for schedulers that don't require it.)
 pub trait TypedSenderConnect<ReceiverType>: TypedSender
 where
     ReceiverType: ReceiverOf<Self::Scheduler, Self::Value>,
