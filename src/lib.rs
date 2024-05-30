@@ -121,7 +121,7 @@ mod transfer;
 mod upon_done;
 mod upon_error;
 
-pub use errors::{new_error, Error, IsTuple, Result};
+pub use errors::{new_error, Error, Result, Tuple};
 pub use just::Just;
 pub use just_done::JustDone;
 pub use just_error::JustError;

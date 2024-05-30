@@ -1,4 +1,4 @@
-use crate::errors::{Error, IsTuple};
+use crate::errors::{Error, Tuple};
 use crate::scheduler::Scheduler;
 use crate::traits::{
     BindSender, OperationState, Receiver, ReceiverOf, Sender, TypedSender, TypedSenderConnect,
@@ -120,7 +120,7 @@ struct ReceiverWrapper<NestedReceiver, Sch, Value>
 where
     NestedReceiver: ReceiverOf<Sch::LocalScheduler, Value>,
     Sch: Scheduler,
-    Value: IsTuple,
+    Value: Tuple,
 {
     nested: NestedReceiver,
     target_scheduler: Sch,
@@ -131,7 +131,7 @@ impl<NestedReceiver, Sch, Value> Receiver for ReceiverWrapper<NestedReceiver, Sc
 where
     NestedReceiver: ReceiverOf<Sch::LocalScheduler, Value>,
     Sch: Scheduler,
-    Value: IsTuple,
+    Value: Tuple,
 {
     fn set_done(self) {
         self.nested.set_done()
@@ -147,7 +147,7 @@ where
     NestedReceiver: ReceiverOf<Sch::LocalScheduler, Value>,
     Sch: Scheduler,
     PreviousScheduler: Scheduler,
-    Value: IsTuple,
+    Value: Tuple,
     Sch::Sender:
         TypedSenderConnect<ContinuingReceiverWrapper<NestedReceiver, Sch::LocalScheduler, Value>>,
 {
@@ -167,7 +167,7 @@ struct ContinuingReceiverWrapper<NestedReceiver, Sch, Value>
 where
     NestedReceiver: ReceiverOf<Sch, Value>,
     Sch: Scheduler,
-    Value: IsTuple,
+    Value: Tuple,
 {
     nested: NestedReceiver,
     phantom: PhantomData<Sch>,
@@ -178,7 +178,7 @@ impl<NestedReceiver, Sch, Value> Receiver for ContinuingReceiverWrapper<NestedRe
 where
     NestedReceiver: ReceiverOf<Sch, Value>,
     Sch: Scheduler,
-    Value: IsTuple,
+    Value: Tuple,
 {
     fn set_done(self) {
         self.nested.set_done()
@@ -193,7 +193,7 @@ impl<NestedReceiver, Sch, Value> ReceiverOf<Sch, ()>
 where
     NestedReceiver: ReceiverOf<Sch, Value>,
     Sch: Scheduler,
-    Value: IsTuple,
+    Value: Tuple,
 {
     fn set_value(self, sch: Sch, _: ()) {
         self.nested.set_value(sch, self.values)

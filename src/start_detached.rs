@@ -1,4 +1,4 @@
-use crate::errors::{Error, IsTuple};
+use crate::errors::{Error, Tuple};
 use crate::scheduler::Scheduler;
 use crate::traits::{OperationState, Receiver, ReceiverOf, TypedSender, TypedSenderConnect};
 
@@ -23,12 +23,12 @@ impl Receiver for DiscardingReceiver {
     }
 }
 
-impl<Sch, Tuple> ReceiverOf<Sch, Tuple> for DiscardingReceiver
+impl<Sch, Tpl> ReceiverOf<Sch, Tpl> for DiscardingReceiver
 where
     Sch: Scheduler,
-    Tuple: IsTuple,
+    Tpl: Tuple,
 {
-    fn set_value(self, _: Sch, _: Tuple) {
+    fn set_value(self, _: Sch, _: Tpl) {
         // Since we run detached, we discard the arguments.
     }
 }

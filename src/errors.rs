@@ -1,7 +1,10 @@
 use std::error;
 
 /// Confirm if a type is a tuple.
-pub trait IsTuple {}
+///
+/// Note: once [Tuple](std::marker::Tuple) stabilizes, we'll change this to
+/// `pub use std::marker::Tuple;` (with an appropriate deprecation message).
+pub trait Tuple {}
 
 // Copying the trick from https://doc.rust-lang.org/src/core/tuple.rs.html to implement lots of implementations.
 macro_rules! tuple_impls_ {
@@ -24,13 +27,13 @@ pub(crate) use tuple_impls_;
 
 macro_rules! make_is_tuple {
     () => {
-        impl IsTuple for () {}
+        impl Tuple for () {}
     };
     ($v:ident : $T:ident) => {
-        impl<$T> IsTuple for ($T,) {}
+        impl<$T> Tuple for ($T,) {}
     };
     ($($v:ident: $T:ident),+) => {
-        impl<$($T),+> IsTuple for ($($T),+) {}
+        impl<$($T),+> Tuple for ($($T),+) {}
     };
 }
 

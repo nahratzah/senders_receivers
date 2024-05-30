@@ -1,20 +1,20 @@
-use crate::errors::{Error, IsTuple, Result};
+use crate::errors::{Error, Result, Tuple};
 use crate::scheduler::Scheduler;
 use crate::sync::same_thread_channel;
 use crate::traits::{OperationState, Receiver, ReceiverOf, TypedSender, TypedSenderConnect};
 use std::sync::mpsc;
 
-enum SyncWaitOutcome<Tuple: IsTuple> {
-    Value(Tuple),
+enum SyncWaitOutcome<Tpl: Tuple> {
+    Value(Tpl),
     Error(Error),
     Done,
 }
 
-pub struct NoSendReceiver<Tuple: IsTuple> {
-    tx: same_thread_channel::Sender<SyncWaitOutcome<Tuple>>,
+pub struct NoSendReceiver<Tpl: Tuple> {
+    tx: same_thread_channel::Sender<SyncWaitOutcome<Tpl>>,
 }
 
-impl<Tuple: IsTuple> Receiver for NoSendReceiver<Tuple> {
+impl<Tpl: Tuple> Receiver for NoSendReceiver<Tpl> {
     fn set_done(self) {
         self.tx
             .send(SyncWaitOutcome::Done)
@@ -28,19 +28,19 @@ impl<Tuple: IsTuple> Receiver for NoSendReceiver<Tuple> {
     }
 }
 
-impl<Sch: Scheduler, Tuple: IsTuple> ReceiverOf<Sch, Tuple> for NoSendReceiver<Tuple> {
-    fn set_value(self, _: Sch, values: Tuple) {
+impl<Sch: Scheduler, Tpl: Tuple> ReceiverOf<Sch, Tpl> for NoSendReceiver<Tpl> {
+    fn set_value(self, _: Sch, values: Tpl) {
         self.tx
             .send(SyncWaitOutcome::Value(values))
             .expect("send must succeed");
     }
 }
 
-pub struct SendReceiver<Tuple: IsTuple + Send + 'static> {
-    tx: mpsc::SyncSender<SyncWaitOutcome<Tuple>>,
+pub struct SendReceiver<Tpl: Tuple + Send + 'static> {
+    tx: mpsc::SyncSender<SyncWaitOutcome<Tpl>>,
 }
 
-impl<Tuple: IsTuple + Send + 'static> Receiver for SendReceiver<Tuple> {
+impl<Tpl: Tuple + Send + 'static> Receiver for SendReceiver<Tpl> {
     fn set_done(self) {
         self.tx
             .send(SyncWaitOutcome::Done)
@@ -54,10 +54,8 @@ impl<Tuple: IsTuple + Send + 'static> Receiver for SendReceiver<Tuple> {
     }
 }
 
-impl<Sch: Scheduler, Tuple: IsTuple + Send + 'static> ReceiverOf<Sch, Tuple>
-    for SendReceiver<Tuple>
-{
-    fn set_value(self, _: Sch, values: Tuple) {
+impl<Sch: Scheduler, Tpl: Tuple + Send + 'static> ReceiverOf<Sch, Tpl> for SendReceiver<Tpl> {
+    fn set_value(self, _: Sch, values: Tpl) {
         self.tx
             .send(SyncWaitOutcome::Value(values))
             .expect("send must succeed");

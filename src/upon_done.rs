@@ -1,4 +1,4 @@
-use crate::errors::{Error, IsTuple, Result};
+use crate::errors::{Error, Result, Tuple};
 use crate::functor::{NoArgClosure, NoArgFunctor, NoErrNoArgFunctor};
 use crate::scheduler::{ImmediateScheduler, Scheduler, WithScheduler};
 use crate::traits::{
@@ -44,7 +44,7 @@ use std::ops::BitOr;
 pub struct UponDone<FnType, Sch, Out>
 where
     FnType: NoArgFunctor<Output = Result<Out>>,
-    Out: IsTuple,
+    Out: Tuple,
     Sch: Scheduler,
 {
     fn_impl: FnType,
@@ -55,7 +55,7 @@ where
 impl<FnType, Out> From<FnType> for UponDone<FnType, ImmediateScheduler, Out>
 where
     FnType: NoArgFunctor<Output = Result<Out>>,
-    Out: IsTuple,
+    Out: Tuple,
 {
     fn from(fn_impl: FnType) -> Self {
         Self {
@@ -71,7 +71,7 @@ type ClosureUponDone<FnType, Sch, Out> = UponDone<NoArgClosure<FnType, Result<Ou
 impl<FnType, Out> From<FnType> for ClosureUponDone<FnType, ImmediateScheduler, Out>
 where
     FnType: FnOnce() -> Result<Out>,
-    Out: IsTuple,
+    Out: Tuple,
 {
     fn from(fn_impl: FnType) -> Self {
         Self::from(NoArgClosure::new(fn_impl))
@@ -83,7 +83,7 @@ type NoErrUponDone<FunctorType, Sch, Out> = UponDone<NoErrNoArgFunctor<FunctorTy
 impl<FnImpl, Out> From<FnImpl> for NoErrUponDone<FnImpl, ImmediateScheduler, Out>
 where
     FnImpl: NoArgFunctor<Output = Out>,
-    Out: IsTuple,
+    Out: Tuple,
 {
     fn from(fn_impl: FnImpl) -> Self {
         Self::from(NoErrNoArgFunctor::new(fn_impl))
@@ -95,7 +95,7 @@ type NoErrClosureUponDone<FnImpl, Sch, Out> = NoErrUponDone<NoArgClosure<FnImpl,
 impl<FnImpl, Out> From<FnImpl> for NoErrClosureUponDone<FnImpl, ImmediateScheduler, Out>
 where
     FnImpl: FnOnce() -> Out,
-    Out: IsTuple,
+    Out: Tuple,
 {
     fn from(fn_impl: FnImpl) -> Self {
         Self::from(NoArgClosure::new(fn_impl))
@@ -106,7 +106,7 @@ impl<FnType, Sch, Out> WithScheduler<Sch, FnType> for UponDone<FnType, Sch, Out>
 where
     FnType: NoArgFunctor<Output = Result<Out>>,
     Sch: Scheduler,
-    Out: IsTuple,
+    Out: Tuple,
 {
     fn with_scheduler(sch: Sch, fn_impl: FnType) -> Self {
         Self {
@@ -121,7 +121,7 @@ impl<FnType, Sch, Out> WithScheduler<Sch, FnType> for ClosureUponDone<FnType, Sc
 where
     FnType: FnOnce() -> Result<Out>,
     Sch: Scheduler,
-    Out: IsTuple,
+    Out: Tuple,
 {
     fn with_scheduler(sch: Sch, fn_impl: FnType) -> Self {
         Self::with_scheduler(sch, NoArgClosure::new(fn_impl))
@@ -132,7 +132,7 @@ impl<FnImpl, Sch, Out> WithScheduler<Sch, FnImpl> for NoErrUponDone<FnImpl, Sch,
 where
     FnImpl: NoArgFunctor<Output = Out>,
     Sch: Scheduler,
-    Out: IsTuple,
+    Out: Tuple,
 {
     fn with_scheduler(sch: Sch, fn_impl: FnImpl) -> Self {
         Self::with_scheduler(sch, NoErrNoArgFunctor::new(fn_impl))
@@ -143,7 +143,7 @@ impl<FnImpl, Sch, Out> WithScheduler<Sch, FnImpl> for NoErrClosureUponDone<FnImp
 where
     FnImpl: FnOnce() -> Out,
     Sch: Scheduler,
-    Out: IsTuple,
+    Out: Tuple,
 {
     fn with_scheduler(sch: Sch, fn_impl: FnImpl) -> Self {
         Self::with_scheduler(sch, NoArgClosure::new(fn_impl))
@@ -153,7 +153,7 @@ where
 impl<FnType, Sch, Out> Sender for UponDone<FnType, Sch, Out>
 where
     FnType: NoArgFunctor<Output = Result<Out>>,
-    Out: IsTuple,
+    Out: Tuple,
     Sch: Scheduler,
 {
 }
@@ -162,7 +162,7 @@ impl<FnType, Sch, Out, NestedSender> BindSender<NestedSender> for UponDone<FnTyp
 where
     NestedSender: TypedSender<Scheduler = Sch::LocalScheduler, Value = Out>,
     FnType: NoArgFunctor<Output = Result<Out>>,
-    Out: IsTuple,
+    Out: Tuple,
     Sch: Scheduler,
 {
     type Output = UponDoneTS<NestedSender, FnType, Sch, Out>;
@@ -181,7 +181,7 @@ pub struct UponDoneTS<NestedSender, FnType, Sch, Out>
 where
     NestedSender: TypedSender<Scheduler = Sch::LocalScheduler, Value = Out>,
     FnType: NoArgFunctor<Output = Result<Out>>,
-    Out: IsTuple,
+    Out: Tuple,
     Sch: Scheduler,
 {
     nested: NestedSender,
@@ -194,7 +194,7 @@ impl<NestedSender, FnType, Sch, Out> TypedSender for UponDoneTS<NestedSender, Fn
 where
     NestedSender: TypedSender<Scheduler = Sch::LocalScheduler, Value = Out>,
     FnType: NoArgFunctor<Output = Result<Out>>,
-    Out: IsTuple,
+    Out: Tuple,
     Sch: Scheduler,
 {
     type Scheduler = Sch::LocalScheduler;
@@ -208,7 +208,7 @@ where
     NestedSender: TypedSender<Scheduler = Sch::LocalScheduler, Value = Out>
         + TypedSenderConnect<ReceiverWrapper<ReceiverType, FnType, Sch, Out>>,
     FnType: NoArgFunctor<Output = Result<Out>>,
-    Out: IsTuple,
+    Out: Tuple,
     Sch: Scheduler,
     Sch::Sender: TypedSenderConnect<DoneReceiver<ReceiverType, FnType, Sch::LocalScheduler, Out>>,
 {
@@ -229,7 +229,7 @@ where
     BindSenderImpl: BindSender<UponDoneTS<NestedSender, FnType, Sch, Out>>,
     NestedSender: TypedSender<Scheduler = Sch::LocalScheduler, Value = Out>,
     FnType: NoArgFunctor<Output = Result<Out>>,
-    Out: IsTuple,
+    Out: Tuple,
     Sch: Scheduler,
 {
     type Output = BindSenderImpl::Output;
@@ -245,7 +245,7 @@ where
     FnType: NoArgFunctor<Output = Result<Out>>,
     Sch: Scheduler,
     Sch::Sender: TypedSenderConnect<DoneReceiver<NestedReceiver, FnType, Sch::LocalScheduler, Out>>,
-    Out: IsTuple,
+    Out: Tuple,
 {
     nested: NestedReceiver,
     fn_impl: FnType,
@@ -260,7 +260,7 @@ where
     FnType: NoArgFunctor<Output = Result<Out>>,
     Sch: Scheduler,
     Sch::Sender: TypedSenderConnect<DoneReceiver<NestedReceiver, FnType, Sch::LocalScheduler, Out>>,
-    Out: IsTuple,
+    Out: Tuple,
 {
     fn set_done(self) {
         self.sch
@@ -287,7 +287,7 @@ where
     FnType: NoArgFunctor<Output = Result<Out>>,
     Sch: Scheduler,
     Sch::Sender: TypedSenderConnect<DoneReceiver<NestedReceiver, FnType, Sch::LocalScheduler, Out>>,
-    Out: IsTuple,
+    Out: Tuple,
 {
     fn set_value(self, sch: Sch::LocalScheduler, v: Out) {
         self.nested.set_value(sch, v);
@@ -299,7 +299,7 @@ where
     NestedReceiver: ReceiverOf<Sch, Out>,
     FnType: NoArgFunctor<Output = Result<Out>>,
     Sch: Scheduler,
-    Out: IsTuple,
+    Out: Tuple,
 {
     nested: NestedReceiver,
     fn_impl: FnType,
@@ -311,7 +311,7 @@ where
     NestedReceiver: ReceiverOf<Sch, Out>,
     FnType: NoArgFunctor<Output = Result<Out>>,
     Sch: Scheduler,
-    Out: IsTuple,
+    Out: Tuple,
 {
     fn set_done(self) {
         self.nested.set_done();
@@ -328,7 +328,7 @@ where
     NestedReceiver: ReceiverOf<Sch, Out>,
     FnType: NoArgFunctor<Output = Result<Out>>,
     Sch: Scheduler,
-    Out: IsTuple,
+    Out: Tuple,
 {
     fn set_value(self, sch: Sch, _: ()) {
         match self.fn_impl.tuple_invoke() {

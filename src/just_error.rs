@@ -1,4 +1,4 @@
-use crate::errors::{Error, IsTuple};
+use crate::errors::{Error, Tuple};
 use crate::scheduler::{ImmediateScheduler, Scheduler, WithScheduler};
 use crate::traits::{
     BindSender, OperationState, Receiver, ReceiverOf, TypedSender, TypedSenderConnect,
@@ -21,12 +21,12 @@ use std::ops::BitOr;
 ///     };
 /// }
 /// ```
-pub struct JustError<Sch: Scheduler, Tuple: IsTuple> {
-    phantom: PhantomData<fn(Sch) -> Tuple>,
+pub struct JustError<Sch: Scheduler, Tpl: Tuple> {
+    phantom: PhantomData<fn(Sch) -> Tpl>,
     error: Error,
 }
 
-impl<Sch: Scheduler, Tuple: IsTuple> JustError<Sch, Tuple> {
+impl<Sch: Scheduler, Tpl: Tuple> JustError<Sch, Tpl> {
     /// Create a new typed sender that'll yield an error.
     ///
     /// This function usually requires a turbo-fish to get the type right.
@@ -39,14 +39,14 @@ impl<Sch: Scheduler, Tuple: IsTuple> JustError<Sch, Tuple> {
     }
 }
 
-impl<Tuple: IsTuple> From<Error> for JustError<ImmediateScheduler, Tuple> {
+impl<Tpl: Tuple> From<Error> for JustError<ImmediateScheduler, Tpl> {
     /// Create a new typed sender that'll yield an error.
     fn from(error: Error) -> Self {
         Self::new(error)
     }
 }
 
-impl<Sch: Scheduler, Tuple: IsTuple> WithScheduler<Sch, Error> for JustError<Sch, Tuple> {
+impl<Sch: Scheduler, Tpl: Tuple> WithScheduler<Sch, Error> for JustError<Sch, Tpl> {
     fn with_scheduler(_: Sch, error: Error) -> Self {
         JustError {
             error,
@@ -55,16 +55,16 @@ impl<Sch: Scheduler, Tuple: IsTuple> WithScheduler<Sch, Error> for JustError<Sch
     }
 }
 
-impl<Sch: Scheduler, Tuple: IsTuple> TypedSender for JustError<Sch, Tuple> {
-    type Value = Tuple;
+impl<Sch: Scheduler, Tpl: Tuple> TypedSender for JustError<Sch, Tpl> {
+    type Value = Tpl;
     type Scheduler = Sch::LocalScheduler;
 }
 
-impl<ReceiverType, Sch, Tuple> TypedSenderConnect<ReceiverType> for JustError<Sch, Tuple>
+impl<ReceiverType, Sch, Tpl> TypedSenderConnect<ReceiverType> for JustError<Sch, Tpl>
 where
     Sch: Scheduler,
-    Tuple: IsTuple,
-    ReceiverType: ReceiverOf<Sch::LocalScheduler, Tuple>,
+    Tpl: Tuple,
+    ReceiverType: ReceiverOf<Sch::LocalScheduler, Tpl>,
 {
     fn connect(self, receiver: ReceiverType) -> impl OperationState {
         JustErrorOperationState {
@@ -91,7 +91,7 @@ where
     }
 }
 
-impl<Sch: Scheduler, Tuple: IsTuple, BindSenderImpl> BitOr<BindSenderImpl> for JustError<Sch, Tuple>
+impl<Sch: Scheduler, Tpl: Tuple, BindSenderImpl> BitOr<BindSenderImpl> for JustError<Sch, Tpl>
 where
     BindSenderImpl: BindSender<Self>,
 {

@@ -1,4 +1,4 @@
-use crate::errors::IsTuple;
+use crate::errors::Tuple;
 use crate::scheduler::{ImmediateScheduler, Scheduler};
 use crate::traits::{
     BindSender, OperationState, Receiver, ReceiverOf, TypedSender, TypedSenderConnect,
@@ -22,38 +22,38 @@ use std::ops::BitOr;
 ///     };
 /// }
 /// ```
-pub struct JustDone<Sch: Scheduler, Tuple: IsTuple> {
-    phantom: PhantomData<fn(Sch) -> Tuple>,
+pub struct JustDone<Sch: Scheduler, Tpl: Tuple> {
+    phantom: PhantomData<fn(Sch) -> Tpl>,
 }
 
-impl<Sch: Scheduler, Tuple: IsTuple> JustDone<Sch, Tuple> {
+impl<Sch: Scheduler, Tpl: Tuple> JustDone<Sch, Tpl> {
     /// Create a new typed sender that'll yield an error.
     ///
     /// Since you usually need to use a turbo-fish to use this function,
     /// you might prefer using [Scheduler::schedule_done] instead.
-    pub fn new() -> JustDone<Sch, Tuple> {
+    pub fn new() -> JustDone<Sch, Tpl> {
         JustDone {
             phantom: PhantomData,
         }
     }
 }
 
-impl<Tuple: IsTuple> Default for JustDone<ImmediateScheduler, Tuple> {
+impl<Tpl: Tuple> Default for JustDone<ImmediateScheduler, Tpl> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<Sch: Scheduler, Tuple: IsTuple> TypedSender for JustDone<Sch, Tuple> {
-    type Value = Tuple;
+impl<Sch: Scheduler, Tpl: Tuple> TypedSender for JustDone<Sch, Tpl> {
+    type Value = Tpl;
     type Scheduler = Sch::LocalScheduler;
 }
 
-impl<Sch, ReceiverType, Tuple> TypedSenderConnect<ReceiverType> for JustDone<Sch, Tuple>
+impl<Sch, ReceiverType, Tpl> TypedSenderConnect<ReceiverType> for JustDone<Sch, Tpl>
 where
     Sch: Scheduler,
-    Tuple: IsTuple,
-    ReceiverType: ReceiverOf<Sch::LocalScheduler, Tuple>,
+    Tpl: Tuple,
+    ReceiverType: ReceiverOf<Sch::LocalScheduler, Tpl>,
 {
     fn connect(self, receiver: ReceiverType) -> impl OperationState {
         JustDoneOperationState { receiver }
@@ -70,9 +70,9 @@ impl<ReceiverImpl: Receiver> OperationState for JustDoneOperationState<ReceiverI
     }
 }
 
-impl<Sch: Scheduler, Tuple: IsTuple, BindSenderImpl> BitOr<BindSenderImpl> for JustDone<Sch, Tuple>
+impl<Sch: Scheduler, Tpl: Tuple, BindSenderImpl> BitOr<BindSenderImpl> for JustDone<Sch, Tpl>
 where
-    BindSenderImpl: BindSender<JustDone<Sch, Tuple>>,
+    BindSenderImpl: BindSender<JustDone<Sch, Tpl>>,
 {
     type Output = BindSenderImpl::Output;
 

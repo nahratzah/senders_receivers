@@ -1,4 +1,4 @@
-use crate::errors::{Error, IsTuple};
+use crate::errors::{Error, Tuple};
 use crate::just::Just;
 use crate::just_done::JustDone;
 use crate::just_error::JustError;
@@ -49,18 +49,18 @@ pub trait Scheduler: Eq + Clone {
     fn schedule(&self) -> Self::Sender;
 
     /// Create a sender that'll run on this scheduler, that produces a value signal.
-    fn schedule_value<Tuple: IsTuple>(&self, values: Tuple) -> Just<Self, Tuple> {
+    fn schedule_value<Tpl: Tuple>(&self, values: Tpl) -> Just<Self, Tpl> {
         Just::with_scheduler(self.clone(), values)
     }
 
     /// Create a sender associated with this scheduler, that produces an error signal.
-    fn schedule_error<Tuple: IsTuple>(&self, error: Error) -> JustError<Self, Tuple> {
-        JustError::<Self, Tuple>::new(error)
+    fn schedule_error<Tpl: Tuple>(&self, error: Error) -> JustError<Self, Tpl> {
+        JustError::<Self, Tpl>::new(error)
     }
 
     /// Create a sender associated with this scheduler, that produces a done signal.
-    fn schedule_done<Tuple: IsTuple>(&self) -> JustDone<Self, Tuple> {
-        JustDone::<Self, Tuple>::new()
+    fn schedule_done<Tpl: Tuple>(&self) -> JustDone<Self, Tpl> {
+        JustDone::<Self, Tpl>::new()
     }
 }
 
