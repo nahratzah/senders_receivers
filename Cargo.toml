@@ -10,3 +10,4 @@ license = "BSD-2-Clause"
 [dependencies]
 threadpool = "1.8"
 rand = "0.8"
+mio = { version = "0.8.11", features = ["os-poll"] }

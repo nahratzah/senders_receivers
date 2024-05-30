@@ -7,6 +7,7 @@ use crate::scheduler::{ImmediateScheduler, Scheduler};
 use crate::start_detached::start_detached;
 use crate::traits::{BindSender, OperationState, ReceiverOf, TypedSender, TypedSenderConnect};
 use rand::Rng;
+use std::io;
 use std::ops::BitOr;
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -27,13 +28,13 @@ impl ThreadPoolState {
     ///
     /// The threadpool will have `thread_count` threads.
     /// Note that this type is the internal state, and should be shared with a reference-count-pointer, and a mutex.
-    fn new(thread_count: usize) -> Self {
+    fn new(thread_count: usize) -> Result<Self, io::Error> {
         let mut pool = Self {
             threads: Vec::with_capacity(thread_count),
             pending_joins: Vec::new(),
         };
-        pool.set_thread_count(thread_count);
-        pool
+        pool.set_thread_count(thread_count)?;
+        Ok(pool)
     }
 
     /// Change the number of threads that are part of the pool.
@@ -42,15 +43,15 @@ impl ThreadPoolState {
     /// will not go away until their last associated scheduler is closed and all tasks have run.
     /// However, those threads won't have new tasks scheduled on them anymore.
     /// This function won't wait for threads to complete.
-    fn set_thread_count(&mut self, thread_count: usize) -> usize {
+    fn set_thread_count(&mut self, thread_count: usize) -> Result<usize, io::Error> {
         let old_size = self.threads.len();
         while self.threads.len() > thread_count {
             self.pending_joins.push(self.threads.pop().unwrap().1);
         }
         while self.threads.len() < thread_count {
-            self.threads.push(Worker::start())
+            self.threads.push(Worker::start()?)
         }
-        old_size
+        Ok(old_size)
     }
 
     /// Wait for all worker threads to complete.
@@ -77,10 +78,10 @@ pub struct ThreadPool {
 
 impl ThreadPool {
     /// Create a new threadpool with the specified number of worker threads.
-    pub fn new(thread_count: usize) -> Self {
-        Self {
-            state: Arc::new(Mutex::new(ThreadPoolState::new(thread_count))),
-        }
+    pub fn new(thread_count: usize) -> Result<Self, io::Error> {
+        Ok(Self {
+            state: Arc::new(Mutex::new(ThreadPoolState::new(thread_count)?)),
+        })
     }
 
     /// Join all threads.
@@ -130,7 +131,7 @@ impl ThreadPool {
     /// will not go away until their last associated scheduler is closed and all tasks have run.
     /// However, those threads won't have new tasks scheduled on them anymore.
     /// This function won't wait for threads to complete.
-    pub fn set_thread_count(&mut self, thread_count: usize) -> usize {
+    pub fn set_thread_count(&mut self, thread_count: usize) -> Result<usize, io::Error> {
         self.state.lock().unwrap().set_thread_count(thread_count)
     }
 }

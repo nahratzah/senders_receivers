@@ -1,10 +1,10 @@
 use crate::embarrasingly_parallel::tasks::SendTask;
 use crate::embarrasingly_parallel::thread_local_pool::ThreadLocalPool;
 use crate::scheduler::Scheduler;
+use crate::sync::cross_thread_channel;
 
 use crate::traits::{BindSender, OperationState, ReceiverOf, TypedSender, TypedSenderConnect};
 use std::ops::BitOr;
-use std::sync::mpsc;
 use std::thread;
 
 /// Cross-thread counterpart of [ThreadLocalPool].
@@ -14,12 +14,15 @@ use std::thread;
 #[derive(Clone)]
 pub struct CrossThreadPool {
     thread_id: thread::ThreadId,
-    xtc_sender: mpsc::Sender<SendTask>,
+    xtc_sender: cross_thread_channel::Sender<SendTask>,
 }
 
 impl CrossThreadPool {
     /// Create a new cross-thread-pool.
-    pub(super) fn new(thread_id: thread::ThreadId, xtc_sender: mpsc::Sender<SendTask>) -> Self {
+    pub(super) fn new(
+        thread_id: thread::ThreadId,
+        xtc_sender: cross_thread_channel::Sender<SendTask>,
+    ) -> Self {
         Self {
             thread_id,
             xtc_sender,

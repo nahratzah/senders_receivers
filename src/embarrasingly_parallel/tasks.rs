@@ -1,6 +1,5 @@
 use crate::embarrasingly_parallel::thread_local_pool::ThreadLocalPool;
-use crate::sync::same_thread_channel;
-use std::sync::mpsc;
+use crate::sync::{cross_thread_channel, same_thread_channel};
 use std::thread;
 
 /// A task that can run on the ThreadLocalPool.
@@ -13,7 +12,7 @@ pub struct Task {
     ///
     /// We use this to recreate a [ThreadLocalPool] when the task is invoked.
     /// It also is how the [ThreadLocalPool] is kept live.
-    xtc_sender: mpsc::Sender<SendTask>,
+    xtc_sender: cross_thread_channel::Sender<SendTask>,
     /// Implementation function.
     function: Box<dyn FnOnce(ThreadLocalPool) + 'static>,
 }
@@ -22,7 +21,7 @@ impl Task {
     /// Create a new task.
     pub fn new(
         thread_id: thread::ThreadId,
-        xtc_sender: mpsc::Sender<SendTask>,
+        xtc_sender: cross_thread_channel::Sender<SendTask>,
         function: Box<dyn FnOnce(ThreadLocalPool) + 'static>,
     ) -> Self {
         Self {
@@ -70,7 +69,7 @@ pub struct SendTask {
     ///
     /// We use this to recreate a [ThreadLocalPool] when the task is invoked.
     /// It also is how the [ThreadLocalPool] is kept live.
-    xtc_sender: mpsc::Sender<SendTask>,
+    xtc_sender: cross_thread_channel::Sender<SendTask>,
     /// Implementation function.
     function: Box<dyn FnOnce(ThreadLocalPool) + Send + 'static>,
 }
@@ -79,7 +78,7 @@ impl SendTask {
     /// Create a new task.
     pub fn new(
         thread_id: thread::ThreadId,
-        xtc_sender: mpsc::Sender<SendTask>,
+        xtc_sender: cross_thread_channel::Sender<SendTask>,
         function: Box<dyn FnOnce(ThreadLocalPool) + Send + 'static>,
     ) -> Self {
         Self {

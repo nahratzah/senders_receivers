@@ -80,6 +80,10 @@ impl<T> Channel<T> {
             _ => TryRecvError::Empty,
         })
     }
+
+    fn is_empty(&self) -> bool {
+        self.queue.is_empty()
+    }
 }
 
 impl<T> Drop for Receiver<T> {
@@ -119,6 +123,11 @@ impl<T> Receiver<T> {
     pub fn try_recv(&self) -> Result<T, TryRecvError> {
         let mut channel: RefMut<'_, _> = self.channel.borrow_mut();
         channel.try_pop()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        let channel: RefMut<'_, _> = self.channel.borrow_mut();
+        channel.is_empty()
     }
 }
 
