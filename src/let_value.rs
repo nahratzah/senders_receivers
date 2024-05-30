@@ -1,4 +1,4 @@
-use crate::errors::{Error, IsTuple};
+use crate::errors::{Error, IsTuple, Result};
 use crate::functor::{BiClosure, BiFunctor, NoErrBiFunctor};
 use crate::scheduler::Scheduler;
 use crate::traits::{
@@ -36,7 +36,7 @@ use std::ops::BitOr;
 /// ```
 pub struct LetValue<FnType, Out, FirstArg, ArgTuple>
 where
-    FnType: BiFunctor<FirstArg, ArgTuple, Output = Result<Out, Error>>,
+    FnType: BiFunctor<FirstArg, ArgTuple, Output = Result<Out>>,
     FirstArg: Scheduler,
     ArgTuple: IsTuple,
     Out: TypedSender,
@@ -47,7 +47,7 @@ where
 
 impl<FnType, Out, FirstArg, ArgTuple> From<FnType> for LetValue<FnType, Out, FirstArg, ArgTuple>
 where
-    FnType: BiFunctor<FirstArg, ArgTuple, Output = Result<Out, Error>>,
+    FnType: BiFunctor<FirstArg, ArgTuple, Output = Result<Out>>,
     FirstArg: Scheduler,
     ArgTuple: IsTuple,
     Out: TypedSender,
@@ -61,12 +61,12 @@ where
 }
 
 type ClosureLetValue<FnType, Out, FirstArg, ArgTuple> =
-    LetValue<BiClosure<FnType, Result<Out, Error>, FirstArg, ArgTuple>, Out, FirstArg, ArgTuple>;
+    LetValue<BiClosure<FnType, Result<Out>, FirstArg, ArgTuple>, Out, FirstArg, ArgTuple>;
 
 impl<FnType, Out, FirstArg, ArgTuple> From<FnType>
     for ClosureLetValue<FnType, Out, FirstArg, ArgTuple>
 where
-    FnType: FnOnce(FirstArg, ArgTuple) -> Result<Out, Error>,
+    FnType: FnOnce(FirstArg, ArgTuple) -> Result<Out>,
     FirstArg: Scheduler,
     ArgTuple: IsTuple,
     Out: TypedSender,
@@ -111,7 +111,7 @@ where
 impl<FnType, Out: TypedSender, FirstArg: Scheduler, ArgTuple: IsTuple> Sender
     for LetValue<FnType, Out, FirstArg, ArgTuple>
 where
-    FnType: BiFunctor<FirstArg, ArgTuple, Output = Result<Out, Error>>,
+    FnType: BiFunctor<FirstArg, ArgTuple, Output = Result<Out>>,
 {
 }
 
@@ -124,7 +124,7 @@ impl<FnType, Out, NestedSender> BindSender<NestedSender>
     >
 where
     NestedSender: TypedSender,
-    FnType: BiFunctor<NestedSender::Scheduler, NestedSender::Value, Output = Result<Out, Error>>,
+    FnType: BiFunctor<NestedSender::Scheduler, NestedSender::Value, Output = Result<Out>>,
     NestedSender::Value: IsTuple,
     Out: TypedSender,
 {
@@ -144,7 +144,7 @@ impl<NestedSender, FnType, Out: TypedSender, BindSenderImpl> BitOr<BindSenderImp
 where
     BindSenderImpl: BindSender<LetValueSender<NestedSender, FnType, Out>>,
     NestedSender: TypedSender,
-    FnType: BiFunctor<NestedSender::Scheduler, NestedSender::Value, Output = Result<Out, Error>>,
+    FnType: BiFunctor<NestedSender::Scheduler, NestedSender::Value, Output = Result<Out>>,
     NestedSender::Value: IsTuple,
     Out: TypedSender,
 {
@@ -158,7 +158,7 @@ where
 pub struct LetValueSender<NestedSender, FnType, Out>
 where
     NestedSender: TypedSender,
-    FnType: BiFunctor<NestedSender::Scheduler, NestedSender::Value, Output = Result<Out, Error>>,
+    FnType: BiFunctor<NestedSender::Scheduler, NestedSender::Value, Output = Result<Out>>,
     Out: TypedSender,
 {
     nested: NestedSender,
@@ -169,7 +169,7 @@ where
 impl<NestedSender, FnType, Out> TypedSender for LetValueSender<NestedSender, FnType, Out>
 where
     NestedSender: TypedSender,
-    FnType: BiFunctor<NestedSender::Scheduler, NestedSender::Value, Output = Result<Out, Error>>,
+    FnType: BiFunctor<NestedSender::Scheduler, NestedSender::Value, Output = Result<Out>>,
     Out: TypedSender,
 {
     type Value = Out::Value;
@@ -190,7 +190,7 @@ where
                 <NestedSender as TypedSender>::Value,
             >,
         >,
-    FnType: BiFunctor<NestedSender::Scheduler, NestedSender::Value, Output = Result<Out, Error>>,
+    FnType: BiFunctor<NestedSender::Scheduler, NestedSender::Value, Output = Result<Out>>,
     Out: TypedSender + TypedSenderConnect<ReceiverImpl>,
 {
     fn connect(self, receiver: ReceiverImpl) -> impl OperationState {
@@ -206,7 +206,7 @@ where
 struct LetValueWrappedReceiver<ReceiverImpl, FnType, Out, FirstArg, ArgTuple>
 where
     ReceiverImpl: ReceiverOf<Out::Scheduler, Out::Value>,
-    FnType: BiFunctor<FirstArg, ArgTuple, Output = Result<Out, Error>>,
+    FnType: BiFunctor<FirstArg, ArgTuple, Output = Result<Out>>,
     FirstArg: Scheduler,
     ArgTuple: IsTuple,
     Out: TypedSender + TypedSenderConnect<ReceiverImpl>,
@@ -220,7 +220,7 @@ impl<ReceiverImpl, FnType, Out, FirstArg, ArgTuple> Receiver
     for LetValueWrappedReceiver<ReceiverImpl, FnType, Out, FirstArg, ArgTuple>
 where
     ReceiverImpl: ReceiverOf<Out::Scheduler, Out::Value>,
-    FnType: BiFunctor<FirstArg, ArgTuple, Output = Result<Out, Error>>,
+    FnType: BiFunctor<FirstArg, ArgTuple, Output = Result<Out>>,
     FirstArg: Scheduler,
     ArgTuple: IsTuple,
     Out: TypedSender + TypedSenderConnect<ReceiverImpl>,
@@ -238,7 +238,7 @@ impl<ReceiverImpl, FnType, Out, FirstArg, ArgTuple> ReceiverOf<FirstArg, ArgTupl
     for LetValueWrappedReceiver<ReceiverImpl, FnType, Out, FirstArg, ArgTuple>
 where
     ReceiverImpl: ReceiverOf<Out::Scheduler, Out::Value>,
-    FnType: BiFunctor<FirstArg, ArgTuple, Output = Result<Out, Error>>,
+    FnType: BiFunctor<FirstArg, ArgTuple, Output = Result<Out>>,
     FirstArg: Scheduler,
     ArgTuple: IsTuple,
     Out: TypedSender + TypedSenderConnect<ReceiverImpl>,
@@ -257,7 +257,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::LetValue;
-    use crate::errors::{new_error, Error, ErrorForTesting};
+    use crate::errors::{new_error, ErrorForTesting, Result};
     use crate::just::Just;
     use crate::just_error::JustError;
     use crate::scheduler::{ImmediateScheduler, WithScheduler};
@@ -309,7 +309,7 @@ mod tests {
     fn errors_from_functor_are_propagated() {
         match sync_wait(
             Just::from(())
-                | LetValue::from(|_, ()| -> Result<Just<ImmediateScheduler, (i32,)>, Error> {
+                | LetValue::from(|_, ()| -> Result<Just<ImmediateScheduler, (i32,)>> {
                     Err(new_error(ErrorForTesting::from("error")))
                 }),
         ) {

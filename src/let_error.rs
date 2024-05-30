@@ -1,4 +1,4 @@
-use crate::errors::Error;
+use crate::errors::{Error, Result};
 use crate::functor::{Closure, Functor, NoErrFunctor};
 use crate::traits::{
     BindSender, OperationState, Receiver, ReceiverOf, Sender, TypedSender, TypedSenderConnect,
@@ -26,7 +26,7 @@ use std::ops::BitOr;
 /// ```
 pub struct LetError<FnType, Out>
 where
-    FnType: Functor<Error, Output = Result<Out, Error>>,
+    FnType: Functor<Error, Output = Result<Out>>,
     Out: TypedSender,
 {
     fn_impl: FnType,
@@ -35,7 +35,7 @@ where
 
 impl<FnType, Out> From<FnType> for LetError<FnType, Out>
 where
-    FnType: Functor<Error, Output = Result<Out, Error>>,
+    FnType: Functor<Error, Output = Result<Out>>,
     Out: TypedSender,
 {
     fn from(fn_impl: FnType) -> Self {
@@ -46,11 +46,11 @@ where
     }
 }
 
-type ClosureLetError<FnType, Out> = LetError<Closure<FnType, Result<Out, Error>, Error>, Out>;
+type ClosureLetError<FnType, Out> = LetError<Closure<FnType, Result<Out>, Error>, Out>;
 
 impl<FnType, Out> From<FnType> for ClosureLetError<FnType, Out>
 where
-    FnType: FnOnce(Error) -> Result<Out, Error>,
+    FnType: FnOnce(Error) -> Result<Out>,
     Out: TypedSender,
 {
     fn from(fn_impl: FnType) -> Self {
@@ -84,7 +84,7 @@ where
 
 impl<FnType, Out> Sender for LetError<FnType, Out>
 where
-    FnType: Functor<Error, Output = Result<Out, Error>>,
+    FnType: Functor<Error, Output = Result<Out>>,
     Out: TypedSender,
 {
 }
@@ -92,7 +92,7 @@ where
 impl<FnType, Out, NestedSender> BindSender<NestedSender> for LetError<FnType, Out>
 where
     NestedSender: TypedSender<Scheduler = Out::Scheduler, Value = Out::Value>,
-    FnType: Functor<Error, Output = Result<Out, Error>>,
+    FnType: Functor<Error, Output = Result<Out>>,
     Out: TypedSender,
 {
     type Output = LetErrorSender<NestedSender, FnType, Out>;
@@ -109,7 +109,7 @@ where
 pub struct LetErrorSender<NestedSender, FnType, Out>
 where
     NestedSender: TypedSender<Scheduler = Out::Scheduler, Value = Out::Value>,
-    FnType: Functor<Error, Output = Result<Out, Error>>,
+    FnType: Functor<Error, Output = Result<Out>>,
     Out: TypedSender,
 {
     nested: NestedSender,
@@ -120,7 +120,7 @@ where
 impl<FnType, Out, NestedSender> TypedSender for LetErrorSender<NestedSender, FnType, Out>
 where
     NestedSender: TypedSender<Scheduler = Out::Scheduler, Value = Out::Value>,
-    FnType: Functor<Error, Output = Result<Out, Error>>,
+    FnType: Functor<Error, Output = Result<Out>>,
     Out: TypedSender,
 {
     type Value = Out::Value;
@@ -132,7 +132,7 @@ impl<ReceiverType, FnType, Out, NestedSender> TypedSenderConnect<ReceiverType>
 where
     NestedSender: TypedSender<Scheduler = Out::Scheduler, Value = Out::Value>
         + TypedSenderConnect<ReceiverWrapper<ReceiverType, FnType, Out>>,
-    FnType: Functor<Error, Output = Result<Out, Error>>,
+    FnType: Functor<Error, Output = Result<Out>>,
     Out: TypedSender + TypedSenderConnect<ReceiverType>,
     ReceiverType: ReceiverOf<Out::Scheduler, Out::Value>,
 {
@@ -151,7 +151,7 @@ impl<BindSenderImpl, NestedSender, FnType, Out> BitOr<BindSenderImpl>
 where
     BindSenderImpl: BindSender<Self>,
     NestedSender: TypedSender<Scheduler = Out::Scheduler, Value = Out::Value>,
-    FnType: Functor<Error, Output = Result<Out, Error>>,
+    FnType: Functor<Error, Output = Result<Out>>,
     Out: TypedSender,
 {
     type Output = BindSenderImpl::Output;
@@ -164,7 +164,7 @@ where
 struct ReceiverWrapper<ReceiverType, FnType, Out>
 where
     ReceiverType: ReceiverOf<Out::Scheduler, Out::Value>,
-    FnType: Functor<Error, Output = Result<Out, Error>>,
+    FnType: Functor<Error, Output = Result<Out>>,
     Out: TypedSender,
 {
     receiver: ReceiverType,
@@ -175,7 +175,7 @@ where
 impl<ReceiverType, FnType, Out> Receiver for ReceiverWrapper<ReceiverType, FnType, Out>
 where
     ReceiverType: ReceiverOf<Out::Scheduler, Out::Value>,
-    FnType: Functor<Error, Output = Result<Out, Error>>,
+    FnType: Functor<Error, Output = Result<Out>>,
     Out: TypedSender + TypedSenderConnect<ReceiverType>,
 {
     fn set_done(self) {
@@ -194,7 +194,7 @@ impl<ReceiverType, FnType, Out> ReceiverOf<Out::Scheduler, Out::Value>
     for ReceiverWrapper<ReceiverType, FnType, Out>
 where
     ReceiverType: ReceiverOf<Out::Scheduler, Out::Value>,
-    FnType: Functor<Error, Output = Result<Out, Error>>,
+    FnType: Functor<Error, Output = Result<Out>>,
     Out: TypedSender + TypedSenderConnect<ReceiverType>,
 {
     fn set_value(self, sch: Out::Scheduler, value: Out::Value) {

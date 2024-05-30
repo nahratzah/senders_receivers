@@ -1,4 +1,4 @@
-use crate::errors::{Error, IsTuple};
+use crate::errors::{Error, IsTuple, Result};
 use crate::scheduler::Scheduler;
 use crate::sync::same_thread_channel;
 use crate::traits::{OperationState, Receiver, ReceiverOf, TypedSender, TypedSenderConnect};
@@ -88,7 +88,7 @@ impl<Sch: Scheduler, Tuple: IsTuple + Send + 'static> ReceiverOf<Sch, Tuple>
 ///     Ok(Some(tuple)) => println!("value signal: {:?}", tuple), // tuple: Rc<String> holding "bla"
 /// };
 /// ```
-pub fn sync_wait<SenderImpl>(sender: SenderImpl) -> Result<Option<SenderImpl::Value>, Error>
+pub fn sync_wait<SenderImpl>(sender: SenderImpl) -> Result<Option<SenderImpl::Value>>
 where
     SenderImpl:
         TypedSender + TypedSenderConnect<NoSendReceiver<<SenderImpl as TypedSender>::Value>>,
@@ -133,7 +133,7 @@ where
 ///     Ok(Some(tuple)) => println!("value signal: {:?}", tuple), // tuple: String holding "bla"
 /// };
 /// ```
-pub fn sync_wait_send<SenderImpl>(sender: SenderImpl) -> Result<Option<SenderImpl::Value>, Error>
+pub fn sync_wait_send<SenderImpl>(sender: SenderImpl) -> Result<Option<SenderImpl::Value>>
 where
     SenderImpl: TypedSender + TypedSenderConnect<SendReceiver<<SenderImpl as TypedSender>::Value>>,
     <SenderImpl as TypedSender>::Value: Send + 'static,

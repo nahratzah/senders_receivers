@@ -1,4 +1,4 @@
-use crate::errors::{Error, IsTuple};
+use crate::errors::{Error, IsTuple, Result};
 use crate::functor::{Closure, Functor, NoErrFunctor};
 use crate::scheduler::{ImmediateScheduler, Scheduler, WithScheduler};
 use crate::traits::{
@@ -57,7 +57,7 @@ use std::ops::BitOr;
 /// ```
 pub struct UponError<FnType, Sch, Out>
 where
-    FnType: Functor<Error, Output = Result<Out, Error>>,
+    FnType: Functor<Error, Output = Result<Out>>,
     Out: IsTuple,
     Sch: Scheduler,
 {
@@ -68,7 +68,7 @@ where
 
 impl<FnType, Out> From<FnType> for UponError<FnType, ImmediateScheduler, Out>
 where
-    FnType: Functor<Error, Output = Result<Out, Error>>,
+    FnType: Functor<Error, Output = Result<Out>>,
     Out: IsTuple,
 {
     fn from(fn_impl: FnType) -> Self {
@@ -80,12 +80,11 @@ where
     }
 }
 
-type ClosureUponError<FnType, Sch, Out> =
-    UponError<Closure<FnType, Result<Out, Error>, Error>, Sch, Out>;
+type ClosureUponError<FnType, Sch, Out> = UponError<Closure<FnType, Result<Out>, Error>, Sch, Out>;
 
 impl<FnType, Out> From<FnType> for ClosureUponError<FnType, ImmediateScheduler, Out>
 where
-    FnType: FnOnce(Error) -> Result<Out, Error>,
+    FnType: FnOnce(Error) -> Result<Out>,
     Out: IsTuple,
 {
     fn from(fn_impl: FnType) -> Self {
@@ -121,7 +120,7 @@ where
 
 impl<FnType, Sch, Out> WithScheduler<Sch, FnType> for UponError<FnType, Sch, Out>
 where
-    FnType: Functor<Error, Output = Result<Out, Error>>,
+    FnType: Functor<Error, Output = Result<Out>>,
     Sch: Scheduler,
     Out: IsTuple,
 {
@@ -136,7 +135,7 @@ where
 
 impl<FnType, Sch, Out> WithScheduler<Sch, FnType> for ClosureUponError<FnType, Sch, Out>
 where
-    FnType: FnOnce(Error) -> Result<Out, Error>,
+    FnType: FnOnce(Error) -> Result<Out>,
     Sch: Scheduler,
     Out: IsTuple,
 {
@@ -169,7 +168,7 @@ where
 
 impl<FnType, Sch, Out> Sender for UponError<FnType, Sch, Out>
 where
-    FnType: Functor<Error, Output = Result<Out, Error>>,
+    FnType: Functor<Error, Output = Result<Out>>,
     Out: IsTuple,
     Sch: Scheduler,
 {
@@ -178,7 +177,7 @@ where
 impl<FnType, Sch, Out, NestedSender> BindSender<NestedSender> for UponError<FnType, Sch, Out>
 where
     NestedSender: TypedSender<Scheduler = Sch::LocalScheduler, Value = Out>,
-    FnType: Functor<Error, Output = Result<Out, Error>>,
+    FnType: Functor<Error, Output = Result<Out>>,
     Out: IsTuple,
     Sch: Scheduler,
 {
@@ -197,7 +196,7 @@ where
 pub struct UponErrorTS<NestedSender, FnType, Sch, Out>
 where
     NestedSender: TypedSender<Scheduler = Sch::LocalScheduler, Value = Out>,
-    FnType: Functor<Error, Output = Result<Out, Error>>,
+    FnType: Functor<Error, Output = Result<Out>>,
     Out: IsTuple,
     Sch: Scheduler,
 {
@@ -210,7 +209,7 @@ where
 impl<NestedSender, FnType, Sch, Out> TypedSender for UponErrorTS<NestedSender, FnType, Sch, Out>
 where
     NestedSender: TypedSender<Scheduler = Sch::LocalScheduler, Value = Out>,
-    FnType: Functor<Error, Output = Result<Out, Error>>,
+    FnType: Functor<Error, Output = Result<Out>>,
     Out: IsTuple,
     Sch: Scheduler,
 {
@@ -224,7 +223,7 @@ where
     ReceiverType: ReceiverOf<Sch::LocalScheduler, Out>,
     NestedSender: TypedSender<Scheduler = Sch::LocalScheduler, Value = Out>
         + TypedSenderConnect<ReceiverWrapper<ReceiverType, FnType, Sch, Out>>,
-    FnType: Functor<Error, Output = Result<Out, Error>>,
+    FnType: Functor<Error, Output = Result<Out>>,
     Out: IsTuple,
     Sch: Scheduler,
     Sch::Sender: TypedSenderConnect<ErrorReceiver<ReceiverType, FnType, Sch::LocalScheduler, Out>>,
@@ -245,7 +244,7 @@ impl<NestedSender, FnType, Sch, Out, BindSenderImpl> BitOr<BindSenderImpl>
 where
     BindSenderImpl: BindSender<UponErrorTS<NestedSender, FnType, Sch, Out>>,
     NestedSender: TypedSender<Scheduler = Sch::LocalScheduler, Value = Out>,
-    FnType: Functor<Error, Output = Result<Out, Error>>,
+    FnType: Functor<Error, Output = Result<Out>>,
     Out: IsTuple,
     Sch: Scheduler,
 {
@@ -259,7 +258,7 @@ where
 struct ReceiverWrapper<NestedReceiver, FnType, Sch, Out>
 where
     NestedReceiver: ReceiverOf<Sch::LocalScheduler, Out>,
-    FnType: Functor<Error, Output = Result<Out, Error>>,
+    FnType: Functor<Error, Output = Result<Out>>,
     Sch: Scheduler,
     Sch::Sender:
         TypedSenderConnect<ErrorReceiver<NestedReceiver, FnType, Sch::LocalScheduler, Out>>,
@@ -275,7 +274,7 @@ impl<NestedReceiver, FnType, Sch, Out> Receiver
     for ReceiverWrapper<NestedReceiver, FnType, Sch, Out>
 where
     NestedReceiver: ReceiverOf<Sch::LocalScheduler, Out>,
-    FnType: Functor<Error, Output = Result<Out, Error>>,
+    FnType: Functor<Error, Output = Result<Out>>,
     Sch: Scheduler,
     Sch::Sender:
         TypedSenderConnect<ErrorReceiver<NestedReceiver, FnType, Sch::LocalScheduler, Out>>,
@@ -304,7 +303,7 @@ impl<NestedReceiver, FnType, Sch, Out> ReceiverOf<Sch::LocalScheduler, Out>
     for ReceiverWrapper<NestedReceiver, FnType, Sch, Out>
 where
     NestedReceiver: ReceiverOf<Sch::LocalScheduler, Out>,
-    FnType: Functor<Error, Output = Result<Out, Error>>,
+    FnType: Functor<Error, Output = Result<Out>>,
     Sch: Scheduler,
     Sch::Sender:
         TypedSenderConnect<ErrorReceiver<NestedReceiver, FnType, Sch::LocalScheduler, Out>>,
@@ -318,7 +317,7 @@ where
 struct ErrorReceiver<NestedReceiver, FnType, Sch, Out>
 where
     NestedReceiver: ReceiverOf<Sch, Out>,
-    FnType: Functor<Error, Output = Result<Out, Error>>,
+    FnType: Functor<Error, Output = Result<Out>>,
     Sch: Scheduler,
     Out: IsTuple,
 {
@@ -331,7 +330,7 @@ where
 impl<NestedReceiver, FnType, Sch, Out> Receiver for ErrorReceiver<NestedReceiver, FnType, Sch, Out>
 where
     NestedReceiver: ReceiverOf<Sch, Out>,
-    FnType: Functor<Error, Output = Result<Out, Error>>,
+    FnType: Functor<Error, Output = Result<Out>>,
     Sch: Scheduler,
     Out: IsTuple,
 {
@@ -348,7 +347,7 @@ impl<NestedReceiver, FnType, Sch, Out> ReceiverOf<Sch, ()>
     for ErrorReceiver<NestedReceiver, FnType, Sch, Out>
 where
     NestedReceiver: ReceiverOf<Sch, Out>,
-    FnType: Functor<Error, Output = Result<Out, Error>>,
+    FnType: Functor<Error, Output = Result<Out>>,
     Sch: Scheduler,
     Out: IsTuple,
 {

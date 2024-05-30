@@ -51,6 +51,9 @@ tuple_impls!(make_is_tuple);
 /// The [new_error] function is provided to more easily convert an error into an [Error].
 pub type Error = Box<dyn error::Error + Send>;
 
+/// Result type used in senders/receivers.
+pub type Result<T> = std::result::Result<T, Error>;
+
 /// Create a new error from something that looks like an error.
 pub fn new_error<E>(e: E) -> Error
 where

@@ -36,7 +36,7 @@ where
 #[cfg(test)]
 mod test {
     use super::start_detached;
-    use crate::errors::{new_error, Error, ErrorForTesting};
+    use crate::errors::{new_error, ErrorForTesting, Result};
     use crate::just::Just;
     use crate::let_value::LetValue;
     use crate::scheduler::{ImmediateScheduler, Scheduler};
@@ -75,7 +75,7 @@ mod test {
         start_detached(
             Just::from((String::from("dcba"),))
                 | Then::from(|(x,): (String,)| (x.chars().rev().collect::<String>(),))
-                | Then::from(move |(_,)| -> Result<(), Error> {
+                | Then::from(move |(_,)| -> Result<()> {
                     Err(new_error(ErrorForTesting::from(
                         "start_detached error signal test",
                     )))

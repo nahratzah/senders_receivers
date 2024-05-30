@@ -5,7 +5,7 @@
 //!
 //! Note: we might erase this module in the future, if implementing [FnOnce] becomes doable.
 
-use crate::errors::Error;
+use crate::errors::Result;
 use std::marker::PhantomData;
 
 pub trait NoArgFunctor {
@@ -171,7 +171,7 @@ impl<FunctorType, Out> NoArgFunctor for NoErrNoArgFunctor<FunctorType, Out>
 where
     FunctorType: NoArgFunctor<Output = Out>,
 {
-    type Output = Result<Out, Error>;
+    type Output = Result<Out>;
 
     fn tuple_invoke(self) -> Self::Output {
         Ok(self.functor.tuple_invoke())
@@ -207,7 +207,7 @@ impl<FunctorType, Out, ArgTuple> Functor<ArgTuple> for NoErrFunctor<FunctorType,
 where
     FunctorType: Functor<ArgTuple, Output = Out>,
 {
-    type Output = Result<Out, Error>;
+    type Output = Result<Out>;
 
     fn tuple_invoke(self, args: ArgTuple) -> Self::Output {
         Ok(self.functor.tuple_invoke(args))
@@ -244,7 +244,7 @@ impl<FunctorType, Out, FirstArg, ArgTuple> BiFunctor<FirstArg, ArgTuple>
 where
     FunctorType: BiFunctor<FirstArg, ArgTuple, Output = Out>,
 {
-    type Output = Result<Out, Error>;
+    type Output = Result<Out>;
 
     fn tuple_invoke(self, first_arg: FirstArg, args: ArgTuple) -> Self::Output {
         Ok(self.functor.tuple_invoke(first_arg, args))

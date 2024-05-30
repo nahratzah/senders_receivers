@@ -1,4 +1,4 @@
-use crate::errors::{Error, IsTuple};
+use crate::errors::{Error, IsTuple, Result};
 use crate::functor::{Closure, Functor, NoErrFunctor};
 use crate::scheduler::Scheduler;
 use crate::traits::{
@@ -33,7 +33,7 @@ use std::ops::BitOr;
 /// those operate on functors.
 pub struct Then<FnType, Out, ArgTuple>
 where
-    FnType: Functor<ArgTuple, Output = Result<Out, Error>>,
+    FnType: Functor<ArgTuple, Output = Result<Out>>,
     ArgTuple: IsTuple,
     Out: IsTuple,
 {
@@ -43,7 +43,7 @@ where
 
 impl<FnType, Out, ArgTuple> From<FnType> for Then<FnType, Out, ArgTuple>
 where
-    FnType: Functor<ArgTuple, Output = Result<Out, Error>>,
+    FnType: Functor<ArgTuple, Output = Result<Out>>,
     ArgTuple: IsTuple,
     Out: IsTuple,
 {
@@ -57,11 +57,11 @@ where
 }
 
 type ClosureThen<FnType, Out, ArgTuple> =
-    Then<Closure<FnType, Result<Out, Error>, ArgTuple>, Out, ArgTuple>;
+    Then<Closure<FnType, Result<Out>, ArgTuple>, Out, ArgTuple>;
 
 impl<FnType, ArgTuple, Out> From<FnType> for ClosureThen<FnType, Out, ArgTuple>
 where
-    FnType: FnOnce(ArgTuple) -> Result<Out, Error>,
+    FnType: FnOnce(ArgTuple) -> Result<Out>,
     ArgTuple: IsTuple,
     Out: IsTuple,
 {
@@ -106,7 +106,7 @@ where
 }
 
 impl<FnType, Out: IsTuple, ArgTuple: IsTuple> Sender for Then<FnType, Out, ArgTuple> where
-    FnType: Functor<ArgTuple, Output = Result<Out, Error>>
+    FnType: Functor<ArgTuple, Output = Result<Out>>
 {
 }
 
@@ -114,7 +114,7 @@ impl<FnType, Out, NestedSender> BindSender<NestedSender>
     for Then<FnType, Out, <NestedSender as TypedSender>::Value>
 where
     NestedSender: TypedSender,
-    FnType: Functor<NestedSender::Value, Output = Result<Out, Error>>,
+    FnType: Functor<NestedSender::Value, Output = Result<Out>>,
     NestedSender::Value: IsTuple,
     Out: IsTuple,
 {
@@ -134,7 +134,7 @@ impl<NestedSender, FnType, Out, BindSenderImpl> BitOr<BindSenderImpl>
 where
     BindSenderImpl: BindSender<ThenSender<NestedSender, FnType, Out>>,
     NestedSender: TypedSender,
-    FnType: Functor<NestedSender::Value, Output = Result<Out, Error>>,
+    FnType: Functor<NestedSender::Value, Output = Result<Out>>,
     NestedSender::Value: IsTuple,
     Out: IsTuple,
 {
@@ -148,7 +148,7 @@ where
 pub struct ThenSender<NestedSender, FnType, Out>
 where
     NestedSender: TypedSender,
-    FnType: Functor<NestedSender::Value, Output = Result<Out, Error>>,
+    FnType: Functor<NestedSender::Value, Output = Result<Out>>,
     Out: IsTuple,
 {
     nested: NestedSender,
@@ -159,7 +159,7 @@ where
 impl<NestedSender, FnType, Out> TypedSender for ThenSender<NestedSender, FnType, Out>
 where
     NestedSender: TypedSender,
-    FnType: Functor<NestedSender::Value, Output = Result<Out, Error>>,
+    FnType: Functor<NestedSender::Value, Output = Result<Out>>,
     Out: IsTuple,
 {
     type Value = Out;
@@ -180,7 +180,7 @@ where
                 <NestedSender as TypedSender>::Value,
             >,
         >,
-    FnType: Functor<NestedSender::Value, Output = Result<Out, Error>>,
+    FnType: Functor<NestedSender::Value, Output = Result<Out>>,
     Out: IsTuple,
 {
     fn connect(self, receiver: ReceiverImpl) -> impl OperationState {
@@ -197,7 +197,7 @@ where
 struct ThenWrappedReceiver<ReceiverImpl, FnType, Sch, Out, ArgTuple>
 where
     ReceiverImpl: ReceiverOf<Sch, Out>,
-    FnType: Functor<ArgTuple, Output = Result<Out, Error>>,
+    FnType: Functor<ArgTuple, Output = Result<Out>>,
     Sch: Scheduler,
     ArgTuple: IsTuple,
     Out: IsTuple,
@@ -211,7 +211,7 @@ impl<ReceiverImpl, FnType, Sch, ArgTuple, Out> Receiver
     for ThenWrappedReceiver<ReceiverImpl, FnType, Sch, Out, ArgTuple>
 where
     ReceiverImpl: ReceiverOf<Sch, Out>,
-    FnType: Functor<ArgTuple, Output = Result<Out, Error>>,
+    FnType: Functor<ArgTuple, Output = Result<Out>>,
     Sch: Scheduler,
     ArgTuple: IsTuple,
     Out: IsTuple,
@@ -229,7 +229,7 @@ impl<ReceiverImpl, FnType, Sch, ArgTuple, Out> ReceiverOf<Sch, ArgTuple>
     for ThenWrappedReceiver<ReceiverImpl, FnType, Sch, Out, ArgTuple>
 where
     ReceiverImpl: ReceiverOf<Sch, Out>,
-    FnType: Functor<ArgTuple, Output = Result<Out, Error>>,
+    FnType: Functor<ArgTuple, Output = Result<Out>>,
     Sch: Scheduler,
     ArgTuple: IsTuple,
     Out: IsTuple,
@@ -245,7 +245,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::Then;
-    use crate::errors::{new_error, Error, ErrorForTesting};
+    use crate::errors::{new_error, ErrorForTesting, Result};
     use crate::just::Just;
     use crate::just_error::JustError;
     use crate::scheduler::ImmediateScheduler;
@@ -291,9 +291,7 @@ mod tests {
     fn errors_from_functor_are_propagated() {
         match sync_wait(
             Just::from(())
-                | Then::from(|()| -> Result<(), Error> {
-                    Err(Box::new(ErrorForTesting::from("error")))
-                }),
+                | Then::from(|()| -> Result<()> { Err(Box::new(ErrorForTesting::from("error"))) }),
         ) {
             Ok(_) => panic!("expected an error"),
             Err(e) => {
