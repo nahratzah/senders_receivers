@@ -112,6 +112,7 @@ mod just_error;
 mod let_value;
 mod scheduler;
 mod start_detached;
+mod sync;
 mod sync_wait;
 mod then;
 mod traits;

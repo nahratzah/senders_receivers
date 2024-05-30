@@ -1,5 +1,5 @@
 use crate::embarrasingly_parallel::thread_local_pool::ThreadLocalPool;
-use crate::sync_wait::same_thread_channel;
+use crate::sync::same_thread_channel;
 use std::sync::mpsc;
 use std::thread;
 

@@ -1,7 +1,6 @@
-pub mod same_thread_channel;
-
 use crate::errors::{Error, IsTuple};
 use crate::scheduler::Scheduler;
+use crate::sync::same_thread_channel;
 use crate::traits::{OperationState, Receiver, ReceiverOf, TypedSender, TypedSenderConnect};
 use std::sync::mpsc;
 

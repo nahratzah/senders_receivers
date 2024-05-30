@@ -1,7 +1,7 @@
 use crate::embarrasingly_parallel::cross_thread_pool::CrossThreadPool;
 use crate::embarrasingly_parallel::tasks::{SendTask, Task};
 use crate::scheduler::Scheduler;
-use crate::sync_wait::same_thread_channel;
+use crate::sync::same_thread_channel;
 use crate::traits::{BindSender, OperationState, ReceiverOf, TypedSender, TypedSenderConnect};
 use std::ops::BitOr;
 use std::sync::mpsc;
