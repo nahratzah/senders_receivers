@@ -31,19 +31,19 @@ use std::ops::BitOr;
 ///
 /// You probably don't want the non `_fn` versions of those functions:
 /// those operate on functors.
-pub struct Then<FnType, Out, ArgTuple>
+pub struct Then<'a, FnType, Out, ArgTuple>
 where
-    FnType: Functor<ArgTuple, Output = Result<Out>>,
+    FnType: Functor<'a, ArgTuple, Output = Result<Out>>,
     ArgTuple: Tuple,
     Out: Tuple,
 {
     fn_impl: FnType,
-    phantom: PhantomData<fn(ArgTuple) -> Out>,
+    phantom: PhantomData<&'a fn(ArgTuple) -> Out>,
 }
 
-impl<FnType, Out, ArgTuple> From<FnType> for Then<FnType, Out, ArgTuple>
+impl<'a, FnType, Out, ArgTuple> From<FnType> for Then<'a, FnType, Out, ArgTuple>
 where
-    FnType: Functor<ArgTuple, Output = Result<Out>>,
+    FnType: Functor<'a, ArgTuple, Output = Result<Out>>,
     ArgTuple: Tuple,
     Out: Tuple,
 {
@@ -56,12 +56,12 @@ where
     }
 }
 
-type ClosureThen<FnType, Out, ArgTuple> =
-    Then<Closure<FnType, Result<Out>, ArgTuple>, Out, ArgTuple>;
+type ClosureThen<'a, FnType, Out, ArgTuple> =
+    Then<'a, Closure<'a, FnType, Result<Out>, ArgTuple>, Out, ArgTuple>;
 
-impl<FnType, ArgTuple, Out> From<FnType> for ClosureThen<FnType, Out, ArgTuple>
+impl<'a, FnType, ArgTuple, Out> From<FnType> for ClosureThen<'a, FnType, Out, ArgTuple>
 where
-    FnType: FnOnce(ArgTuple) -> Result<Out>,
+    FnType: 'a+FnOnce(ArgTuple) -> Result<Out>,
     ArgTuple: Tuple,
     Out: Tuple,
 {
@@ -73,12 +73,12 @@ where
     }
 }
 
-type NoErrThen<FunctorType, Out, ArgTuple> =
-    Then<NoErrFunctor<FunctorType, Out, ArgTuple>, Out, ArgTuple>;
+type NoErrThen<'a, FunctorType, Out, ArgTuple> =
+    Then<'a, NoErrFunctor<'a, FunctorType, Out, ArgTuple>, Out, ArgTuple>;
 
-impl<FnImpl, Out, ArgTuple> From<FnImpl> for NoErrThen<FnImpl, Out, ArgTuple>
+impl<'a, FnImpl, Out, ArgTuple> From<FnImpl> for NoErrThen<'a, FnImpl, Out, ArgTuple>
 where
-    FnImpl: Functor<ArgTuple, Output = Out>,
+    FnImpl: Functor<'a, ArgTuple, Output = Out>,
     ArgTuple: Tuple,
     Out: Tuple,
 {
@@ -89,12 +89,12 @@ where
     }
 }
 
-type NoErrClosureThen<FnImpl, Out, ArgTuple> =
-    NoErrThen<Closure<FnImpl, Out, ArgTuple>, Out, ArgTuple>;
+type NoErrClosureThen<'a, FnImpl, Out, ArgTuple> =
+    NoErrThen<'a, Closure<'a, FnImpl, Out, ArgTuple>, Out, ArgTuple>;
 
-impl<FnImpl, Out, ArgTuple> From<FnImpl> for NoErrClosureThen<FnImpl, Out, ArgTuple>
+impl<'a, FnImpl, Out, ArgTuple> From<FnImpl> for NoErrClosureThen<'a, FnImpl, Out, ArgTuple>
 where
-    FnImpl: FnOnce(ArgTuple) -> Out,
+    FnImpl: 'a+FnOnce(ArgTuple) -> Out,
     ArgTuple: Tuple,
     Out: Tuple,
 {
@@ -105,20 +105,20 @@ where
     }
 }
 
-impl<FnType, Out: Tuple, ArgTuple: Tuple> Sender for Then<FnType, Out, ArgTuple> where
-    FnType: Functor<ArgTuple, Output = Result<Out>>
+impl<'a, FnType, Out: Tuple, ArgTuple: Tuple> Sender for Then<'a, FnType, Out, ArgTuple> where
+    FnType: Functor<'a, ArgTuple, Output = Result<Out>>
 {
 }
 
-impl<FnType, Out, NestedSender> BindSender<NestedSender>
-    for Then<FnType, Out, <NestedSender as TypedSender>::Value>
+impl<'a, FnType, Out, NestedSender> BindSender<NestedSender>
+    for Then<'a, FnType, Out, <NestedSender as TypedSender>::Value>
 where
     NestedSender: TypedSender,
-    FnType: Functor<NestedSender::Value, Output = Result<Out>>,
+    FnType: Functor<'a, NestedSender::Value, Output = Result<Out>>,
     NestedSender::Value: Tuple,
     Out: Tuple,
 {
-    type Output = ThenSender<NestedSender, FnType, Out>;
+    type Output = ThenSender<'a, NestedSender, FnType, Out>;
 
     fn bind(self, nested: NestedSender) -> Self::Output {
         ThenSender {
@@ -129,12 +129,12 @@ where
     }
 }
 
-impl<NestedSender, FnType, Out, BindSenderImpl> BitOr<BindSenderImpl>
-    for ThenSender<NestedSender, FnType, Out>
+impl<'a, NestedSender, FnType, Out, BindSenderImpl> BitOr<BindSenderImpl>
+    for ThenSender<'a, NestedSender, FnType, Out>
 where
-    BindSenderImpl: BindSender<ThenSender<NestedSender, FnType, Out>>,
+    BindSenderImpl: BindSender<ThenSender<'a, NestedSender, FnType, Out>>,
     NestedSender: TypedSender,
-    FnType: Functor<NestedSender::Value, Output = Result<Out>>,
+    FnType: Functor<'a, NestedSender::Value, Output = Result<Out>>,
     NestedSender::Value: Tuple,
     Out: Tuple,
 {
@@ -145,34 +145,34 @@ where
     }
 }
 
-pub struct ThenSender<NestedSender, FnType, Out>
+pub struct ThenSender<'a, NestedSender, FnType, Out>
 where
     NestedSender: TypedSender,
-    FnType: Functor<NestedSender::Value, Output = Result<Out>>,
+    FnType: Functor<'a, NestedSender::Value, Output = Result<Out>>,
     Out: Tuple,
 {
     nested: NestedSender,
     fn_impl: FnType,
-    phantom: PhantomData<fn() -> Out>,
+    phantom: PhantomData<&'a fn() -> Out>,
 }
 
-impl<NestedSender, FnType, Out> TypedSender for ThenSender<NestedSender, FnType, Out>
+impl<'a, NestedSender, FnType, Out> TypedSender for ThenSender<'a, NestedSender, FnType, Out>
 where
     NestedSender: TypedSender,
-    FnType: Functor<NestedSender::Value, Output = Result<Out>>,
+    FnType: Functor<'a, NestedSender::Value, Output = Result<Out>>,
     Out: Tuple,
 {
     type Value = Out;
     type Scheduler = NestedSender::Scheduler;
 }
 
-impl<ReceiverImpl, NestedSender, FnType, Out> TypedSenderConnect<ReceiverImpl>
-    for ThenSender<NestedSender, FnType, Out>
+impl<'a, ReceiverImpl, NestedSender, FnType, Out> TypedSenderConnect<ReceiverImpl>
+    for ThenSender<'a, NestedSender, FnType, Out>
 where
     ReceiverImpl: ReceiverOf<Self::Scheduler, Out>,
     NestedSender: TypedSender
         + TypedSenderConnect<
-            ThenWrappedReceiver<
+            ThenWrappedReceiver<'a,
                 ReceiverImpl,
                 FnType,
                 Self::Scheduler,
@@ -180,7 +180,8 @@ where
                 <NestedSender as TypedSender>::Value,
             >,
         >,
-    FnType: Functor<NestedSender::Value, Output = Result<Out>>,
+    NestedSender::Value: 'a,
+    FnType: Functor<'a, NestedSender::Value, Output = Result<Out>>,
     Out: Tuple,
 {
     fn connect(self, receiver: ReceiverImpl) -> impl OperationState {
@@ -194,24 +195,24 @@ where
     }
 }
 
-struct ThenWrappedReceiver<ReceiverImpl, FnType, Sch, Out, ArgTuple>
+struct ThenWrappedReceiver<'a, ReceiverImpl, FnType, Sch, Out, ArgTuple>
 where
     ReceiverImpl: ReceiverOf<Sch, Out>,
-    FnType: Functor<ArgTuple, Output = Result<Out>>,
+    FnType: Functor<'a, ArgTuple, Output = Result<Out>>,
     Sch: Scheduler,
     ArgTuple: Tuple,
     Out: Tuple,
 {
     nested: ReceiverImpl,
     fn_impl: FnType,
-    phantom: PhantomData<fn(Sch, ArgTuple) -> Out>,
+    phantom: PhantomData<&'a fn(Sch, ArgTuple) -> Out>,
 }
 
-impl<ReceiverImpl, FnType, Sch, ArgTuple, Out> Receiver
-    for ThenWrappedReceiver<ReceiverImpl, FnType, Sch, Out, ArgTuple>
+impl<'a, ReceiverImpl, FnType, Sch, ArgTuple, Out> Receiver
+    for ThenWrappedReceiver<'a, ReceiverImpl, FnType, Sch, Out, ArgTuple>
 where
     ReceiverImpl: ReceiverOf<Sch, Out>,
-    FnType: Functor<ArgTuple, Output = Result<Out>>,
+    FnType: Functor<'a, ArgTuple, Output = Result<Out>>,
     Sch: Scheduler,
     ArgTuple: Tuple,
     Out: Tuple,
@@ -225,11 +226,11 @@ where
     }
 }
 
-impl<ReceiverImpl, FnType, Sch, ArgTuple, Out> ReceiverOf<Sch, ArgTuple>
-    for ThenWrappedReceiver<ReceiverImpl, FnType, Sch, Out, ArgTuple>
+impl<'a, ReceiverImpl, FnType, Sch, ArgTuple, Out> ReceiverOf<Sch, ArgTuple>
+    for ThenWrappedReceiver<'a, ReceiverImpl, FnType, Sch, Out, ArgTuple>
 where
     ReceiverImpl: ReceiverOf<Sch, Out>,
-    FnType: Functor<ArgTuple, Output = Result<Out>>,
+    FnType: Functor<'a, ArgTuple, Output = Result<Out>>,
     Sch: Scheduler,
     ArgTuple: Tuple,
     Out: Tuple,

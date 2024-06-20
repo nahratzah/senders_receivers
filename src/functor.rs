@@ -8,7 +8,7 @@
 use crate::errors::Result;
 use std::marker::PhantomData;
 
-pub trait NoArgFunctor {
+pub trait NoArgFunctor<'a> {
     type Output;
 
     fn tuple_invoke(self) -> Self::Output;
@@ -17,7 +17,7 @@ pub trait NoArgFunctor {
 /// A functor can be invoked.
 ///
 /// Args represents a tuple of arguments.
-pub trait Functor<Args> {
+pub trait Functor<'a, Args> {
     /// The result type of the functor.
     type Output;
 
@@ -32,7 +32,7 @@ pub trait Functor<Args> {
 /// A bi-functor can be invoked with two arguments.
 ///
 /// The second argument represents a tuple of arguments.
-pub trait BiFunctor<FirstArg, Args> {
+pub trait BiFunctor<'a, FirstArg, Args> {
     /// The result type of the functor.
     type Output;
 
@@ -43,17 +43,17 @@ pub trait BiFunctor<FirstArg, Args> {
 /// Functor for a [function/closure](FnOnce).
 ///
 /// The functor will delegate to the contained function.
-pub struct NoArgClosure<FnType, Out>
+pub struct NoArgClosure<'a, FnType, Out>
 where
-    FnType: FnOnce() -> Out,
+    FnType: 'a+FnOnce() -> Out,
 {
-    phantom: PhantomData<fn() -> Out>,
+    phantom: PhantomData<&'a fn() -> Out>,
     fn_impl: FnType,
 }
 
-impl<FnType, Out> NoArgClosure<FnType, Out>
+impl<'a, FnType, Out> NoArgClosure<'a, FnType, Out>
 where
-    FnType: FnOnce() -> Out,
+    FnType: 'a+FnOnce() -> Out,
 {
     pub fn new(fn_impl: FnType) -> Self {
         Self {
@@ -63,9 +63,9 @@ where
     }
 }
 
-impl<FnType, Out> NoArgFunctor for NoArgClosure<FnType, Out>
+impl<'a, FnType, Out> NoArgFunctor<'a> for NoArgClosure<'a, FnType, Out>
 where
-    FnType: FnOnce() -> Out,
+    FnType: 'a+FnOnce() -> Out,
 {
     type Output = Out;
 
@@ -77,19 +77,19 @@ where
 /// Functor for a [function/closure](FnOnce).
 ///
 /// The functor will delegate to the contained function.
-pub struct Closure<FnType, Out, Args>
+pub struct Closure<'a, FnType, Out, Args>
 where
-    FnType: FnOnce(Args) -> Out,
+    FnType: 'a+FnOnce(Args) -> Out,
 {
-    phantom: PhantomData<fn(Args) -> Out>,
+    phantom: PhantomData<&'a fn(Args) -> Out>,
     fn_impl: FnType,
 }
 
-impl<FnType, Out, Args> Closure<FnType, Out, Args>
+impl<'a, FnType, Out, Args> Closure<'a, FnType, Out, Args>
 where
-    FnType: FnOnce(Args) -> Out,
+    FnType: 'a+FnOnce(Args) -> Out,
 {
-    pub fn new(fn_impl: FnType) -> Closure<FnType, Out, Args> {
+    pub fn new(fn_impl: FnType) -> Self {
         Closure {
             phantom: PhantomData,
             fn_impl,
@@ -97,9 +97,9 @@ where
     }
 }
 
-impl<FnType, Out, Args> Functor<Args> for Closure<FnType, Out, Args>
+impl<'a, FnType, Out, Args> Functor<'a, Args> for Closure<'a, FnType, Out, Args>
 where
-    FnType: FnOnce(Args) -> Out,
+    FnType: 'a+FnOnce(Args) -> Out,
 {
     type Output = Out;
 
@@ -112,19 +112,19 @@ where
 /// BiFunctor for a [function/closure](FnOnce).
 ///
 /// The functor will delegate to the contained function.
-pub struct BiClosure<FnType, Out, FirstArg, Args>
+pub struct BiClosure<'a, FnType, Out, FirstArg, Args>
 where
-    FnType: FnOnce(FirstArg, Args) -> Out,
+    FnType: 'a+FnOnce(FirstArg, Args) -> Out,
 {
-    phantom: PhantomData<fn(FirstArg, Args) -> Out>,
+    phantom: PhantomData<&'a fn(FirstArg, Args) -> Out>,
     fn_impl: FnType,
 }
 
-impl<FnType, Out, FirstArg, Args> BiClosure<FnType, Out, FirstArg, Args>
+impl<'a, FnType, Out, FirstArg, Args> BiClosure<'a, FnType, Out, FirstArg, Args>
 where
-    FnType: FnOnce(FirstArg, Args) -> Out,
+    FnType: 'a+FnOnce(FirstArg, Args) -> Out,
 {
-    pub fn new(fn_impl: FnType) -> BiClosure<FnType, Out, FirstArg, Args> {
+    pub fn new(fn_impl: FnType) -> Self {
         BiClosure {
             phantom: PhantomData,
             fn_impl,
@@ -132,10 +132,10 @@ where
     }
 }
 
-impl<FnType, Out, FirstArg, Args> BiFunctor<FirstArg, Args>
-    for BiClosure<FnType, Out, FirstArg, Args>
+impl<'a, FnType, Out, FirstArg, Args> BiFunctor<'a, FirstArg, Args>
+    for BiClosure<'a, FnType, Out, FirstArg, Args>
 where
-    FnType: FnOnce(FirstArg, Args) -> Out,
+    FnType: 'a+FnOnce(FirstArg, Args) -> Out,
 {
     type Output = Out;
 
@@ -147,17 +147,17 @@ where
 
 /// Wrapper for functors that don't return a [Result].
 /// This wrapper wraps the functor into something that will return a [Result].
-pub struct NoErrNoArgFunctor<FunctorType, Out>
+pub struct NoErrNoArgFunctor<'a, FunctorType, Out>
 where
-    FunctorType: NoArgFunctor<Output = Out>,
+    FunctorType: NoArgFunctor<'a, Output = Out>,
 {
     functor: FunctorType,
-    phantom: PhantomData<fn() -> Out>,
+    phantom: PhantomData<&'a fn() -> Out>,
 }
 
-impl<FunctorType, Out> NoErrNoArgFunctor<FunctorType, Out>
+impl<'a, FunctorType, Out> NoErrNoArgFunctor<'a, FunctorType, Out>
 where
-    FunctorType: NoArgFunctor<Output = Out>,
+    FunctorType: NoArgFunctor<'a, Output = Out>,
 {
     pub fn new(functor: FunctorType) -> Self {
         Self {
@@ -167,9 +167,9 @@ where
     }
 }
 
-impl<FunctorType, Out> NoArgFunctor for NoErrNoArgFunctor<FunctorType, Out>
+impl<'a, FunctorType, Out> NoArgFunctor<'a> for NoErrNoArgFunctor<'a, FunctorType, Out>
 where
-    FunctorType: NoArgFunctor<Output = Out>,
+    FunctorType: NoArgFunctor<'a, Output = Out>,
 {
     type Output = Result<Out>;
 
@@ -183,19 +183,19 @@ where
 ///
 /// We need to use an actual struct, because we need to declare types.
 /// With closures, we cannot capture the closure type, and thus not create a specialization.
-pub struct NoErrFunctor<FunctorType, Out, ArgTuple>
+pub struct NoErrFunctor<'a, FunctorType, Out, ArgTuple>
 where
-    FunctorType: Functor<ArgTuple, Output = Out>,
+    FunctorType: Functor<'a, ArgTuple, Output = Out>,
 {
     functor: FunctorType,
-    phantom: PhantomData<fn(ArgTuple) -> Out>,
+    phantom: PhantomData<&'a fn(ArgTuple) -> Out>,
 }
 
-impl<FunctorType, Out, ArgTuple> NoErrFunctor<FunctorType, Out, ArgTuple>
+impl<'a, FunctorType, Out, ArgTuple> NoErrFunctor<'a, FunctorType, Out, ArgTuple>
 where
-    FunctorType: Functor<ArgTuple, Output = Out>,
+    FunctorType: Functor<'a, ArgTuple, Output = Out>,
 {
-    pub fn new(functor: FunctorType) -> NoErrFunctor<FunctorType, Out, ArgTuple> {
+    pub fn new(functor: FunctorType) -> Self {
         NoErrFunctor {
             functor,
             phantom: PhantomData,
@@ -203,9 +203,9 @@ where
     }
 }
 
-impl<FunctorType, Out, ArgTuple> Functor<ArgTuple> for NoErrFunctor<FunctorType, Out, ArgTuple>
+impl<'a, FunctorType, Out, ArgTuple> Functor<'a, ArgTuple> for NoErrFunctor<'a, FunctorType, Out, ArgTuple>
 where
-    FunctorType: Functor<ArgTuple, Output = Out>,
+    FunctorType: Functor<'a, ArgTuple, Output = Out>,
 {
     type Output = Result<Out>;
 
@@ -219,19 +219,19 @@ where
 ///
 /// We need to use an actual struct, because we need to declare types.
 /// With closures, we cannot capture the closure type, and thus not create a specialization.
-pub struct NoErrBiFunctor<FunctorType, Out, FirstArg, ArgTuple>
+pub struct NoErrBiFunctor<'a, FunctorType, Out, FirstArg, ArgTuple>
 where
-    FunctorType: BiFunctor<FirstArg, ArgTuple, Output = Out>,
+    FunctorType: BiFunctor<'a, FirstArg, ArgTuple, Output = Out>,
 {
     functor: FunctorType,
-    phantom: PhantomData<fn(FirstArg, ArgTuple) -> Out>,
+    phantom: PhantomData<&'a fn(FirstArg, ArgTuple) -> Out>,
 }
 
-impl<FunctorType, Out, FirstArg, ArgTuple> NoErrBiFunctor<FunctorType, Out, FirstArg, ArgTuple>
+impl<'a, FunctorType, Out, FirstArg, ArgTuple> NoErrBiFunctor<'a, FunctorType, Out, FirstArg, ArgTuple>
 where
-    FunctorType: BiFunctor<FirstArg, ArgTuple, Output = Out>,
+    FunctorType: BiFunctor<'a, FirstArg, ArgTuple, Output = Out>,
 {
-    pub fn new(functor: FunctorType) -> NoErrBiFunctor<FunctorType, Out, FirstArg, ArgTuple> {
+    pub fn new(functor: FunctorType) -> Self {
         NoErrBiFunctor {
             functor,
             phantom: PhantomData,
@@ -239,10 +239,10 @@ where
     }
 }
 
-impl<FunctorType, Out, FirstArg, ArgTuple> BiFunctor<FirstArg, ArgTuple>
-    for NoErrBiFunctor<FunctorType, Out, FirstArg, ArgTuple>
+impl<'a, FunctorType, Out, FirstArg, ArgTuple> BiFunctor<'a, FirstArg, ArgTuple>
+    for NoErrBiFunctor<'a, FunctorType, Out, FirstArg, ArgTuple>
 where
-    FunctorType: BiFunctor<FirstArg, ArgTuple, Output = Out>,
+    FunctorType: BiFunctor<'a, FirstArg, ArgTuple, Output = Out>,
 {
     type Output = Result<Out>;
 

@@ -106,6 +106,7 @@
 pub mod embarrasingly_parallel;
 mod errors;
 pub mod functor;
+pub mod io;
 mod just;
 mod just_done;
 mod just_error;

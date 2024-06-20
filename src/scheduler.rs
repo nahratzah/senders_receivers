@@ -30,7 +30,7 @@ use threadpool::ThreadPool;
 ///     5050,
 ///     sync_wait_send(sender).unwrap().unwrap().0);
 /// ```
-pub trait Scheduler: Eq + Clone {
+pub trait Scheduler: Eq + Clone + 'static {
     /// Mark if the scheduler may block the caller, when started.
     /// If this is `false`, you are guaranteed that the sender will complete independently from the operation-state start method.
     /// But if it returns `true`, the scheduler will complete before returning from the operation-state start method.
@@ -61,6 +61,30 @@ pub trait Scheduler: Eq + Clone {
     /// Create a sender associated with this scheduler, that produces a done signal.
     fn schedule_done<Tpl: Tuple>(&self) -> JustDone<Self, Tpl> {
         JustDone::<Self, Tpl>::new()
+    }
+
+    /// Create a scheduler, that won't reschedule immediately, but instead reschedule on the first ehm... reschedule.
+    ///
+    /// Use these in [LetValue], [LetDone], or [LetError], when you're not switching scheduler:
+    /// ```
+    /// use senders_receivers::{Scheduler, LetValue, start_detached};
+    /// use threadpool::ThreadPool;
+    ///
+    /// let pool = ThreadPool::with_name("example".into(), 1);
+    /// start_detached(
+    ///     pool.schedule()
+    ///     | LetValue::from(|sch: ThreadPool, _: ()| {
+    ///         // Since we are already running in sch, we don't want a reschedule to happen.
+    ///         // By using lazy, we basically tell the code that we're already running on that scheduler,
+    ///         // and rescheduling isn't needed.
+    ///         sch.lazy().schedule_value((1, 2, 3))
+    ///     }));
+    /// ```
+    fn lazy(&self) -> LazyScheduler<Self>
+    where
+        Self: Scheduler<LocalScheduler = Self>,
+    {
+        LazyScheduler { sch: self.clone() }
     }
 }
 
@@ -197,4 +221,78 @@ where
     Sch: Scheduler,
 {
     fn with_scheduler(sch: Sch, arg: Arg) -> Self;
+}
+
+/// A lazy scheduler is a scheduler, that doesn't transfer immediately.
+///
+/// It is used when you already are running on the desired scheduler,
+/// but need to re-use it, in for example [LetValue].
+#[derive(Clone, Eq, PartialEq)]
+pub struct LazyScheduler<Sch>
+where
+    Sch: Scheduler<LocalScheduler = Sch>,
+{
+    sch: Sch,
+}
+
+impl<Sch> Scheduler for LazyScheduler<Sch>
+where
+    Sch: Scheduler<LocalScheduler = Sch>,
+{
+    const EXECUTION_BLOCKS_CALLER: bool = Sch::EXECUTION_BLOCKS_CALLER;
+    type LocalScheduler = Sch;
+    type Sender = LazySchedulerTS<Sch>;
+
+    fn schedule(&self) -> Self::Sender {
+        Self::Sender {
+            sch: self.sch.clone(),
+        }
+    }
+}
+
+pub struct LazySchedulerTS<Sch>
+where
+    Sch: Scheduler<LocalScheduler = Sch>,
+{
+    sch: Sch,
+}
+
+impl<Sch> TypedSender for LazySchedulerTS<Sch>
+where
+    Sch: Scheduler<LocalScheduler = Sch>,
+{
+    type Scheduler = Sch;
+    type Value = ();
+}
+
+impl<ReceiverType, Sch> TypedSenderConnect<ReceiverType> for LazySchedulerTS<Sch>
+where
+    ReceiverType: ReceiverOf<Sch, ()>,
+    Sch: Scheduler<LocalScheduler = Sch>,
+{
+    fn connect(self, receiver: ReceiverType) -> impl OperationState {
+        LazySchedulerOperationState {
+            sch: self.sch,
+            receiver,
+        }
+    }
+}
+
+struct LazySchedulerOperationState<Sch, ReceiverType>
+where
+    ReceiverType: ReceiverOf<Sch, ()>,
+    Sch: Scheduler<LocalScheduler = Sch>,
+{
+    sch: Sch,
+    receiver: ReceiverType,
+}
+
+impl<Sch, ReceiverType> OperationState for LazySchedulerOperationState<Sch, ReceiverType>
+where
+    ReceiverType: ReceiverOf<Sch, ()>,
+    Sch: Scheduler<LocalScheduler = Sch>,
+{
+    fn start(self) {
+        self.receiver.set_value(self.sch, ());
+    }
 }

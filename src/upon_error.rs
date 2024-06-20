@@ -55,20 +55,20 @@ use std::ops::BitOr;
 ///              });
 /// println!("result: {}", sync_wait(sender).unwrap().unwrap().0);
 /// ```
-pub struct UponError<FnType, Sch, Out>
+pub struct UponError<'a, FnType, Sch, Out>
 where
-    FnType: Functor<Error, Output = Result<Out>>,
+    FnType: Functor<'a, Error, Output = Result<Out>>,
     Out: Tuple,
     Sch: Scheduler,
 {
     fn_impl: FnType,
     sch: Sch,
-    phantom: PhantomData<fn() -> Out>,
+    phantom: PhantomData<&'a fn() -> Out>,
 }
 
-impl<FnType, Out> From<FnType> for UponError<FnType, ImmediateScheduler, Out>
+impl<'a, FnType, Out> From<FnType> for UponError<'a, FnType, ImmediateScheduler, Out>
 where
-    FnType: Functor<Error, Output = Result<Out>>,
+    FnType: Functor<'a, Error, Output = Result<Out>>,
     Out: Tuple,
 {
     fn from(fn_impl: FnType) -> Self {
@@ -80,11 +80,11 @@ where
     }
 }
 
-type ClosureUponError<FnType, Sch, Out> = UponError<Closure<FnType, Result<Out>, Error>, Sch, Out>;
+type ClosureUponError<'a, FnType, Sch, Out> = UponError<'a, Closure<'a, FnType, Result<Out>, Error>, Sch, Out>;
 
-impl<FnType, Out> From<FnType> for ClosureUponError<FnType, ImmediateScheduler, Out>
+impl<'a, FnType, Out> From<FnType> for ClosureUponError<'a, FnType, ImmediateScheduler, Out>
 where
-    FnType: FnOnce(Error) -> Result<Out>,
+    FnType: 'a+FnOnce(Error) -> Result<Out>,
     Out: Tuple,
 {
     fn from(fn_impl: FnType) -> Self {
@@ -92,12 +92,12 @@ where
     }
 }
 
-type NoErrUponError<FunctorType, Sch, Out> =
-    UponError<NoErrFunctor<FunctorType, Out, Error>, Sch, Out>;
+type NoErrUponError<'a, FunctorType, Sch, Out> =
+    UponError<'a, NoErrFunctor<'a, FunctorType, Out, Error>, Sch, Out>;
 
-impl<FnImpl, Out> From<FnImpl> for NoErrUponError<FnImpl, ImmediateScheduler, Out>
+impl<'a, FnImpl, Out> From<FnImpl> for NoErrUponError<'a, FnImpl, ImmediateScheduler, Out>
 where
-    FnImpl: Functor<Error, Output = Out>,
+    FnImpl: Functor<'a, Error, Output = Out>,
     Out: Tuple,
 {
     fn from(fn_impl: FnImpl) -> Self {
@@ -105,12 +105,12 @@ where
     }
 }
 
-type NoErrClosureUponError<FnImpl, Sch, Out> =
-    NoErrUponError<Closure<FnImpl, Out, Error>, Sch, Out>;
+type NoErrClosureUponError<'a, FnImpl, Sch, Out> =
+    NoErrUponError<'a, Closure<'a, FnImpl, Out, Error>, Sch, Out>;
 
-impl<FnImpl, Out> From<FnImpl> for NoErrClosureUponError<FnImpl, ImmediateScheduler, Out>
+impl<'a, FnImpl, Out> From<FnImpl> for NoErrClosureUponError<'a, FnImpl, ImmediateScheduler, Out>
 where
-    FnImpl: FnOnce(Error) -> Out,
+    FnImpl: 'a+FnOnce(Error) -> Out,
     Out: Tuple,
 {
     fn from(fn_impl: FnImpl) -> Self {
@@ -118,9 +118,9 @@ where
     }
 }
 
-impl<FnType, Sch, Out> WithScheduler<Sch, FnType> for UponError<FnType, Sch, Out>
+impl<'a, FnType, Sch, Out> WithScheduler<Sch, FnType> for UponError<'a, FnType, Sch, Out>
 where
-    FnType: Functor<Error, Output = Result<Out>>,
+    FnType: Functor<'a, Error, Output = Result<Out>>,
     Sch: Scheduler,
     Out: Tuple,
 {
@@ -133,9 +133,9 @@ where
     }
 }
 
-impl<FnType, Sch, Out> WithScheduler<Sch, FnType> for ClosureUponError<FnType, Sch, Out>
+impl<'a, FnType, Sch, Out> WithScheduler<Sch, FnType> for ClosureUponError<'a, FnType, Sch, Out>
 where
-    FnType: FnOnce(Error) -> Result<Out>,
+    FnType: 'a+FnOnce(Error) -> Result<Out>,
     Sch: Scheduler,
     Out: Tuple,
 {
@@ -144,9 +144,9 @@ where
     }
 }
 
-impl<FnImpl, Sch, Out> WithScheduler<Sch, FnImpl> for NoErrUponError<FnImpl, Sch, Out>
+impl<'a, FnImpl, Sch, Out> WithScheduler<Sch, FnImpl> for NoErrUponError<'a, FnImpl, Sch, Out>
 where
-    FnImpl: Functor<Error, Output = Out>,
+    FnImpl: Functor<'a, Error, Output = Out>,
     Sch: Scheduler,
     Out: Tuple,
 {
@@ -155,9 +155,9 @@ where
     }
 }
 
-impl<FnImpl, Sch, Out> WithScheduler<Sch, FnImpl> for NoErrClosureUponError<FnImpl, Sch, Out>
+impl<'a, FnImpl, Sch, Out> WithScheduler<Sch, FnImpl> for NoErrClosureUponError<'a, FnImpl, Sch, Out>
 where
-    FnImpl: FnOnce(Error) -> Out,
+    FnImpl: 'a+FnOnce(Error) -> Out,
     Sch: Scheduler,
     Out: Tuple,
 {
@@ -166,22 +166,22 @@ where
     }
 }
 
-impl<FnType, Sch, Out> Sender for UponError<FnType, Sch, Out>
+impl<'a, FnType, Sch, Out> Sender for UponError<'a, FnType, Sch, Out>
 where
-    FnType: Functor<Error, Output = Result<Out>>,
+    FnType: Functor<'a, Error, Output = Result<Out>>,
     Out: Tuple,
     Sch: Scheduler,
 {
 }
 
-impl<FnType, Sch, Out, NestedSender> BindSender<NestedSender> for UponError<FnType, Sch, Out>
+impl<'a, FnType, Sch, Out, NestedSender> BindSender<NestedSender> for UponError<'a, FnType, Sch, Out>
 where
     NestedSender: TypedSender<Scheduler = Sch::LocalScheduler, Value = Out>,
-    FnType: Functor<Error, Output = Result<Out>>,
+    FnType: Functor<'a, Error, Output = Result<Out>>,
     Out: Tuple,
     Sch: Scheduler,
 {
-    type Output = UponErrorTS<NestedSender, FnType, Sch, Out>;
+    type Output = UponErrorTS<'a, NestedSender, FnType, Sch, Out>;
 
     fn bind(self, nested: NestedSender) -> Self::Output {
         UponErrorTS {
@@ -193,23 +193,23 @@ where
     }
 }
 
-pub struct UponErrorTS<NestedSender, FnType, Sch, Out>
+pub struct UponErrorTS<'a, NestedSender, FnType, Sch, Out>
 where
     NestedSender: TypedSender<Scheduler = Sch::LocalScheduler, Value = Out>,
-    FnType: Functor<Error, Output = Result<Out>>,
+    FnType: Functor<'a, Error, Output = Result<Out>>,
     Out: Tuple,
     Sch: Scheduler,
 {
     nested: NestedSender,
     fn_impl: FnType,
     sch: Sch,
-    phantom: PhantomData<fn() -> Out>,
+    phantom: PhantomData<&'a fn() -> Out>,
 }
 
-impl<NestedSender, FnType, Sch, Out> TypedSender for UponErrorTS<NestedSender, FnType, Sch, Out>
+impl<'a, NestedSender, FnType, Sch, Out> TypedSender for UponErrorTS<'a, NestedSender, FnType, Sch, Out>
 where
     NestedSender: TypedSender<Scheduler = Sch::LocalScheduler, Value = Out>,
-    FnType: Functor<Error, Output = Result<Out>>,
+    FnType: Functor<'a, Error, Output = Result<Out>>,
     Out: Tuple,
     Sch: Scheduler,
 {
@@ -217,16 +217,16 @@ where
     type Value = Out;
 }
 
-impl<ReceiverType, NestedSender, FnType, Sch, Out> TypedSenderConnect<ReceiverType>
-    for UponErrorTS<NestedSender, FnType, Sch, Out>
+impl<'a, ReceiverType, NestedSender, FnType, Sch, Out> TypedSenderConnect<ReceiverType>
+    for UponErrorTS<'a, NestedSender, FnType, Sch, Out>
 where
     ReceiverType: ReceiverOf<Sch::LocalScheduler, Out>,
     NestedSender: TypedSender<Scheduler = Sch::LocalScheduler, Value = Out>
-        + TypedSenderConnect<ReceiverWrapper<ReceiverType, FnType, Sch, Out>>,
-    FnType: Functor<Error, Output = Result<Out>>,
+        + TypedSenderConnect<ReceiverWrapper<'a, ReceiverType, FnType, Sch, Out>>,
+    FnType: Functor<'a, Error, Output = Result<Out>>,
     Out: Tuple,
     Sch: Scheduler,
-    Sch::Sender: TypedSenderConnect<ErrorReceiver<ReceiverType, FnType, Sch::LocalScheduler, Out>>,
+    Sch::Sender: TypedSenderConnect<ErrorReceiver<'a, ReceiverType, FnType, Sch::LocalScheduler, Out>>,
 {
     fn connect(self, receiver: ReceiverType) -> impl OperationState {
         let receiver: ReceiverWrapper<ReceiverType, FnType, Sch, Out> = ReceiverWrapper {
@@ -239,12 +239,12 @@ where
     }
 }
 
-impl<NestedSender, FnType, Sch, Out, BindSenderImpl> BitOr<BindSenderImpl>
-    for UponErrorTS<NestedSender, FnType, Sch, Out>
+impl<'a, NestedSender, FnType, Sch, Out, BindSenderImpl> BitOr<BindSenderImpl>
+    for UponErrorTS<'a, NestedSender, FnType, Sch, Out>
 where
-    BindSenderImpl: BindSender<UponErrorTS<NestedSender, FnType, Sch, Out>>,
+    BindSenderImpl: BindSender<Self>,
     NestedSender: TypedSender<Scheduler = Sch::LocalScheduler, Value = Out>,
-    FnType: Functor<Error, Output = Result<Out>>,
+    FnType: Functor<'a, Error, Output = Result<Out>>,
     Out: Tuple,
     Sch: Scheduler,
 {
@@ -255,29 +255,29 @@ where
     }
 }
 
-struct ReceiverWrapper<NestedReceiver, FnType, Sch, Out>
+struct ReceiverWrapper<'a, NestedReceiver, FnType, Sch, Out>
 where
     NestedReceiver: ReceiverOf<Sch::LocalScheduler, Out>,
-    FnType: Functor<Error, Output = Result<Out>>,
+    FnType: Functor<'a, Error, Output = Result<Out>>,
     Sch: Scheduler,
     Sch::Sender:
-        TypedSenderConnect<ErrorReceiver<NestedReceiver, FnType, Sch::LocalScheduler, Out>>,
+        TypedSenderConnect<ErrorReceiver<'a, NestedReceiver, FnType, Sch::LocalScheduler, Out>>,
     Out: Tuple,
 {
     nested: NestedReceiver,
     fn_impl: FnType,
     sch: Sch,
-    phantom: PhantomData<fn() -> Out>,
+    phantom: PhantomData<&'a fn() -> Out>,
 }
 
-impl<NestedReceiver, FnType, Sch, Out> Receiver
-    for ReceiverWrapper<NestedReceiver, FnType, Sch, Out>
+impl<'a, NestedReceiver, FnType, Sch, Out> Receiver
+    for ReceiverWrapper<'a, NestedReceiver, FnType, Sch, Out>
 where
     NestedReceiver: ReceiverOf<Sch::LocalScheduler, Out>,
-    FnType: Functor<Error, Output = Result<Out>>,
+    FnType: Functor<'a, Error, Output = Result<Out>>,
     Sch: Scheduler,
     Sch::Sender:
-        TypedSenderConnect<ErrorReceiver<NestedReceiver, FnType, Sch::LocalScheduler, Out>>,
+        TypedSenderConnect<ErrorReceiver<'a, NestedReceiver, FnType, Sch::LocalScheduler, Out>>,
     Out: Tuple,
 {
     fn set_done(self) {
@@ -288,7 +288,7 @@ where
         self.sch
             .schedule()
             .connect(
-                ErrorReceiver::<NestedReceiver, FnType, Sch::LocalScheduler, Out> {
+                ErrorReceiver::<'a, NestedReceiver, FnType, Sch::LocalScheduler, Out> {
                     nested: self.nested,
                     error,
                     fn_impl: self.fn_impl,
@@ -299,14 +299,14 @@ where
     }
 }
 
-impl<NestedReceiver, FnType, Sch, Out> ReceiverOf<Sch::LocalScheduler, Out>
-    for ReceiverWrapper<NestedReceiver, FnType, Sch, Out>
+impl<'a, NestedReceiver, FnType, Sch, Out> ReceiverOf<Sch::LocalScheduler, Out>
+    for ReceiverWrapper<'a, NestedReceiver, FnType, Sch, Out>
 where
     NestedReceiver: ReceiverOf<Sch::LocalScheduler, Out>,
-    FnType: Functor<Error, Output = Result<Out>>,
+    FnType: Functor<'a, Error, Output = Result<Out>>,
     Sch: Scheduler,
     Sch::Sender:
-        TypedSenderConnect<ErrorReceiver<NestedReceiver, FnType, Sch::LocalScheduler, Out>>,
+        TypedSenderConnect<ErrorReceiver<'a, NestedReceiver, FnType, Sch::LocalScheduler, Out>>,
     Out: Tuple,
 {
     fn set_value(self, sch: Sch::LocalScheduler, v: Out) {
@@ -314,23 +314,23 @@ where
     }
 }
 
-struct ErrorReceiver<NestedReceiver, FnType, Sch, Out>
+struct ErrorReceiver<'a, NestedReceiver, FnType, Sch, Out>
 where
     NestedReceiver: ReceiverOf<Sch, Out>,
-    FnType: Functor<Error, Output = Result<Out>>,
+    FnType: Functor<'a, Error, Output = Result<Out>>,
     Sch: Scheduler,
     Out: Tuple,
 {
     nested: NestedReceiver,
     error: Error,
     fn_impl: FnType,
-    phantom: PhantomData<fn(Sch) -> Out>,
+    phantom: PhantomData<&'a fn(Sch) -> Out>,
 }
 
-impl<NestedReceiver, FnType, Sch, Out> Receiver for ErrorReceiver<NestedReceiver, FnType, Sch, Out>
+impl<'a, NestedReceiver, FnType, Sch, Out> Receiver for ErrorReceiver<'a, NestedReceiver, FnType, Sch, Out>
 where
     NestedReceiver: ReceiverOf<Sch, Out>,
-    FnType: Functor<Error, Output = Result<Out>>,
+    FnType: Functor<'a, Error, Output = Result<Out>>,
     Sch: Scheduler,
     Out: Tuple,
 {
@@ -343,11 +343,11 @@ where
     }
 }
 
-impl<NestedReceiver, FnType, Sch, Out> ReceiverOf<Sch, ()>
-    for ErrorReceiver<NestedReceiver, FnType, Sch, Out>
+impl<'a, NestedReceiver, FnType, Sch, Out> ReceiverOf<Sch, ()>
+    for ErrorReceiver<'a, NestedReceiver, FnType, Sch, Out>
 where
     NestedReceiver: ReceiverOf<Sch, Out>,
-    FnType: Functor<Error, Output = Result<Out>>,
+    FnType: Functor<'a, Error, Output = Result<Out>>,
     Sch: Scheduler,
     Out: Tuple,
 {
