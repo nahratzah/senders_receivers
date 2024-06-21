@@ -1,11 +1,10 @@
 use crate::errors::{new_error, Error};
 use crate::scheduler::Scheduler;
 use crate::traits::{
-    BindSender, OperationState, Receiver, ReceiverOf, TypedSender, TypedSenderConnect,
+    BindSender, OperationState, Receiver, ReceiverOf, Sender, TypedSender, TypedSenderConnect,
 };
-
 use std::io;
-
+use std::marker::PhantomData;
 use std::ops::BitOr;
 
 /// Implement the write trait for a [writeable](io::Write) type.
@@ -17,8 +16,8 @@ where
     /// Create a new sender-chain, which will write to this descriptor.
     ///
     /// ---
-    /// use crate::io::Write;
-    /// use crate::{sync_wait, ImmediateScheduler, Just, LetValue, Scheduler};
+    /// use senders_receivers::io::Write;
+    /// use senders_receivers::{sync_wait, ImmediateScheduler, Just, LetValue, Scheduler};
     /// use std::fs::File;
     ///
     /// fn do_the_thing(file: &mut File) {
@@ -49,49 +48,79 @@ where
         sch: Sch,
         buf: &'a [u8],
     ) -> impl TypedSender<Scheduler = Sch::LocalScheduler, Value = (usize,)> + 'a {
-        WriteSender::<'a> { sch, fd: self, buf }
+        WriteSender::<'a> { fd: self, buf }.bind(sch.schedule())
     }
 }
 
-struct WriteSender<'a, Sch, Fd>
+struct WriteSender<'a, Fd>
 where
-    Sch: Scheduler,
     Fd: io::Write + ?Sized,
 {
-    sch: Sch,
     fd: &'a mut Fd,
     buf: &'a [u8],
 }
 
-impl<'a, Sch, Fd> TypedSender for WriteSender<'a, Sch, Fd>
+impl<'a, Fd> Sender for WriteSender<'a, Fd> where Fd: io::Write + ?Sized {}
+
+impl<'a, Fd, NestedSender> BindSender<NestedSender> for WriteSender<'a, Fd>
 where
-    Sch: Scheduler,
-    Fd: 'a + io::Write + ?Sized,
+    Fd: io::Write + ?Sized,
+    NestedSender: TypedSender<Value = ()>,
 {
-    type Scheduler = Sch::LocalScheduler;
+    type Output = WriteTS<'a, NestedSender, Fd>;
+
+    fn bind(self, nested_sender: NestedSender) -> Self::Output {
+        WriteTS {
+            nested_sender,
+            fd: self.fd,
+            buf: self.buf,
+        }
+    }
+}
+
+struct WriteTS<'a, NestedSender, Fd>
+where
+    Fd: io::Write + ?Sized,
+    NestedSender: TypedSender<Value = ()>,
+{
+    fd: &'a mut Fd,
+    buf: &'a [u8],
+    nested_sender: NestedSender,
+}
+
+impl<'a, NestedSender, Fd> TypedSender for WriteTS<'a, NestedSender, Fd>
+where
+    Fd: 'a + io::Write + ?Sized,
+    NestedSender: TypedSender<Value = ()>,
+{
+    type Scheduler = NestedSender::Scheduler;
     type Value = (usize,);
 }
 
-impl<'a, ReceiverType, Sch, Fd> TypedSenderConnect<ReceiverType> for WriteSender<'a, Sch, Fd>
+impl<'a, ReceiverType, NestedSender, Fd> TypedSenderConnect<ReceiverType>
+    for WriteTS<'a, NestedSender, Fd>
 where
-    Sch: Scheduler,
     Fd: 'a + io::Write + ?Sized,
-    ReceiverType: ReceiverOf<Sch::LocalScheduler, (usize,)>,
-    Sch::Sender: TypedSenderConnect<ReceiverWrapper<'a, ReceiverType, Fd>>,
+    NestedSender: TypedSender<Value = ()>
+        + TypedSenderConnect<
+            ReceiverWrapper<'a, ReceiverType, <NestedSender as TypedSender>::Scheduler, Fd>,
+        >,
+    ReceiverType: ReceiverOf<<NestedSender as TypedSender>::Scheduler, (usize,)>,
 {
     fn connect(self, receiver: ReceiverType) -> impl OperationState {
-        self.sch.schedule().connect(ReceiverWrapper {
+        self.nested_sender.connect(ReceiverWrapper {
             nested: receiver,
             fd: self.fd,
             buf: self.buf,
+            phantom: PhantomData,
         })
     }
 }
 
-impl<'a, BindSenderImpl, Sch, Fd> BitOr<BindSenderImpl> for WriteSender<'a, Sch, Fd>
+impl<'a, BindSenderImpl, NestedSender, Fd> BitOr<BindSenderImpl> for WriteTS<'a, NestedSender, Fd>
 where
     BindSenderImpl: BindSender<Self>,
-    Sch: Scheduler,
+    NestedSender: TypedSender<Value = ()>,
     Fd: 'a + io::Write + ?Sized,
 {
     type Output = BindSenderImpl::Output;
@@ -101,19 +130,22 @@ where
     }
 }
 
-struct ReceiverWrapper<'a, ReceiverType, Fd>
+struct ReceiverWrapper<'a, ReceiverType, Sch, Fd>
 where
-    ReceiverType: Receiver,
+    ReceiverType: ReceiverOf<Sch, (usize,)>,
+    Sch: Scheduler,
     Fd: 'a + io::Write + ?Sized,
 {
+    phantom: PhantomData<Sch>,
     nested: ReceiverType,
     fd: &'a mut Fd,
     buf: &'a [u8],
 }
 
-impl<'a, ReceiverType, Fd> Receiver for ReceiverWrapper<'a, ReceiverType, Fd>
+impl<'a, ReceiverType, Sch, Fd> Receiver for ReceiverWrapper<'a, ReceiverType, Sch, Fd>
 where
-    ReceiverType: Receiver,
+    ReceiverType: ReceiverOf<Sch, (usize,)>,
+    Sch: Scheduler,
     Fd: 'a + io::Write + ?Sized,
 {
     fn set_done(self) {
@@ -125,10 +157,10 @@ where
     }
 }
 
-impl<'a, Sch, ReceiverType, Fd> ReceiverOf<Sch, ()> for ReceiverWrapper<'a, ReceiverType, Fd>
+impl<'a, Sch, ReceiverType, Fd> ReceiverOf<Sch, ()> for ReceiverWrapper<'a, ReceiverType, Sch, Fd>
 where
-    Sch: Scheduler,
     ReceiverType: ReceiverOf<Sch, (usize,)>,
+    Sch: Scheduler,
     Fd: 'a + io::Write + ?Sized,
 {
     fn set_value(self, sch: Sch, _: ()) {
