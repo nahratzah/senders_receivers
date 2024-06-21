@@ -220,6 +220,7 @@ pub trait WithScheduler<Sch, Arg>
 where
     Sch: Scheduler,
 {
+    /// Create a new instance of Self, using the given scheduler.
     fn with_scheduler(sch: Sch, arg: Arg) -> Self;
 }
 

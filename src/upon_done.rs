@@ -66,11 +66,12 @@ where
     }
 }
 
-type ClosureUponDone<'a, FnType, Sch, Out> = UponDone<'a, NoArgClosure<'a, FnType, Result<Out>>, Sch, Out>;
+type ClosureUponDone<'a, FnType, Sch, Out> =
+    UponDone<'a, NoArgClosure<'a, FnType, Result<Out>>, Sch, Out>;
 
 impl<'a, FnType, Out> From<FnType> for ClosureUponDone<'a, FnType, ImmediateScheduler, Out>
 where
-    FnType: 'a+FnOnce() -> Result<Out>,
+    FnType: 'a + FnOnce() -> Result<Out>,
     Out: Tuple,
 {
     fn from(fn_impl: FnType) -> Self {
@@ -78,7 +79,8 @@ where
     }
 }
 
-type NoErrUponDone<'a, FunctorType, Sch, Out> = UponDone<'a, NoErrNoArgFunctor<'a, FunctorType, Out>, Sch, Out>;
+type NoErrUponDone<'a, FunctorType, Sch, Out> =
+    UponDone<'a, NoErrNoArgFunctor<'a, FunctorType, Out>, Sch, Out>;
 
 impl<'a, FnImpl, Out> From<FnImpl> for NoErrUponDone<'a, FnImpl, ImmediateScheduler, Out>
 where
@@ -90,11 +92,12 @@ where
     }
 }
 
-type NoErrClosureUponDone<'a, FnImpl, Sch, Out> = NoErrUponDone<'a, NoArgClosure<'a, FnImpl, Out>, Sch, Out>;
+type NoErrClosureUponDone<'a, FnImpl, Sch, Out> =
+    NoErrUponDone<'a, NoArgClosure<'a, FnImpl, Out>, Sch, Out>;
 
 impl<'a, FnImpl, Out> From<FnImpl> for NoErrClosureUponDone<'a, FnImpl, ImmediateScheduler, Out>
 where
-    FnImpl: 'a+FnOnce() -> Out,
+    FnImpl: 'a + FnOnce() -> Out,
     Out: Tuple,
 {
     fn from(fn_impl: FnImpl) -> Self {
@@ -119,7 +122,7 @@ where
 
 impl<'a, FnType, Sch, Out> WithScheduler<Sch, FnType> for ClosureUponDone<'a, FnType, Sch, Out>
 where
-    FnType: 'a+FnOnce() -> Result<Out>,
+    FnType: 'a + FnOnce() -> Result<Out>,
     Sch: Scheduler,
     Out: Tuple,
 {
@@ -141,7 +144,7 @@ where
 
 impl<'a, FnImpl, Sch, Out> WithScheduler<Sch, FnImpl> for NoErrClosureUponDone<'a, FnImpl, Sch, Out>
 where
-    FnImpl: 'a+FnOnce() -> Out,
+    FnImpl: 'a + FnOnce() -> Out,
     Sch: Scheduler,
     Out: Tuple,
 {
@@ -190,7 +193,8 @@ where
     phantom: PhantomData<&'a fn() -> Out>,
 }
 
-impl<'a, NestedSender, FnType, Sch, Out> TypedSender for UponDoneTS<'a, NestedSender, FnType, Sch, Out>
+impl<'a, NestedSender, FnType, Sch, Out> TypedSender
+    for UponDoneTS<'a, NestedSender, FnType, Sch, Out>
 where
     NestedSender: TypedSender<Scheduler = Sch::LocalScheduler, Value = Out>,
     FnType: NoArgFunctor<'a, Output = Result<Out>>,
@@ -210,7 +214,8 @@ where
     FnType: NoArgFunctor<'a, Output = Result<Out>>,
     Out: Tuple,
     Sch: Scheduler,
-    Sch::Sender: TypedSenderConnect<DoneReceiver<'a, ReceiverType, FnType, Sch::LocalScheduler, Out>>,
+    Sch::Sender:
+        TypedSenderConnect<DoneReceiver<'a, ReceiverType, FnType, Sch::LocalScheduler, Out>>,
 {
     fn connect(self, receiver: ReceiverType) -> impl OperationState {
         let receiver: ReceiverWrapper<ReceiverType, FnType, Sch, Out> = ReceiverWrapper {
@@ -244,7 +249,8 @@ where
     NestedReceiver: ReceiverOf<Sch::LocalScheduler, Out>,
     FnType: NoArgFunctor<'a, Output = Result<Out>>,
     Sch: Scheduler,
-    Sch::Sender: TypedSenderConnect<DoneReceiver<'a, NestedReceiver, FnType, Sch::LocalScheduler, Out>>,
+    Sch::Sender:
+        TypedSenderConnect<DoneReceiver<'a, NestedReceiver, FnType, Sch::LocalScheduler, Out>>,
     Out: Tuple,
 {
     nested: NestedReceiver,
@@ -259,7 +265,8 @@ where
     NestedReceiver: ReceiverOf<Sch::LocalScheduler, Out>,
     FnType: NoArgFunctor<'a, Output = Result<Out>>,
     Sch: Scheduler,
-    Sch::Sender: TypedSenderConnect<DoneReceiver<'a, NestedReceiver, FnType, Sch::LocalScheduler, Out>>,
+    Sch::Sender:
+        TypedSenderConnect<DoneReceiver<'a, NestedReceiver, FnType, Sch::LocalScheduler, Out>>,
     Out: Tuple,
 {
     fn set_done(self) {
@@ -286,7 +293,8 @@ where
     NestedReceiver: ReceiverOf<Sch::LocalScheduler, Out>,
     FnType: NoArgFunctor<'a, Output = Result<Out>>,
     Sch: Scheduler,
-    Sch::Sender: TypedSenderConnect<DoneReceiver<'a, NestedReceiver, FnType, Sch::LocalScheduler, Out>>,
+    Sch::Sender:
+        TypedSenderConnect<DoneReceiver<'a, NestedReceiver, FnType, Sch::LocalScheduler, Out>>,
     Out: Tuple,
 {
     fn set_value(self, sch: Sch::LocalScheduler, v: Out) {
@@ -306,7 +314,8 @@ where
     phantom: PhantomData<&'a fn(Sch) -> Out>,
 }
 
-impl<'a, NestedReceiver, FnType, Sch, Out> Receiver for DoneReceiver<'a, NestedReceiver, FnType, Sch, Out>
+impl<'a, NestedReceiver, FnType, Sch, Out> Receiver
+    for DoneReceiver<'a, NestedReceiver, FnType, Sch, Out>
 where
     NestedReceiver: ReceiverOf<Sch, Out>,
     FnType: NoArgFunctor<'a, Output = Result<Out>>,

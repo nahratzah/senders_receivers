@@ -61,7 +61,7 @@ type ClosureThen<'a, FnType, Out, ArgTuple> =
 
 impl<'a, FnType, ArgTuple, Out> From<FnType> for ClosureThen<'a, FnType, Out, ArgTuple>
 where
-    FnType: 'a+FnOnce(ArgTuple) -> Result<Out>,
+    FnType: 'a + FnOnce(ArgTuple) -> Result<Out>,
     ArgTuple: Tuple,
     Out: Tuple,
 {
@@ -94,7 +94,7 @@ type NoErrClosureThen<'a, FnImpl, Out, ArgTuple> =
 
 impl<'a, FnImpl, Out, ArgTuple> From<FnImpl> for NoErrClosureThen<'a, FnImpl, Out, ArgTuple>
 where
-    FnImpl: 'a+FnOnce(ArgTuple) -> Out,
+    FnImpl: 'a + FnOnce(ArgTuple) -> Out,
     ArgTuple: Tuple,
     Out: Tuple,
 {
@@ -172,7 +172,8 @@ where
     ReceiverImpl: ReceiverOf<Self::Scheduler, Out>,
     NestedSender: TypedSender
         + TypedSenderConnect<
-            ThenWrappedReceiver<'a,
+            ThenWrappedReceiver<
+                'a,
                 ReceiverImpl,
                 FnType,
                 Self::Scheduler,

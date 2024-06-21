@@ -50,7 +50,7 @@ type ClosureLetError<'a, FnType, Out> = LetError<'a, Closure<'a, FnType, Result<
 
 impl<'a, FnType, Out> From<FnType> for ClosureLetError<'a, FnType, Out>
 where
-    FnType: 'a+FnOnce(Error) -> Result<Out>,
+    FnType: 'a + FnOnce(Error) -> Result<Out>,
     Out: TypedSender,
 {
     fn from(fn_impl: FnType) -> Self {
@@ -70,11 +70,12 @@ where
     }
 }
 
-type NoErrClosureLetError<'a, FnType, Out> = NoErrLetError<'a, Closure<'a, FnType, Out, Error>, Out>;
+type NoErrClosureLetError<'a, FnType, Out> =
+    NoErrLetError<'a, Closure<'a, FnType, Out, Error>, Out>;
 
 impl<'a, FnType, Out> From<FnType> for NoErrClosureLetError<'a, FnType, Out>
 where
-    FnType: 'a+FnOnce(Error) -> Out,
+    FnType: 'a + FnOnce(Error) -> Out,
     Out: TypedSender,
 {
     fn from(fn_impl: FnType) -> Self {

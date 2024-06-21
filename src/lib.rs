@@ -1,4 +1,5 @@
 #![crate_name = "senders_receivers"]
+#![deny(missing_docs)]
 
 //! This is an implementation (for certain value of implementation) of C++ senders/receivers.
 //!

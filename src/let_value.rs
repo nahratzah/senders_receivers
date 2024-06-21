@@ -45,7 +45,8 @@ where
     phantom: PhantomData<&'a fn(FirstArg, ArgTuple) -> Out>,
 }
 
-impl<'a, FnType, Out, FirstArg, ArgTuple> From<FnType> for LetValue<'a, FnType, Out, FirstArg, ArgTuple>
+impl<'a, FnType, Out, FirstArg, ArgTuple> From<FnType>
+    for LetValue<'a, FnType, Out, FirstArg, ArgTuple>
 where
     FnType: BiFunctor<'a, FirstArg, ArgTuple, Output = Result<Out>>,
     FirstArg: Scheduler,
@@ -66,7 +67,7 @@ type ClosureLetValue<'a, FnType, Out, FirstArg, ArgTuple> =
 impl<'a, FnType, Out, FirstArg, ArgTuple> From<FnType>
     for ClosureLetValue<'a, FnType, Out, FirstArg, ArgTuple>
 where
-    FnType: 'a+FnOnce(FirstArg, ArgTuple) -> Result<Out>,
+    FnType: 'a + FnOnce(FirstArg, ArgTuple) -> Result<Out>,
     FirstArg: Scheduler,
     ArgTuple: Tuple,
     Out: TypedSender,
@@ -98,7 +99,7 @@ type NoErrClosureLetValue<'a, FnImpl, Out, FirstArg, ArgTuple> =
 impl<'a, FnImpl, Out, FirstArg, ArgTuple> From<FnImpl>
     for NoErrClosureLetValue<'a, FnImpl, Out, FirstArg, ArgTuple>
 where
-    FnImpl: 'a+FnOnce(FirstArg, ArgTuple) -> Out,
+    FnImpl: 'a + FnOnce(FirstArg, ArgTuple) -> Out,
     FirstArg: Scheduler,
     ArgTuple: Tuple,
     Out: TypedSender,
@@ -116,7 +117,8 @@ where
 }
 
 impl<'a, FnType, Out, NestedSender> BindSender<NestedSender>
-    for LetValue<'a,
+    for LetValue<
+        'a,
         FnType,
         Out,
         <NestedSender as TypedSender>::Scheduler,
@@ -182,7 +184,8 @@ where
     ReceiverImpl: ReceiverOf<Out::Scheduler, Out::Value>,
     NestedSender: TypedSender
         + TypedSenderConnect<
-            LetValueWrappedReceiver<'a,
+            LetValueWrappedReceiver<
+                'a,
                 ReceiverImpl,
                 FnType,
                 Out,

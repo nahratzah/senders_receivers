@@ -8,9 +8,12 @@
 use crate::errors::Result;
 use std::marker::PhantomData;
 
+/// Functor that takes no arguments.
 pub trait NoArgFunctor<'a> {
+    /// Type returned by the functor invocation.
     type Output;
 
+    /// Invoke this functor, producing a new [Output].
     fn tuple_invoke(self) -> Self::Output;
 }
 
@@ -45,7 +48,7 @@ pub trait BiFunctor<'a, FirstArg, Args> {
 /// The functor will delegate to the contained function.
 pub struct NoArgClosure<'a, FnType, Out>
 where
-    FnType: 'a+FnOnce() -> Out,
+    FnType: 'a + FnOnce() -> Out,
 {
     phantom: PhantomData<&'a fn() -> Out>,
     fn_impl: FnType,
@@ -53,8 +56,9 @@ where
 
 impl<'a, FnType, Out> NoArgClosure<'a, FnType, Out>
 where
-    FnType: 'a+FnOnce() -> Out,
+    FnType: 'a + FnOnce() -> Out,
 {
+    /// Create a new [NoArgClosure] from the given function.
     pub fn new(fn_impl: FnType) -> Self {
         Self {
             fn_impl,
@@ -65,7 +69,7 @@ where
 
 impl<'a, FnType, Out> NoArgFunctor<'a> for NoArgClosure<'a, FnType, Out>
 where
-    FnType: 'a+FnOnce() -> Out,
+    FnType: 'a + FnOnce() -> Out,
 {
     type Output = Out;
 
@@ -79,7 +83,7 @@ where
 /// The functor will delegate to the contained function.
 pub struct Closure<'a, FnType, Out, Args>
 where
-    FnType: 'a+FnOnce(Args) -> Out,
+    FnType: 'a + FnOnce(Args) -> Out,
 {
     phantom: PhantomData<&'a fn(Args) -> Out>,
     fn_impl: FnType,
@@ -87,8 +91,9 @@ where
 
 impl<'a, FnType, Out, Args> Closure<'a, FnType, Out, Args>
 where
-    FnType: 'a+FnOnce(Args) -> Out,
+    FnType: 'a + FnOnce(Args) -> Out,
 {
+    /// Create a new [Closure] from the given function.
     pub fn new(fn_impl: FnType) -> Self {
         Closure {
             phantom: PhantomData,
@@ -99,7 +104,7 @@ where
 
 impl<'a, FnType, Out, Args> Functor<'a, Args> for Closure<'a, FnType, Out, Args>
 where
-    FnType: 'a+FnOnce(Args) -> Out,
+    FnType: 'a + FnOnce(Args) -> Out,
 {
     type Output = Out;
 
@@ -114,7 +119,7 @@ where
 /// The functor will delegate to the contained function.
 pub struct BiClosure<'a, FnType, Out, FirstArg, Args>
 where
-    FnType: 'a+FnOnce(FirstArg, Args) -> Out,
+    FnType: 'a + FnOnce(FirstArg, Args) -> Out,
 {
     phantom: PhantomData<&'a fn(FirstArg, Args) -> Out>,
     fn_impl: FnType,
@@ -122,8 +127,9 @@ where
 
 impl<'a, FnType, Out, FirstArg, Args> BiClosure<'a, FnType, Out, FirstArg, Args>
 where
-    FnType: 'a+FnOnce(FirstArg, Args) -> Out,
+    FnType: 'a + FnOnce(FirstArg, Args) -> Out,
 {
+    /// Create a new [BiClosure] from the given function.
     pub fn new(fn_impl: FnType) -> Self {
         BiClosure {
             phantom: PhantomData,
@@ -135,7 +141,7 @@ where
 impl<'a, FnType, Out, FirstArg, Args> BiFunctor<'a, FirstArg, Args>
     for BiClosure<'a, FnType, Out, FirstArg, Args>
 where
-    FnType: 'a+FnOnce(FirstArg, Args) -> Out,
+    FnType: 'a + FnOnce(FirstArg, Args) -> Out,
 {
     type Output = Out;
 
@@ -159,6 +165,7 @@ impl<'a, FunctorType, Out> NoErrNoArgFunctor<'a, FunctorType, Out>
 where
     FunctorType: NoArgFunctor<'a, Output = Out>,
 {
+    /// Create a new [NoErrNoArgFunctor] from the given function.
     pub fn new(functor: FunctorType) -> Self {
         Self {
             functor,
@@ -195,6 +202,7 @@ impl<'a, FunctorType, Out, ArgTuple> NoErrFunctor<'a, FunctorType, Out, ArgTuple
 where
     FunctorType: Functor<'a, ArgTuple, Output = Out>,
 {
+    /// Create a new [NoErrFunctor] from the given function.
     pub fn new(functor: FunctorType) -> Self {
         NoErrFunctor {
             functor,
@@ -203,7 +211,8 @@ where
     }
 }
 
-impl<'a, FunctorType, Out, ArgTuple> Functor<'a, ArgTuple> for NoErrFunctor<'a, FunctorType, Out, ArgTuple>
+impl<'a, FunctorType, Out, ArgTuple> Functor<'a, ArgTuple>
+    for NoErrFunctor<'a, FunctorType, Out, ArgTuple>
 where
     FunctorType: Functor<'a, ArgTuple, Output = Out>,
 {
@@ -227,10 +236,12 @@ where
     phantom: PhantomData<&'a fn(FirstArg, ArgTuple) -> Out>,
 }
 
-impl<'a, FunctorType, Out, FirstArg, ArgTuple> NoErrBiFunctor<'a, FunctorType, Out, FirstArg, ArgTuple>
+impl<'a, FunctorType, Out, FirstArg, ArgTuple>
+    NoErrBiFunctor<'a, FunctorType, Out, FirstArg, ArgTuple>
 where
     FunctorType: BiFunctor<'a, FirstArg, ArgTuple, Output = Out>,
 {
+    /// Create a new [NoErrBiFunctor] from the given function.
     pub fn new(functor: FunctorType) -> Self {
         NoErrBiFunctor {
             functor,

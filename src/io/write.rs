@@ -6,14 +6,16 @@ use crate::traits::{
 
 use std::io;
 
-
 use std::ops::BitOr;
 
+/// Implement the write trait for a [writeable](io::Write) type.
 pub trait Write<Sch>
 where
     Sch: Scheduler,
     Self: io::Write,
 {
+    /// Create a new sender-chain, which will write to this descriptor.
+    ///
     /// ---
     /// use crate::io::Write;
     /// use crate::{sync_wait, ImmediateScheduler, Just, LetValue, Scheduler};
