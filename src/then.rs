@@ -35,7 +35,7 @@ pub struct Then<'a, FnType, Out, ArgTuple>
 where
     FnType: Functor<'a, ArgTuple, Output = Result<Out>>,
     ArgTuple: Tuple,
-    Out: Tuple,
+    Out: 'a + Tuple,
 {
     fn_impl: FnType,
     phantom: PhantomData<&'a fn(ArgTuple) -> Out>,
@@ -45,7 +45,7 @@ impl<'a, FnType, Out, ArgTuple> From<FnType> for Then<'a, FnType, Out, ArgTuple>
 where
     FnType: Functor<'a, ArgTuple, Output = Result<Out>>,
     ArgTuple: Tuple,
-    Out: Tuple,
+    Out: 'a + Tuple,
 {
     /// Create a new Then operation, using a [Functor] that returns an [Result].
     fn from(fn_impl: FnType) -> Self {
@@ -63,7 +63,7 @@ impl<'a, FnType, ArgTuple, Out> From<FnType> for ClosureThen<'a, FnType, Out, Ar
 where
     FnType: 'a + FnOnce(ArgTuple) -> Result<Out>,
     ArgTuple: Tuple,
-    Out: Tuple,
+    Out: 'a + Tuple,
 {
     /// Create a new Then operation, using the specified [function](FnOnce).
     /// The function must return a [Result].
@@ -80,7 +80,7 @@ impl<'a, FnImpl, Out, ArgTuple> From<FnImpl> for NoErrThen<'a, FnImpl, Out, ArgT
 where
     FnImpl: Functor<'a, ArgTuple, Output = Out>,
     ArgTuple: Tuple,
-    Out: Tuple,
+    Out: 'a + Tuple,
 {
     /// Create a new then operation, from a [Functor].
     /// The functor should return a [tuple](Tuple).
@@ -96,7 +96,7 @@ impl<'a, FnImpl, Out, ArgTuple> From<FnImpl> for NoErrClosureThen<'a, FnImpl, Ou
 where
     FnImpl: 'a + FnOnce(ArgTuple) -> Out,
     ArgTuple: Tuple,
-    Out: Tuple,
+    Out: 'a + Tuple,
 {
     /// Create a new then operation, from a [function/closure](FnOnce).
     /// The function/closure should return a [tuple](Tuple).
@@ -116,7 +116,7 @@ where
     NestedSender: TypedSender,
     FnType: Functor<'a, NestedSender::Value, Output = Result<Out>>,
     NestedSender::Value: Tuple,
-    Out: Tuple,
+    Out: 'a + Tuple,
 {
     type Output = ThenSender<'a, NestedSender, FnType, Out>;
 
@@ -136,7 +136,7 @@ where
     NestedSender: TypedSender,
     FnType: Functor<'a, NestedSender::Value, Output = Result<Out>>,
     NestedSender::Value: Tuple,
-    Out: Tuple,
+    Out: 'a + Tuple,
 {
     type Output = BindSenderImpl::Output;
 
@@ -149,7 +149,7 @@ pub struct ThenSender<'a, NestedSender, FnType, Out>
 where
     NestedSender: TypedSender,
     FnType: Functor<'a, NestedSender::Value, Output = Result<Out>>,
-    Out: Tuple,
+    Out: 'a + Tuple,
 {
     nested: NestedSender,
     fn_impl: FnType,
@@ -160,7 +160,7 @@ impl<'a, NestedSender, FnType, Out> TypedSender for ThenSender<'a, NestedSender,
 where
     NestedSender: TypedSender,
     FnType: Functor<'a, NestedSender::Value, Output = Result<Out>>,
-    Out: Tuple,
+    Out: 'a + Tuple,
 {
     type Value = Out;
     type Scheduler = NestedSender::Scheduler;
@@ -183,7 +183,7 @@ where
         >,
     NestedSender::Value: 'a,
     FnType: Functor<'a, NestedSender::Value, Output = Result<Out>>,
-    Out: Tuple,
+    Out: 'a + Tuple,
 {
     fn connect(self, receiver: ReceiverImpl) -> impl OperationState {
         let wrapped_receiver = ThenWrappedReceiver {
@@ -202,7 +202,7 @@ where
     FnType: Functor<'a, ArgTuple, Output = Result<Out>>,
     Sch: Scheduler,
     ArgTuple: Tuple,
-    Out: Tuple,
+    Out: 'a + Tuple,
 {
     nested: ReceiverImpl,
     fn_impl: FnType,
@@ -216,7 +216,7 @@ where
     FnType: Functor<'a, ArgTuple, Output = Result<Out>>,
     Sch: Scheduler,
     ArgTuple: Tuple,
-    Out: Tuple,
+    Out: 'a + Tuple,
 {
     fn set_done(self) {
         self.nested.set_done();
@@ -234,7 +234,7 @@ where
     FnType: Functor<'a, ArgTuple, Output = Result<Out>>,
     Sch: Scheduler,
     ArgTuple: Tuple,
-    Out: Tuple,
+    Out: 'a + Tuple,
 {
     fn set_value(self, sch: Sch, values: ArgTuple) {
         match self.fn_impl.tuple_invoke(values) {

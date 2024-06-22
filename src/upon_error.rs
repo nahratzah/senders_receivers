@@ -58,7 +58,7 @@ use std::ops::BitOr;
 pub struct UponError<'a, FnType, Sch, Out>
 where
     FnType: Functor<'a, Error, Output = Result<Out>>,
-    Out: Tuple,
+    Out: 'a + Tuple,
     Sch: Scheduler,
 {
     fn_impl: FnType,
@@ -69,7 +69,7 @@ where
 impl<'a, FnType, Out> From<FnType> for UponError<'a, FnType, ImmediateScheduler, Out>
 where
     FnType: Functor<'a, Error, Output = Result<Out>>,
-    Out: Tuple,
+    Out: 'a + Tuple,
 {
     fn from(fn_impl: FnType) -> Self {
         Self {
@@ -86,7 +86,7 @@ type ClosureUponError<'a, FnType, Sch, Out> =
 impl<'a, FnType, Out> From<FnType> for ClosureUponError<'a, FnType, ImmediateScheduler, Out>
 where
     FnType: 'a + FnOnce(Error) -> Result<Out>,
-    Out: Tuple,
+    Out: 'a + Tuple,
 {
     fn from(fn_impl: FnType) -> Self {
         Self::from(Closure::new(fn_impl))
@@ -99,7 +99,7 @@ type NoErrUponError<'a, FunctorType, Sch, Out> =
 impl<'a, FnImpl, Out> From<FnImpl> for NoErrUponError<'a, FnImpl, ImmediateScheduler, Out>
 where
     FnImpl: Functor<'a, Error, Output = Out>,
-    Out: Tuple,
+    Out: 'a + Tuple,
 {
     fn from(fn_impl: FnImpl) -> Self {
         Self::from(NoErrFunctor::new(fn_impl))
@@ -112,7 +112,7 @@ type NoErrClosureUponError<'a, FnImpl, Sch, Out> =
 impl<'a, FnImpl, Out> From<FnImpl> for NoErrClosureUponError<'a, FnImpl, ImmediateScheduler, Out>
 where
     FnImpl: 'a + FnOnce(Error) -> Out,
-    Out: Tuple,
+    Out: 'a + Tuple,
 {
     fn from(fn_impl: FnImpl) -> Self {
         Self::from(Closure::new(fn_impl))
@@ -123,7 +123,7 @@ impl<'a, FnType, Sch, Out> WithScheduler<Sch, FnType> for UponError<'a, FnType, 
 where
     FnType: Functor<'a, Error, Output = Result<Out>>,
     Sch: Scheduler,
-    Out: Tuple,
+    Out: 'a + Tuple,
 {
     fn with_scheduler(sch: Sch, fn_impl: FnType) -> Self {
         Self {
@@ -138,7 +138,7 @@ impl<'a, FnType, Sch, Out> WithScheduler<Sch, FnType> for ClosureUponError<'a, F
 where
     FnType: 'a + FnOnce(Error) -> Result<Out>,
     Sch: Scheduler,
-    Out: Tuple,
+    Out: 'a + Tuple,
 {
     fn with_scheduler(sch: Sch, fn_impl: FnType) -> Self {
         Self::with_scheduler(sch, Closure::new(fn_impl))
@@ -149,7 +149,7 @@ impl<'a, FnImpl, Sch, Out> WithScheduler<Sch, FnImpl> for NoErrUponError<'a, FnI
 where
     FnImpl: Functor<'a, Error, Output = Out>,
     Sch: Scheduler,
-    Out: Tuple,
+    Out: 'a + Tuple,
 {
     fn with_scheduler(sch: Sch, fn_impl: FnImpl) -> Self {
         Self::with_scheduler(sch, NoErrFunctor::new(fn_impl))
@@ -161,7 +161,7 @@ impl<'a, FnImpl, Sch, Out> WithScheduler<Sch, FnImpl>
 where
     FnImpl: 'a + FnOnce(Error) -> Out,
     Sch: Scheduler,
-    Out: Tuple,
+    Out: 'a + Tuple,
 {
     fn with_scheduler(sch: Sch, fn_impl: FnImpl) -> Self {
         Self::with_scheduler(sch, Closure::new(fn_impl))
@@ -171,7 +171,7 @@ where
 impl<'a, FnType, Sch, Out> Sender for UponError<'a, FnType, Sch, Out>
 where
     FnType: Functor<'a, Error, Output = Result<Out>>,
-    Out: Tuple,
+    Out: 'a + Tuple,
     Sch: Scheduler,
 {
 }
@@ -181,7 +181,7 @@ impl<'a, FnType, Sch, Out, NestedSender> BindSender<NestedSender>
 where
     NestedSender: TypedSender<Scheduler = Sch::LocalScheduler, Value = Out>,
     FnType: Functor<'a, Error, Output = Result<Out>>,
-    Out: Tuple,
+    Out: 'a + Tuple,
     Sch: Scheduler,
 {
     type Output = UponErrorTS<'a, NestedSender, FnType, Sch, Out>;
@@ -200,7 +200,7 @@ pub struct UponErrorTS<'a, NestedSender, FnType, Sch, Out>
 where
     NestedSender: TypedSender<Scheduler = Sch::LocalScheduler, Value = Out>,
     FnType: Functor<'a, Error, Output = Result<Out>>,
-    Out: Tuple,
+    Out: 'a + Tuple,
     Sch: Scheduler,
 {
     nested: NestedSender,
@@ -214,7 +214,7 @@ impl<'a, NestedSender, FnType, Sch, Out> TypedSender
 where
     NestedSender: TypedSender<Scheduler = Sch::LocalScheduler, Value = Out>,
     FnType: Functor<'a, Error, Output = Result<Out>>,
-    Out: Tuple,
+    Out: 'a + Tuple,
     Sch: Scheduler,
 {
     type Scheduler = Sch::LocalScheduler;
@@ -228,7 +228,7 @@ where
     NestedSender: TypedSender<Scheduler = Sch::LocalScheduler, Value = Out>
         + TypedSenderConnect<ReceiverWrapper<'a, ReceiverType, FnType, Sch, Out>>,
     FnType: Functor<'a, Error, Output = Result<Out>>,
-    Out: Tuple,
+    Out: 'a + Tuple,
     Sch: Scheduler,
     Sch::Sender:
         TypedSenderConnect<ErrorReceiver<'a, ReceiverType, FnType, Sch::LocalScheduler, Out>>,
@@ -250,7 +250,7 @@ where
     BindSenderImpl: BindSender<Self>,
     NestedSender: TypedSender<Scheduler = Sch::LocalScheduler, Value = Out>,
     FnType: Functor<'a, Error, Output = Result<Out>>,
-    Out: Tuple,
+    Out: 'a + Tuple,
     Sch: Scheduler,
 {
     type Output = BindSenderImpl::Output;
@@ -267,7 +267,7 @@ where
     Sch: Scheduler,
     Sch::Sender:
         TypedSenderConnect<ErrorReceiver<'a, NestedReceiver, FnType, Sch::LocalScheduler, Out>>,
-    Out: Tuple,
+    Out: 'a + Tuple,
 {
     nested: NestedReceiver,
     fn_impl: FnType,
@@ -283,7 +283,7 @@ where
     Sch: Scheduler,
     Sch::Sender:
         TypedSenderConnect<ErrorReceiver<'a, NestedReceiver, FnType, Sch::LocalScheduler, Out>>,
-    Out: Tuple,
+    Out: 'a + Tuple,
 {
     fn set_done(self) {
         self.nested.set_done()
@@ -312,7 +312,7 @@ where
     Sch: Scheduler,
     Sch::Sender:
         TypedSenderConnect<ErrorReceiver<'a, NestedReceiver, FnType, Sch::LocalScheduler, Out>>,
-    Out: Tuple,
+    Out: 'a + Tuple,
 {
     fn set_value(self, sch: Sch::LocalScheduler, v: Out) {
         self.nested.set_value(sch, v);
@@ -324,7 +324,7 @@ where
     NestedReceiver: ReceiverOf<Sch, Out>,
     FnType: Functor<'a, Error, Output = Result<Out>>,
     Sch: Scheduler,
-    Out: Tuple,
+    Out: 'a + Tuple,
 {
     nested: NestedReceiver,
     error: Error,
@@ -338,7 +338,7 @@ where
     NestedReceiver: ReceiverOf<Sch, Out>,
     FnType: Functor<'a, Error, Output = Result<Out>>,
     Sch: Scheduler,
-    Out: Tuple,
+    Out: 'a + Tuple,
 {
     fn set_done(self) {
         self.nested.set_done();
@@ -355,7 +355,7 @@ where
     NestedReceiver: ReceiverOf<Sch, Out>,
     FnType: Functor<'a, Error, Output = Result<Out>>,
     Sch: Scheduler,
-    Out: Tuple,
+    Out: 'a + Tuple,
 {
     fn set_value(self, sch: Sch, _: ()) {
         match self.fn_impl.tuple_invoke(self.error) {
