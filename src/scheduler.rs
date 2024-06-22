@@ -49,7 +49,7 @@ pub trait Scheduler: Eq + Clone + 'static {
     fn schedule(&self) -> Self::Sender;
 
     /// Create a sender that'll run on this scheduler, that produces a value signal.
-    fn schedule_value<Tpl: Tuple>(&self, values: Tpl) -> Just<Self, Tpl> {
+    fn schedule_value<'a, Tpl: 'a + Tuple>(&self, values: Tpl) -> Just<'a, Self, Tpl> {
         Just::with_scheduler(self.clone(), values)
     }
 

@@ -30,47 +30,53 @@ use std::ops::BitOr;
 ///     (1, 2, 3),
 ///     sync_wait_send(sender).unwrap().unwrap());
 /// ```
-pub struct Just<Sch: Scheduler, Tpl: Tuple> {
+pub struct Just<'a, Sch: Scheduler, Tpl: 'a + Tuple> {
+    phantom: PhantomData<fn() -> &'a Tpl>,
     sch: Sch,
     values: Tpl,
 }
 
-impl Default for Just<ImmediateScheduler, ()> {
+impl Default for Just<'static, ImmediateScheduler, ()> {
     fn default() -> Self {
         Just::from(())
     }
 }
 
-impl<Tpl: Tuple> From<Tpl> for Just<ImmediateScheduler, Tpl> {
+impl<'a, Tpl: 'a + Tuple> From<Tpl> for Just<'a, ImmediateScheduler, Tpl> {
     /// Create a new typed sender, that emits the `init` value.
     fn from(init: Tpl) -> Self {
         Just {
+            phantom: PhantomData,
             sch: ImmediateScheduler::default(),
             values: init,
         }
     }
 }
 
-impl<Sch: Scheduler, Tpl: Tuple> WithScheduler<Sch, Tpl> for Just<Sch, Tpl> {
+impl<'a, Sch: Scheduler, Tpl: 'a + Tuple> WithScheduler<Sch, Tpl> for Just<'a, Sch, Tpl> {
     /// Create a new typed sender, that emits the `init` value.
     ///
     /// Instead of using this function, you could also use [Scheduler::schedule_value].
     fn with_scheduler(sch: Sch, init: Tpl) -> Self {
-        Just { sch, values: init }
+        Just {
+            sch,
+            values: init,
+            phantom: PhantomData,
+        }
     }
 }
 
-impl<Sch: Scheduler, Tpl: Tuple> TypedSender for Just<Sch, Tpl> {
+impl<'a, Sch: Scheduler, Tpl: 'a + Tuple> TypedSender for Just<'a, Sch, Tpl> {
     type Value = Tpl;
     type Scheduler = Sch::LocalScheduler;
 }
 
-impl<ReceiverType, Sch, Tpl> TypedSenderConnect<ReceiverType> for Just<Sch, Tpl>
+impl<'a, ReceiverType, Sch, Tpl> TypedSenderConnect<ReceiverType> for Just<'a, Sch, Tpl>
 where
     Sch: Scheduler,
-    Tpl: Tuple,
+    Tpl: 'a + Tuple,
     ReceiverType: ReceiverOf<Sch::LocalScheduler, Tpl>,
-    Sch::Sender: TypedSenderConnect<ReceiverWrapper<ReceiverType, Sch::LocalScheduler, Tpl>>,
+    Sch::Sender: TypedSenderConnect<ReceiverWrapper<'a, ReceiverType, Sch::LocalScheduler, Tpl>>,
 {
     fn connect(self, receiver: ReceiverType) -> impl OperationState {
         let receiver = ReceiverWrapper {
@@ -82,10 +88,10 @@ where
     }
 }
 
-impl<BindSenderImpl, Sch, Tpl> BitOr<BindSenderImpl> for Just<Sch, Tpl>
+impl<'a, BindSenderImpl, Sch, Tpl> BitOr<BindSenderImpl> for Just<'a, Sch, Tpl>
 where
     Sch: Scheduler,
-    Tpl: Tuple,
+    Tpl: 'a + Tuple,
     BindSenderImpl: BindSender<Self>,
 {
     type Output = BindSenderImpl::Output;
@@ -95,21 +101,21 @@ where
     }
 }
 
-struct ReceiverWrapper<ReceiverImpl, Sch, Tpl>
+struct ReceiverWrapper<'a, ReceiverImpl, Sch, Tpl>
 where
     ReceiverImpl: ReceiverOf<Sch, Tpl>,
-    Tpl: Tuple,
+    Tpl: 'a + Tuple,
     Sch: Scheduler,
 {
-    phantom: PhantomData<fn(Sch)>,
+    phantom: PhantomData<fn(Sch) -> &'a Tpl>,
     receiver: ReceiverImpl,
     values: Tpl,
 }
 
-impl<ReceiverImpl, Sch, Tpl> Receiver for ReceiverWrapper<ReceiverImpl, Sch, Tpl>
+impl<'a, ReceiverImpl, Sch, Tpl> Receiver for ReceiverWrapper<'a, ReceiverImpl, Sch, Tpl>
 where
     ReceiverImpl: ReceiverOf<Sch, Tpl>,
-    Tpl: Tuple,
+    Tpl: 'a + Tuple,
     Sch: Scheduler,
 {
     fn set_done(self) {
@@ -121,10 +127,10 @@ where
     }
 }
 
-impl<ReceiverImpl, Sch, Tpl> ReceiverOf<Sch, ()> for ReceiverWrapper<ReceiverImpl, Sch, Tpl>
+impl<'a, ReceiverImpl, Sch, Tpl> ReceiverOf<Sch, ()> for ReceiverWrapper<'a, ReceiverImpl, Sch, Tpl>
 where
     ReceiverImpl: ReceiverOf<Sch, Tpl>,
-    Tpl: Tuple,
+    Tpl: 'a + Tuple,
     Sch: Scheduler,
 {
     fn set_value(self, sch: Sch, _: ()) {
