@@ -82,12 +82,12 @@ pub struct ThreadLocalPoolTS {
     sch: ThreadLocalPool,
 }
 
-impl TypedSender for ThreadLocalPoolTS {
+impl TypedSender<'_> for ThreadLocalPoolTS {
     type Scheduler = ThreadLocalPool;
     type Value = ();
 }
 
-impl<ReceiverType> TypedSenderConnect<ReceiverType> for ThreadLocalPoolTS
+impl<ReceiverType> TypedSenderConnect<'_, ReceiverType> for ThreadLocalPoolTS
 where
     ReceiverType: ReceiverOf<ThreadLocalPool, ()> + 'static,
 {

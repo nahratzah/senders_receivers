@@ -35,7 +35,7 @@ pub trait Sender {}
 ///
 /// It can be extended with additional steps, by binding a [Sender] to it.
 /// Can be connected with a receiver, which is handled by the [TypedSenderConnect] trait.
-pub trait TypedSender {
+pub trait TypedSender<'a> {
     /// The type of the value signal.
     type Value: Tuple;
     /// The scheduler for this sender.
@@ -47,7 +47,7 @@ pub trait TypedSender {
 /// Senders are allowed to be arbitrarily restrictive about what type of receiver they'll accept.
 /// (This is how we can make cross-thread schedulers require a receiver to implement [Send],
 /// without requiring this trait on receivers for schedulers that don't require it.)
-pub trait TypedSenderConnect<ReceiverType>: TypedSender
+pub trait TypedSenderConnect<'a, ReceiverType>: TypedSender<'a>
 where
     ReceiverType: ReceiverOf<Self::Scheduler, Self::Value>,
 {
@@ -59,9 +59,12 @@ where
 /// [Sender] can extend [TypedSender].
 /// In order to do that, a function is invoked on that sender, with the typed sender as an argument.
 /// BindSender models the binding of the sender with a typed sender.
-pub trait BindSender<NestedSender: TypedSender>: Sender {
+///
+/// The NestedSender argument should be a [TypedSender].
+pub trait BindSender<NestedSender>: Sender {
     /// Result type of the bind operation.
-    type Output: TypedSender;
+    /// Should be some [TypedSender].
+    type Output;
 
     /// Attach to a typed sender, creating a new typed sender.
     fn bind(self, nested: NestedSender) -> Self::Output;

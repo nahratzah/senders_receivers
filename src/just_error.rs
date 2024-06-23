@@ -55,12 +55,12 @@ impl<Sch: Scheduler, Tpl: Tuple> WithScheduler<Sch, Error> for JustError<Sch, Tp
     }
 }
 
-impl<Sch: Scheduler, Tpl: Tuple> TypedSender for JustError<Sch, Tpl> {
+impl<Sch: Scheduler, Tpl: Tuple> TypedSender<'_> for JustError<Sch, Tpl> {
     type Value = Tpl;
     type Scheduler = Sch::LocalScheduler;
 }
 
-impl<ReceiverType, Sch, Tpl> TypedSenderConnect<ReceiverType> for JustError<Sch, Tpl>
+impl<ReceiverType, Sch, Tpl> TypedSenderConnect<'_, ReceiverType> for JustError<Sch, Tpl>
 where
     Sch: Scheduler,
     Tpl: Tuple,

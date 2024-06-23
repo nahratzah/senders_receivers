@@ -88,12 +88,12 @@ pub struct CrossThreadPoolTS {
     sch: CrossThreadPool,
 }
 
-impl TypedSender for CrossThreadPoolTS {
+impl<'a> TypedSender<'a> for CrossThreadPoolTS {
     type Scheduler = ThreadLocalPool;
     type Value = ();
 }
 
-impl<ReceiverType> TypedSenderConnect<ReceiverType> for CrossThreadPoolTS
+impl<'a, ReceiverType> TypedSenderConnect<'a, ReceiverType> for CrossThreadPoolTS
 where
     ReceiverType: ReceiverOf<ThreadLocalPool, ()> + Send + 'static,
 {

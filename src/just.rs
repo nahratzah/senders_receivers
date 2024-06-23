@@ -36,7 +36,7 @@ pub struct Just<'a, Sch: Scheduler, Tpl: 'a + Tuple> {
     values: Tpl,
 }
 
-impl Default for Just<'static, ImmediateScheduler, ()> {
+impl Default for Just<'_, ImmediateScheduler, ()> {
     fn default() -> Self {
         Just::from(())
     }
@@ -66,17 +66,18 @@ impl<'a, Sch: Scheduler, Tpl: 'a + Tuple> WithScheduler<Sch, Tpl> for Just<'a, S
     }
 }
 
-impl<'a, Sch: Scheduler, Tpl: 'a + Tuple> TypedSender for Just<'a, Sch, Tpl> {
+impl<'a, Sch: Scheduler, Tpl: 'a + Tuple> TypedSender<'a> for Just<'a, Sch, Tpl> {
     type Value = Tpl;
     type Scheduler = Sch::LocalScheduler;
 }
 
-impl<'a, ReceiverType, Sch, Tpl> TypedSenderConnect<ReceiverType> for Just<'a, Sch, Tpl>
+impl<'a, ReceiverType, Sch, Tpl> TypedSenderConnect<'a, ReceiverType> for Just<'a, Sch, Tpl>
 where
     Sch: Scheduler,
     Tpl: 'a + Tuple,
     ReceiverType: ReceiverOf<Sch::LocalScheduler, Tpl>,
-    Sch::Sender: TypedSenderConnect<ReceiverWrapper<'a, ReceiverType, Sch::LocalScheduler, Tpl>>,
+    Sch::Sender:
+        TypedSenderConnect<'a, ReceiverWrapper<'a, ReceiverType, Sch::LocalScheduler, Tpl>>,
 {
     fn connect(self, receiver: ReceiverType) -> impl OperationState {
         let receiver = ReceiverWrapper {

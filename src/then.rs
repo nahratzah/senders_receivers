@@ -111,9 +111,9 @@ impl<'a, FnType, Out: Tuple, ArgTuple: Tuple> Sender for Then<'a, FnType, Out, A
 }
 
 impl<'a, FnType, Out, NestedSender> BindSender<NestedSender>
-    for Then<'a, FnType, Out, <NestedSender as TypedSender>::Value>
+    for Then<'a, FnType, Out, <NestedSender as TypedSender<'a>>::Value>
 where
-    NestedSender: TypedSender,
+    NestedSender: TypedSender<'a>,
     FnType: Functor<'a, NestedSender::Value, Output = Result<Out>>,
     NestedSender::Value: Tuple,
     Out: 'a + Tuple,
@@ -133,7 +133,7 @@ impl<'a, NestedSender, FnType, Out, BindSenderImpl> BitOr<BindSenderImpl>
     for ThenSender<'a, NestedSender, FnType, Out>
 where
     BindSenderImpl: BindSender<ThenSender<'a, NestedSender, FnType, Out>>,
-    NestedSender: TypedSender,
+    NestedSender: TypedSender<'a>,
     FnType: Functor<'a, NestedSender::Value, Output = Result<Out>>,
     NestedSender::Value: Tuple,
     Out: 'a + Tuple,
@@ -147,7 +147,7 @@ where
 
 pub struct ThenSender<'a, NestedSender, FnType, Out>
 where
-    NestedSender: TypedSender,
+    NestedSender: TypedSender<'a>,
     FnType: Functor<'a, NestedSender::Value, Output = Result<Out>>,
     Out: 'a + Tuple,
 {
@@ -156,9 +156,9 @@ where
     phantom: PhantomData<&'a fn() -> Out>,
 }
 
-impl<'a, NestedSender, FnType, Out> TypedSender for ThenSender<'a, NestedSender, FnType, Out>
+impl<'a, NestedSender, FnType, Out> TypedSender<'a> for ThenSender<'a, NestedSender, FnType, Out>
 where
-    NestedSender: TypedSender,
+    NestedSender: TypedSender<'a>,
     FnType: Functor<'a, NestedSender::Value, Output = Result<Out>>,
     Out: 'a + Tuple,
 {
@@ -166,19 +166,20 @@ where
     type Scheduler = NestedSender::Scheduler;
 }
 
-impl<'a, ReceiverImpl, NestedSender, FnType, Out> TypedSenderConnect<ReceiverImpl>
+impl<'a, ReceiverImpl, NestedSender, FnType, Out> TypedSenderConnect<'a, ReceiverImpl>
     for ThenSender<'a, NestedSender, FnType, Out>
 where
     ReceiverImpl: ReceiverOf<Self::Scheduler, Out>,
-    NestedSender: TypedSender
+    NestedSender: TypedSender<'a>
         + TypedSenderConnect<
+            'a,
             ThenWrappedReceiver<
                 'a,
                 ReceiverImpl,
                 FnType,
                 Self::Scheduler,
                 Out,
-                <NestedSender as TypedSender>::Value,
+                <NestedSender as TypedSender<'a>>::Value,
             >,
         >,
     NestedSender::Value: 'a,

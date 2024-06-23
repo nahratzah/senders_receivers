@@ -86,10 +86,10 @@ impl<Sch: Scheduler, Tpl: Tuple + Send + 'static> ReceiverOf<Sch, Tpl> for SendR
 ///     Ok(Some(tuple)) => println!("value signal: {:?}", tuple), // tuple: Rc<String> holding "bla"
 /// };
 /// ```
-pub fn sync_wait<SenderImpl>(sender: SenderImpl) -> Result<Option<SenderImpl::Value>>
+pub fn sync_wait<'a, SenderImpl>(sender: SenderImpl) -> Result<Option<SenderImpl::Value>>
 where
-    SenderImpl:
-        TypedSender + TypedSenderConnect<NoSendReceiver<<SenderImpl as TypedSender>::Value>>,
+    SenderImpl: TypedSender<'a>
+        + TypedSenderConnect<'a, NoSendReceiver<<SenderImpl as TypedSender<'a>>::Value>>,
 {
     type SenderType<Value> = same_thread_channel::Sender<SyncWaitOutcome<Value>>;
     type ReceiverType<Value> = same_thread_channel::Receiver<SyncWaitOutcome<Value>>;
@@ -131,10 +131,11 @@ where
 ///     Ok(Some(tuple)) => println!("value signal: {:?}", tuple), // tuple: String holding "bla"
 /// };
 /// ```
-pub fn sync_wait_send<SenderImpl>(sender: SenderImpl) -> Result<Option<SenderImpl::Value>>
+pub fn sync_wait_send<'a, SenderImpl>(sender: SenderImpl) -> Result<Option<SenderImpl::Value>>
 where
-    SenderImpl: TypedSender + TypedSenderConnect<SendReceiver<<SenderImpl as TypedSender>::Value>>,
-    <SenderImpl as TypedSender>::Value: Send + 'static,
+    SenderImpl: TypedSender<'a>
+        + TypedSenderConnect<'a, SendReceiver<<SenderImpl as TypedSender<'a>>::Value>>,
+    <SenderImpl as TypedSender<'a>>::Value: Send + 'static, // XXX would be nice to reduce lifetime to 'a?
 {
     type SenderType<Value> = mpsc::SyncSender<SyncWaitOutcome<Value>>;
     type ReceiverType<Value> = mpsc::Receiver<SyncWaitOutcome<Value>>;

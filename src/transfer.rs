@@ -28,70 +28,82 @@ use std::ops::BitOr;
 ///     (42,),
 ///     sync_wait_send(sender).unwrap().unwrap());
 /// ```
-pub struct Transfer<Sch>
+pub struct Transfer<'a, Sch>
 where
     Sch: Scheduler,
 {
+    phantom: PhantomData<&'a fn() -> Sch>,
     target_scheduler: Sch,
 }
 
-impl<Sch> Transfer<Sch>
+impl<'a, Sch> Transfer<'a, Sch>
 where
     Sch: Scheduler,
 {
     /// Create a new transfer.
     ///
     /// Note: we don't use from, because it reads really weird to write `Transfer::from(sch)`, when you mean "transfer to `sch`".
-    pub fn new(target_scheduler: Sch) -> Transfer<Sch> {
-        Transfer { target_scheduler }
+    pub fn new(target_scheduler: Sch) -> Self {
+        Transfer {
+            target_scheduler,
+            phantom: PhantomData,
+        }
     }
 }
 
-impl<Sch> Sender for Transfer<Sch> where Sch: Scheduler {}
+impl<'a, Sch> Sender for Transfer<'a, Sch> where Sch: Scheduler {}
 
-impl<NestedSender, Sch> BindSender<NestedSender> for Transfer<Sch>
+impl<'a, NestedSender, Sch> BindSender<NestedSender> for Transfer<'a, Sch>
 where
     Sch: Scheduler,
-    NestedSender: TypedSender,
+    NestedSender: TypedSender<'a>,
 {
-    type Output = TransferTS<NestedSender, Sch>;
+    type Output = TransferTS<'a, NestedSender, Sch>;
 
     fn bind(self, nested: NestedSender) -> Self::Output {
         TransferTS {
+            phantom: PhantomData,
             nested,
             target_scheduler: self.target_scheduler,
         }
     }
 }
 
-pub struct TransferTS<NestedSender, Sch>
+pub struct TransferTS<'a, NestedSender, Sch>
 where
-    NestedSender: TypedSender,
+    NestedSender: TypedSender<'a>,
     Sch: Scheduler,
 {
+    phantom: PhantomData<&'a i32>,
     nested: NestedSender,
     target_scheduler: Sch,
 }
 
-impl<NestedSender, Sch> TypedSender for TransferTS<NestedSender, Sch>
+impl<'a, NestedSender, Sch> TypedSender<'a> for TransferTS<'a, NestedSender, Sch>
 where
-    NestedSender: TypedSender,
+    NestedSender: TypedSender<'a>,
     Sch: Scheduler,
 {
     type Value = NestedSender::Value;
     type Scheduler = Sch::LocalScheduler;
 }
 
-impl<ReceiverType, NestedSender, Sch> TypedSenderConnect<ReceiverType>
-    for TransferTS<NestedSender, Sch>
+impl<'a, ReceiverType, NestedSender, Sch> TypedSenderConnect<'a, ReceiverType>
+    for TransferTS<'a, NestedSender, Sch>
 where
     ReceiverType: ReceiverOf<Sch::LocalScheduler, NestedSender::Value>,
-    NestedSender: TypedSender
-        + TypedSenderConnect<ReceiverWrapper<ReceiverType, Sch, <NestedSender as TypedSender>::Value>>,
+    NestedSender: 'a
+        + TypedSender<'a>
+        + TypedSenderConnect<
+            'a,
+            ReceiverWrapper<'a, ReceiverType, Sch, <NestedSender as TypedSender<'a>>::Value>,
+        >,
     Sch: Scheduler,
-    Sch::Sender: TypedSenderConnect<
-        ContinuingReceiverWrapper<ReceiverType, Sch::LocalScheduler, NestedSender::Value>,
-    >,
+    Sch::Sender: TypedSender<'a>
+        + TypedSenderConnect<
+            'a,
+            ContinuingReceiverWrapper<ReceiverType, Sch::LocalScheduler, NestedSender::Value>,
+        >,
 {
     fn connect(self, nested: ReceiverType) -> impl OperationState {
         let receiver: ReceiverWrapper<ReceiverType, Sch, NestedSender::Value> = ReceiverWrapper {
@@ -103,10 +115,11 @@ where
     }
 }
 
-impl<NestedSender, Sch, BindSenderImpl> BitOr<BindSenderImpl> for TransferTS<NestedSender, Sch>
+impl<'a, NestedSender, Sch, BindSenderImpl> BitOr<BindSenderImpl>
+    for TransferTS<'a, NestedSender, Sch>
 where
-    BindSenderImpl: BindSender<TransferTS<NestedSender, Sch>>,
-    NestedSender: TypedSender,
+    BindSenderImpl: BindSender<TransferTS<'a, NestedSender, Sch>>,
+    NestedSender: TypedSender<'a>,
     Sch: Scheduler,
 {
     type Output = BindSenderImpl::Output;
@@ -116,7 +129,7 @@ where
     }
 }
 
-struct ReceiverWrapper<NestedReceiver, Sch, Value>
+struct ReceiverWrapper<'a, NestedReceiver, Sch, Value>
 where
     NestedReceiver: ReceiverOf<Sch::LocalScheduler, Value>,
     Sch: Scheduler,
@@ -124,10 +137,10 @@ where
 {
     nested: NestedReceiver,
     target_scheduler: Sch,
-    phantom: PhantomData<fn(Value) -> Value>,
+    phantom: PhantomData<&'a fn(Value) -> Value>,
 }
 
-impl<NestedReceiver, Sch, Value> Receiver for ReceiverWrapper<NestedReceiver, Sch, Value>
+impl<'a, NestedReceiver, Sch, Value> Receiver for ReceiverWrapper<'a, NestedReceiver, Sch, Value>
 where
     NestedReceiver: ReceiverOf<Sch::LocalScheduler, Value>,
     Sch: Scheduler,
@@ -141,15 +154,17 @@ where
     }
 }
 
-impl<PreviousScheduler, NestedReceiver, Sch, Value> ReceiverOf<PreviousScheduler, Value>
-    for ReceiverWrapper<NestedReceiver, Sch, Value>
+impl<'a, PreviousScheduler, NestedReceiver, Sch, Value> ReceiverOf<PreviousScheduler, Value>
+    for ReceiverWrapper<'a, NestedReceiver, Sch, Value>
 where
     NestedReceiver: ReceiverOf<Sch::LocalScheduler, Value>,
     Sch: Scheduler,
     PreviousScheduler: Scheduler,
     Value: Tuple,
-    Sch::Sender:
-        TypedSenderConnect<ContinuingReceiverWrapper<NestedReceiver, Sch::LocalScheduler, Value>>,
+    Sch::Sender: TypedSenderConnect<
+        'a,
+        ContinuingReceiverWrapper<NestedReceiver, Sch::LocalScheduler, Value>,
+    >,
 {
     fn set_value(self, _: PreviousScheduler, values: Value) {
         self.target_scheduler

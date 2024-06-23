@@ -43,7 +43,7 @@ pub trait Scheduler: Eq + Clone + 'static {
     type LocalScheduler: Scheduler;
 
     /// The [TypedSender] returned by the scheduler.
-    type Sender: TypedSender<Scheduler = Self::LocalScheduler, Value = ()>;
+    type Sender: for<'a> TypedSender<'a, Scheduler = Self::LocalScheduler, Value = ()>;
 
     /// Create a [Self::Sender] that'll run on this scheduler.
     fn schedule(&self) -> Self::Sender;
@@ -105,16 +105,16 @@ impl Scheduler for ImmediateScheduler {
 
 pub struct ImmediateSender {}
 
-impl TypedSender for ImmediateSender {
+impl TypedSender<'_> for ImmediateSender {
     type Scheduler = ImmediateScheduler;
     type Value = ();
 }
 
-impl<ReceiverType> TypedSenderConnect<ReceiverType> for ImmediateSender
+impl<'a, ReceiverType> TypedSenderConnect<'a, ReceiverType> for ImmediateSender
 where
     ReceiverType: ReceiverOf<
-        <ImmediateSender as TypedSender>::Scheduler,
-        <ImmediateSender as TypedSender>::Value,
+        <ImmediateSender as TypedSender<'a>>::Scheduler,
+        <ImmediateSender as TypedSender<'a>>::Value,
     >,
 {
     fn connect(self, receiver: ReceiverType) -> impl OperationState {
@@ -124,7 +124,7 @@ where
 
 impl<BindSenderImpl> BitOr<BindSenderImpl> for ImmediateSender
 where
-    BindSenderImpl: BindSender<ImmediateSender>,
+    BindSenderImpl: BindSender<Self>,
 {
     type Output = BindSenderImpl::Output;
 
@@ -163,18 +163,18 @@ pub struct ThreadPoolSender {
     pool: ThreadPool,
 }
 
-impl TypedSender for ThreadPoolSender {
+impl TypedSender<'_> for ThreadPoolSender {
     type Value = ();
     type Scheduler = ThreadPool;
 }
 
-impl<ReceiverType> TypedSenderConnect<ReceiverType> for ThreadPoolSender
+impl<'a, ReceiverType> TypedSenderConnect<'a, ReceiverType> for ThreadPoolSender
 where
     ReceiverType: Send
         + 'static
         + ReceiverOf<
-            <ThreadPoolSender as TypedSender>::Scheduler,
-            <ThreadPoolSender as TypedSender>::Value,
+            <ThreadPoolSender as TypedSender<'a>>::Scheduler,
+            <ThreadPoolSender as TypedSender<'a>>::Value,
         >,
 {
     fn connect(self, receiver: ReceiverType) -> impl OperationState {
@@ -187,7 +187,7 @@ where
 
 impl<BindSenderImpl> BitOr<BindSenderImpl> for ThreadPoolSender
 where
-    BindSenderImpl: BindSender<ThreadPoolSender>,
+    BindSenderImpl: BindSender<Self>,
 {
     type Output = BindSenderImpl::Output;
 
@@ -258,7 +258,7 @@ where
     sch: Sch,
 }
 
-impl<Sch> TypedSender for LazySchedulerTS<Sch>
+impl<Sch> TypedSender<'_> for LazySchedulerTS<Sch>
 where
     Sch: Scheduler<LocalScheduler = Sch>,
 {
@@ -266,7 +266,7 @@ where
     type Value = ();
 }
 
-impl<ReceiverType, Sch> TypedSenderConnect<ReceiverType> for LazySchedulerTS<Sch>
+impl<ReceiverType, Sch> TypedSenderConnect<'_, ReceiverType> for LazySchedulerTS<Sch>
 where
     ReceiverType: ReceiverOf<Sch, ()>,
     Sch: Scheduler<LocalScheduler = Sch>,

@@ -44,12 +44,12 @@ impl<Tpl: Tuple> Default for JustDone<ImmediateScheduler, Tpl> {
     }
 }
 
-impl<Sch: Scheduler, Tpl: Tuple> TypedSender for JustDone<Sch, Tpl> {
+impl<Sch: Scheduler, Tpl: Tuple> TypedSender<'_> for JustDone<Sch, Tpl> {
     type Value = Tpl;
     type Scheduler = Sch::LocalScheduler;
 }
 
-impl<Sch, ReceiverType, Tpl> TypedSenderConnect<ReceiverType> for JustDone<Sch, Tpl>
+impl<Sch, ReceiverType, Tpl> TypedSenderConnect<'_, ReceiverType> for JustDone<Sch, Tpl>
 where
     Sch: Scheduler,
     Tpl: Tuple,
@@ -72,7 +72,7 @@ impl<ReceiverImpl: Receiver> OperationState for JustDoneOperationState<ReceiverI
 
 impl<Sch: Scheduler, Tpl: Tuple, BindSenderImpl> BitOr<BindSenderImpl> for JustDone<Sch, Tpl>
 where
-    BindSenderImpl: BindSender<JustDone<Sch, Tpl>>,
+    BindSenderImpl: BindSender<Self>,
 {
     type Output = BindSenderImpl::Output;
 

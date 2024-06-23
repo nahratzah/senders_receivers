@@ -39,7 +39,7 @@ where
     FnType: BiFunctor<'a, FirstArg, ArgTuple, Output = Result<Out>>,
     FirstArg: Scheduler,
     ArgTuple: Tuple,
-    Out: TypedSender,
+    Out: TypedSender<'a>,
 {
     fn_impl: FnType,
     phantom: PhantomData<&'a fn(FirstArg, ArgTuple) -> Out>,
@@ -51,7 +51,7 @@ where
     FnType: BiFunctor<'a, FirstArg, ArgTuple, Output = Result<Out>>,
     FirstArg: Scheduler,
     ArgTuple: Tuple,
-    Out: TypedSender,
+    Out: TypedSender<'a>,
 {
     fn from(fn_impl: FnType) -> Self {
         LetValue {
@@ -70,7 +70,7 @@ where
     FnType: 'a + FnOnce(FirstArg, ArgTuple) -> Result<Out>,
     FirstArg: Scheduler,
     ArgTuple: Tuple,
-    Out: TypedSender,
+    Out: TypedSender<'a>,
 {
     fn from(fn_impl: FnType) -> Self {
         Self::from(BiClosure::new(fn_impl))
@@ -86,7 +86,7 @@ where
     FnImpl: BiFunctor<'a, FirstArg, ArgTuple, Output = Out>,
     FirstArg: Scheduler,
     ArgTuple: Tuple,
-    Out: TypedSender,
+    Out: TypedSender<'a>,
 {
     fn from(fn_impl: FnImpl) -> Self {
         Self::from(NoErrBiFunctor::new(fn_impl))
@@ -102,14 +102,14 @@ where
     FnImpl: 'a + FnOnce(FirstArg, ArgTuple) -> Out,
     FirstArg: Scheduler,
     ArgTuple: Tuple,
-    Out: TypedSender,
+    Out: TypedSender<'a>,
 {
     fn from(fn_impl: FnImpl) -> Self {
         Self::from(BiClosure::new(fn_impl))
     }
 }
 
-impl<'a, FnType, Out: TypedSender, FirstArg: Scheduler, ArgTuple: Tuple> Sender
+impl<'a, FnType, Out: TypedSender<'a>, FirstArg: Scheduler, ArgTuple: Tuple> Sender
     for LetValue<'a, FnType, Out, FirstArg, ArgTuple>
 where
     FnType: BiFunctor<'a, FirstArg, ArgTuple, Output = Result<Out>>,
@@ -121,14 +121,14 @@ impl<'a, FnType, Out, NestedSender> BindSender<NestedSender>
         'a,
         FnType,
         Out,
-        <NestedSender as TypedSender>::Scheduler,
-        <NestedSender as TypedSender>::Value,
+        <NestedSender as TypedSender<'a>>::Scheduler,
+        <NestedSender as TypedSender<'a>>::Value,
     >
 where
-    NestedSender: TypedSender,
+    NestedSender: TypedSender<'a>,
     FnType: BiFunctor<'a, NestedSender::Scheduler, NestedSender::Value, Output = Result<Out>>,
     NestedSender::Value: Tuple,
-    Out: TypedSender,
+    Out: TypedSender<'a>,
 {
     type Output = LetValueSender<'a, NestedSender, FnType, Out>;
 
@@ -141,14 +141,14 @@ where
     }
 }
 
-impl<'a, NestedSender, FnType, Out: TypedSender, BindSenderImpl> BitOr<BindSenderImpl>
+impl<'a, NestedSender, FnType, Out: TypedSender<'a>, BindSenderImpl> BitOr<BindSenderImpl>
     for LetValueSender<'a, NestedSender, FnType, Out>
 where
     BindSenderImpl: BindSender<Self>,
-    NestedSender: TypedSender,
+    NestedSender: TypedSender<'a>,
     FnType: BiFunctor<'a, NestedSender::Scheduler, NestedSender::Value, Output = Result<Out>>,
     NestedSender::Value: Tuple,
-    Out: TypedSender,
+    Out: TypedSender<'a>,
 {
     type Output = BindSenderImpl::Output;
 
@@ -159,43 +159,45 @@ where
 
 pub struct LetValueSender<'a, NestedSender, FnType, Out>
 where
-    NestedSender: TypedSender,
+    NestedSender: TypedSender<'a>,
     FnType: BiFunctor<'a, NestedSender::Scheduler, NestedSender::Value, Output = Result<Out>>,
-    Out: TypedSender,
+    Out: TypedSender<'a>,
 {
     nested: NestedSender,
     fn_impl: FnType,
     phantom: PhantomData<&'a fn() -> Out>,
 }
 
-impl<'a, NestedSender, FnType, Out> TypedSender for LetValueSender<'a, NestedSender, FnType, Out>
+impl<'a, NestedSender, FnType, Out> TypedSender<'a>
+    for LetValueSender<'a, NestedSender, FnType, Out>
 where
-    NestedSender: TypedSender,
+    NestedSender: TypedSender<'a>,
     FnType: BiFunctor<'a, NestedSender::Scheduler, NestedSender::Value, Output = Result<Out>>,
-    Out: TypedSender,
+    Out: TypedSender<'a>,
 {
     type Value = Out::Value;
     type Scheduler = Out::Scheduler;
 }
 
-impl<'a, ReceiverImpl, NestedSender, FnType, Out> TypedSenderConnect<ReceiverImpl>
+impl<'a, ReceiverImpl, NestedSender, FnType, Out> TypedSenderConnect<'a, ReceiverImpl>
     for LetValueSender<'a, NestedSender, FnType, Out>
 where
     ReceiverImpl: ReceiverOf<Out::Scheduler, Out::Value>,
-    NestedSender: TypedSender
+    NestedSender: TypedSender<'a>
         + TypedSenderConnect<
+            'a,
             LetValueWrappedReceiver<
                 'a,
                 ReceiverImpl,
                 FnType,
                 Out,
-                <NestedSender as TypedSender>::Scheduler,
-                <NestedSender as TypedSender>::Value,
+                <NestedSender as TypedSender<'a>>::Scheduler,
+                <NestedSender as TypedSender<'a>>::Value,
             >,
         >,
     NestedSender::Value: 'a,
     FnType: BiFunctor<'a, NestedSender::Scheduler, NestedSender::Value, Output = Result<Out>>,
-    Out: TypedSender + TypedSenderConnect<ReceiverImpl>,
+    Out: TypedSender<'a> + TypedSenderConnect<'a, ReceiverImpl>,
 {
     fn connect(self, receiver: ReceiverImpl) -> impl OperationState {
         let wrapped_receiver = LetValueWrappedReceiver {
@@ -213,7 +215,7 @@ where
     FnType: BiFunctor<'a, FirstArg, ArgTuple, Output = Result<Out>>,
     FirstArg: Scheduler,
     ArgTuple: Tuple,
-    Out: TypedSender + TypedSenderConnect<ReceiverImpl>,
+    Out: TypedSender<'a> + TypedSenderConnect<'a, ReceiverImpl>,
 {
     nested: ReceiverImpl,
     fn_impl: FnType,
@@ -227,7 +229,7 @@ where
     FnType: BiFunctor<'a, FirstArg, ArgTuple, Output = Result<Out>>,
     FirstArg: Scheduler,
     ArgTuple: Tuple,
-    Out: TypedSender + TypedSenderConnect<ReceiverImpl>,
+    Out: TypedSender<'a> + TypedSenderConnect<'a, ReceiverImpl>,
 {
     fn set_done(self) {
         self.nested.set_done();
@@ -245,7 +247,7 @@ where
     FnType: BiFunctor<'a, FirstArg, ArgTuple, Output = Result<Out>>,
     FirstArg: Scheduler,
     ArgTuple: Tuple,
-    Out: TypedSender + TypedSenderConnect<ReceiverImpl>,
+    Out: TypedSender<'a> + TypedSenderConnect<'a, ReceiverImpl>,
 {
     fn set_value(self, scheduler: FirstArg, values: ArgTuple) {
         match self.fn_impl.tuple_invoke(scheduler, values) {
