@@ -1,4 +1,5 @@
 use crate::errors::{Error, Tuple};
+use crate::io::EnableDefaultIO;
 use crate::just::Just;
 use crate::just_done::JustDone;
 use crate::just_error::JustError;
@@ -103,6 +104,8 @@ impl Scheduler for ImmediateScheduler {
     }
 }
 
+impl EnableDefaultIO for ImmediateScheduler {}
+
 pub struct ImmediateSender {}
 
 impl TypedSender<'_> for ImmediateSender {
@@ -158,6 +161,8 @@ impl Scheduler for ThreadPool {
         ThreadPoolSender { pool: self.clone() }
     }
 }
+
+impl EnableDefaultIO for ThreadPool {}
 
 pub struct ThreadPoolSender {
     pool: ThreadPool,
@@ -249,6 +254,11 @@ where
             sch: self.sch.clone(),
         }
     }
+}
+
+impl<Sch> EnableDefaultIO for LazyScheduler<Sch> where
+    Sch: Scheduler<LocalScheduler = Sch> + EnableDefaultIO
+{
 }
 
 pub struct LazySchedulerTS<Sch>

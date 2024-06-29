@@ -1,4 +1,5 @@
 use crate::errors::{new_error, Error};
+use crate::io::default::EnableDefaultIO;
 use crate::scheduler::Scheduler;
 use crate::traits::{
     BindSender, OperationState, Receiver, ReceiverOf, TypedSender, TypedSenderConnect,
@@ -68,7 +69,7 @@ where
 impl<'a, ReceiverType, Sch, Fd> TypedSenderConnect<'a, ReceiverType> for WriteTS<'a, Sch, Fd>
 where
     Fd: 'a + io::Write + ?Sized,
-    Sch: Scheduler,
+    Sch: Scheduler + EnableDefaultIO,
     Sch::Sender: TypedSender<'a, Value = ()>
         + TypedSenderConnect<'a, ReceiverWrapper<'a, ReceiverType, Sch::LocalScheduler, Fd>>,
     ReceiverType: ReceiverOf<Sch::LocalScheduler, (usize,)>,
