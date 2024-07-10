@@ -1,5 +1,6 @@
 use crate::errors::Tuple;
 use crate::scheduler::{ImmediateScheduler, Scheduler};
+use crate::scope::Scope;
 use crate::traits::{
     BindSender, OperationState, Receiver, ReceiverOf, TypedSender, TypedSenderConnect,
 };
@@ -49,24 +50,37 @@ impl<Sch: Scheduler, Tpl: Tuple> TypedSender<'_> for JustDone<Sch, Tpl> {
     type Scheduler = Sch::LocalScheduler;
 }
 
-impl<Sch, ReceiverType, Tpl> TypedSenderConnect<'_, ReceiverType> for JustDone<Sch, Tpl>
+impl<'scope, 'a, ScopeImpl, ReceiverType, Sch, Tpl>
+    TypedSenderConnect<'scope, 'a, ScopeImpl, ReceiverType> for JustDone<Sch, Tpl>
 where
+    'a: 'scope,
     Sch: Scheduler,
     Tpl: Tuple,
-    ReceiverType: ReceiverOf<Sch::LocalScheduler, Tpl>,
+    ReceiverType: 'scope + ReceiverOf<Sch::LocalScheduler, Tpl>,
+    ScopeImpl: Scope<'scope, 'a>,
 {
-    fn connect(self, receiver: ReceiverType) -> impl OperationState {
-        JustDoneOperationState { receiver }
+    fn connect(self, _: &ScopeImpl, receiver: ReceiverType) -> impl OperationState<'scope> {
+        JustDoneOperationState {
+            phantom: PhantomData,
+            receiver,
+        }
     }
 }
 
-pub struct JustDoneOperationState<ReceiverImpl: Receiver> {
+pub struct JustDoneOperationState<'a, ReceiverImpl>
+where
+    ReceiverImpl: Receiver + 'a,
+{
+    phantom: PhantomData<&'a i32>,
     receiver: ReceiverImpl,
 }
 
-impl<ReceiverImpl: Receiver> OperationState for JustDoneOperationState<ReceiverImpl> {
+impl<'a, ReceiverImpl> OperationState<'a> for JustDoneOperationState<'a, ReceiverImpl>
+where
+    ReceiverImpl: Receiver + 'a,
+{
     fn start(self) {
-        self.receiver.set_done()
+        self.receiver.set_done();
     }
 }
 

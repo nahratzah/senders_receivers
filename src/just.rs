@@ -1,5 +1,6 @@
 use crate::errors::{Error, Tuple};
 use crate::scheduler::{ImmediateScheduler, Scheduler, WithScheduler};
+use crate::scope::Scope;
 use crate::traits::{
     BindSender, OperationState, Receiver, ReceiverOf, TypedSender, TypedSenderConnect,
 };
@@ -71,21 +72,28 @@ impl<'a, Sch: Scheduler, Tpl: 'a + Tuple> TypedSender<'a> for Just<'a, Sch, Tpl>
     type Scheduler = Sch::LocalScheduler;
 }
 
-impl<'a, ReceiverType, Sch, Tpl> TypedSenderConnect<'a, ReceiverType> for Just<'a, Sch, Tpl>
+impl<'scope, 'a, ScopeImpl, ReceiverType, Sch, Tpl>
+    TypedSenderConnect<'scope, 'a, ScopeImpl, ReceiverType> for Just<'a, Sch, Tpl>
 where
+    'a: 'scope,
     Sch: Scheduler,
     Tpl: 'a + Tuple,
-    ReceiverType: ReceiverOf<Sch::LocalScheduler, Tpl>,
-    Sch::Sender:
-        TypedSenderConnect<'a, ReceiverWrapper<'a, ReceiverType, Sch::LocalScheduler, Tpl>>,
+    ReceiverType: 'scope + ReceiverOf<Sch::LocalScheduler, Tpl>,
+    Sch::Sender: TypedSenderConnect<
+        'scope,
+        'a,
+        ScopeImpl,
+        ReceiverWrapper<'a, ReceiverType, Sch::LocalScheduler, Tpl>,
+    >,
+    ScopeImpl: Scope<'scope, 'a>,
 {
-    fn connect(self, receiver: ReceiverType) -> impl OperationState {
+    fn connect(self, scope: &ScopeImpl, receiver: ReceiverType) -> impl OperationState<'scope> {
         let receiver = ReceiverWrapper {
             phantom: PhantomData,
             receiver,
             values: self.values,
         };
-        self.sch.schedule().connect(receiver)
+        self.sch.schedule().connect(scope, receiver)
     }
 }
 

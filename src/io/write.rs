@@ -1,6 +1,7 @@
 use crate::errors::{new_error, Error};
 use crate::io::default::EnableDefaultIO;
 use crate::scheduler::Scheduler;
+use crate::scope::Scope;
 use crate::traits::{
     BindSender, OperationState, Receiver, ReceiverOf, TypedSender, TypedSenderConnect,
 };
@@ -66,21 +67,32 @@ where
     type Value = (usize,);
 }
 
-impl<'a, ReceiverType, Sch, Fd> TypedSenderConnect<'a, ReceiverType> for WriteTS<'a, Sch, Fd>
+impl<'scope, 'a, ScopeImpl, ReceiverType, Sch, Fd>
+    TypedSenderConnect<'scope, 'a, ScopeImpl, ReceiverType> for WriteTS<'a, Sch, Fd>
 where
+    'a: 'scope,
     Fd: 'a + io::Write + ?Sized,
     Sch: Scheduler + EnableDefaultIO,
     Sch::Sender: TypedSender<'a, Value = ()>
-        + TypedSenderConnect<'a, ReceiverWrapper<'a, ReceiverType, Sch::LocalScheduler, Fd>>,
-    ReceiverType: ReceiverOf<Sch::LocalScheduler, (usize,)>,
+        + TypedSenderConnect<
+            'scope,
+            'a,
+            ScopeImpl,
+            ReceiverWrapper<'a, ReceiverType, Sch::LocalScheduler, Fd>,
+        >,
+    ReceiverType: 'scope + ReceiverOf<Sch::LocalScheduler, (usize,)>,
+    ScopeImpl: Scope<'scope, 'a>,
 {
-    fn connect(self, receiver: ReceiverType) -> impl OperationState {
-        self.sch.schedule().connect(ReceiverWrapper {
-            nested: receiver,
-            fd: self.fd,
-            buf: self.buf,
-            phantom: PhantomData,
-        })
+    fn connect(self, scope: &ScopeImpl, receiver: ReceiverType) -> impl OperationState<'scope> {
+        self.sch.schedule().connect(
+            scope,
+            ReceiverWrapper {
+                nested: receiver,
+                fd: self.fd,
+                buf: self.buf,
+                phantom: PhantomData,
+            },
+        )
     }
 }
 

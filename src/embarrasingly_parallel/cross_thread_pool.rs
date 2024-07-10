@@ -1,9 +1,10 @@
 use crate::embarrasingly_parallel::tasks::SendTask;
 use crate::embarrasingly_parallel::thread_local_pool::ThreadLocalPool;
 use crate::scheduler::Scheduler;
+use crate::scope::ScopeSend;
 use crate::sync::cross_thread_channel;
-
 use crate::traits::{BindSender, OperationState, ReceiverOf, TypedSender, TypedSenderConnect};
+use std::marker::PhantomData;
 use std::ops::BitOr;
 use std::thread;
 
@@ -88,26 +89,30 @@ pub struct CrossThreadPoolTS {
     sch: CrossThreadPool,
 }
 
-impl<'a> TypedSender<'a> for CrossThreadPoolTS {
+impl TypedSender<'_> for CrossThreadPoolTS {
     type Scheduler = ThreadLocalPool;
     type Value = ();
 }
 
-impl<'a, ReceiverType> TypedSenderConnect<'a, ReceiverType> for CrossThreadPoolTS
+impl<'scope, 'a, ScopeImpl, ReceiverType> TypedSenderConnect<'scope, 'a, ScopeImpl, ReceiverType>
+    for CrossThreadPoolTS
 where
-    ReceiverType: ReceiverOf<ThreadLocalPool, ()> + Send + 'static,
+    'a: 'scope,
+    ReceiverType: 'scope + ReceiverOf<ThreadLocalPool, ()> + Send,
+    ScopeImpl: ScopeSend<'scope, 'a>,
 {
-    fn connect(self, receiver: ReceiverType) -> impl OperationState {
+    fn connect(self, scope: &ScopeImpl, receiver: ReceiverType) -> impl OperationState<'scope> {
         CrossThreadPoolOperationState {
+            phantom: PhantomData,
             sch: self.sch,
-            receiver,
+            receiver: scope.wrap_send(receiver),
         }
     }
 }
 
 impl<BindSenderImpl> BitOr<BindSenderImpl> for CrossThreadPoolTS
 where
-    BindSenderImpl: BindSender<Self> + Send + 'static,
+    BindSenderImpl: BindSender<Self> + Send,
 {
     type Output = BindSenderImpl::Output;
 
@@ -116,15 +121,16 @@ where
     }
 }
 
-struct CrossThreadPoolOperationState<ReceiverType>
+struct CrossThreadPoolOperationState<'a, ReceiverType>
 where
     ReceiverType: ReceiverOf<ThreadLocalPool, ()> + Send + 'static,
 {
+    phantom: PhantomData<&'a i32>,
     sch: CrossThreadPool,
     receiver: ReceiverType,
 }
 
-impl<ReceiverType> OperationState for CrossThreadPoolOperationState<ReceiverType>
+impl<'a, ReceiverType> OperationState<'a> for CrossThreadPoolOperationState<'a, ReceiverType>
 where
     ReceiverType: ReceiverOf<ThreadLocalPool, ()> + Send + 'static,
 {

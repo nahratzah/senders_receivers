@@ -1,5 +1,8 @@
 use crate::errors::{Error, Result, Tuple};
 use crate::scheduler::Scheduler;
+use crate::scope::scope_data::{ScopeDataPtr, ScopeDataSendPtr};
+use crate::scope::ScopeImpl;
+use crate::scope::{scope, scope_send};
 use crate::sync::same_thread_channel;
 use crate::traits::{OperationState, Receiver, ReceiverOf, TypedSender, TypedSenderConnect};
 use std::sync::mpsc;
@@ -14,25 +17,25 @@ pub struct NoSendReceiver<Tpl: Tuple> {
     tx: same_thread_channel::Sender<SyncWaitOutcome<Tpl>>,
 }
 
+impl<Tpl: Tuple> NoSendReceiver<Tpl> {
+    fn install_outcome(self, outcome: SyncWaitOutcome<Tpl>) {
+        self.tx.send(outcome).expect("send must succeed");
+    }
+}
+
 impl<Tpl: Tuple> Receiver for NoSendReceiver<Tpl> {
     fn set_done(self) {
-        self.tx
-            .send(SyncWaitOutcome::Done)
-            .expect("send must succeed");
+        self.install_outcome(SyncWaitOutcome::Done);
     }
 
     fn set_error(self, error: Error) {
-        self.tx
-            .send(SyncWaitOutcome::Error(error))
-            .expect("send must succeed");
+        self.install_outcome(SyncWaitOutcome::Error(error));
     }
 }
 
 impl<Sch: Scheduler, Tpl: Tuple> ReceiverOf<Sch, Tpl> for NoSendReceiver<Tpl> {
     fn set_value(self, _: Sch, values: Tpl) {
-        self.tx
-            .send(SyncWaitOutcome::Value(values))
-            .expect("send must succeed");
+        self.install_outcome(SyncWaitOutcome::Value(values));
     }
 }
 
@@ -88,8 +91,14 @@ impl<Sch: Scheduler, Tpl: Tuple + Send + 'static> ReceiverOf<Sch, Tpl> for SendR
 /// ```
 pub fn sync_wait<'a, SenderImpl>(sender: SenderImpl) -> Result<Option<SenderImpl::Value>>
 where
-    SenderImpl: TypedSender<'a>
-        + TypedSenderConnect<'a, NoSendReceiver<<SenderImpl as TypedSender<'a>>::Value>>,
+    SenderImpl: 'a
+        + TypedSender<'a>
+        + for<'scope> TypedSenderConnect<
+            'scope,
+            'a,
+            ScopeImpl<'scope, 'a, ScopeDataPtr>,
+            NoSendReceiver<<SenderImpl as TypedSender<'a>>::Value>,
+        >,
 {
     type SenderType<Value> = same_thread_channel::Sender<SyncWaitOutcome<Value>>;
     type ReceiverType<Value> = same_thread_channel::Receiver<SyncWaitOutcome<Value>>;
@@ -99,7 +108,7 @@ where
         ReceiverType<SenderImpl::Value>,
     ) = same_thread_channel::channel(1);
     let receiver = NoSendReceiver { tx };
-    sender.connect(receiver).start();
+    scope(move |scope: &ScopeImpl<'_, 'a, ScopeDataPtr>| sender.connect(scope, receiver).start());
     match rx.recv().expect("a single value must be delivered") {
         SyncWaitOutcome::Value(tuple) => Ok(Some(tuple)),
         SyncWaitOutcome::Error(error) => Err(error),
@@ -133,8 +142,14 @@ where
 /// ```
 pub fn sync_wait_send<'a, SenderImpl>(sender: SenderImpl) -> Result<Option<SenderImpl::Value>>
 where
-    SenderImpl: TypedSender<'a>
-        + TypedSenderConnect<'a, SendReceiver<<SenderImpl as TypedSender<'a>>::Value>>,
+    SenderImpl: 'a
+        + TypedSender<'a>
+        + for<'scope> TypedSenderConnect<
+            'scope,
+            'a,
+            ScopeImpl<'scope, 'a, ScopeDataSendPtr>,
+            SendReceiver<<SenderImpl as TypedSender<'a>>::Value>,
+        >,
     <SenderImpl as TypedSender<'a>>::Value: Send + 'static, // XXX would be nice to reduce lifetime to 'a?
 {
     type SenderType<Value> = mpsc::SyncSender<SyncWaitOutcome<Value>>;
@@ -145,7 +160,9 @@ where
         ReceiverType<SenderImpl::Value>,
     ) = mpsc::sync_channel(1);
     let receiver = SendReceiver { tx };
-    sender.connect(receiver).start();
+    scope_send(move |scope: &ScopeImpl<'_, 'a, ScopeDataSendPtr>| {
+        sender.connect(scope, receiver).start()
+    });
     match rx.recv().expect("a single value must be delivered") {
         SyncWaitOutcome::Value(tuple) => Ok(Some(tuple)),
         SyncWaitOutcome::Error(error) => Err(error),

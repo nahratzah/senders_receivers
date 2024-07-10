@@ -4,10 +4,12 @@ use crate::embarrasingly_parallel::worker::Worker;
 use crate::just_done::JustDone;
 use crate::let_value::LetValue;
 use crate::scheduler::{ImmediateScheduler, Scheduler};
+use crate::scope::ScopeSend;
 use crate::start_detached::start_detached;
 use crate::traits::{BindSender, OperationState, ReceiverOf, TypedSender, TypedSenderConnect};
 use rand::Rng;
 use std::io;
+use std::marker::PhantomData;
 use std::ops::BitOr;
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -101,7 +103,7 @@ impl ThreadPool {
     {
         start_detached(
             self.schedule()
-                | LetValue::from(move |sch: ThreadLocalPool, ()| {
+                | LetValue::from(move |sch: ThreadLocalPool, _: &()| {
                     f(sch);
                     JustDone::<ImmediateScheduler, ()>::default()
                 }),
@@ -117,7 +119,7 @@ impl ThreadPool {
             let f = f.clone();
             start_detached(
                 i.0.schedule()
-                    | LetValue::from(move |sch: ThreadLocalPool, ()| {
+                    | LetValue::from(move |sch: ThreadLocalPool, _: &()| {
                         f(sch);
                         JustDone::<ImmediateScheduler, ()>::default()
                     }),
@@ -163,14 +165,19 @@ impl TypedSender<'_> for ThreadPoolTS {
     type Scheduler = ThreadLocalPool;
 }
 
-impl<ReceiverType> TypedSenderConnect<'_, ReceiverType> for ThreadPoolTS
+impl<'scope, 'a, ScopeImpl, ReceiverType> TypedSenderConnect<'scope, 'a, ScopeImpl, ReceiverType>
+    for ThreadPoolTS
 where
-    ReceiverType: ReceiverOf<ThreadLocalPool, ()> + Send + 'static,
+    'a: 'scope,
+    ReceiverType: 'scope + ReceiverOf<ThreadLocalPool, ()> + Send,
+    ScopeImpl: ScopeSend<'scope, 'a>,
 {
-    fn connect(self, receiver: ReceiverType) -> impl OperationState {
+    fn connect(self, scope: &ScopeImpl, receiver: ReceiverType) -> impl OperationState<'scope> {
         ThreadPoolOperationState {
+            phantom: PhantomData,
             sch: self.sch,
-            receiver,
+            receiver: receiver,
+            scope: scope.clone(),
         }
     }
 }
@@ -186,17 +193,24 @@ where
     }
 }
 
-struct ThreadPoolOperationState<ReceiverType>
+struct ThreadPoolOperationState<'scope, 'a, ScopeImpl, ReceiverType>
 where
-    ReceiverType: ReceiverOf<ThreadLocalPool, ()> + Send + 'static,
+    'a: 'scope,
+    ReceiverType: ReceiverOf<ThreadLocalPool, ()> + Send + 'scope,
+    ScopeImpl: ScopeSend<'scope, 'a>,
 {
+    phantom: PhantomData<(&'scope (), &'a ())>,
     sch: ThreadPool,
     receiver: ReceiverType,
+    scope: ScopeImpl,
 }
 
-impl<ReceiverType> OperationState for ThreadPoolOperationState<ReceiverType>
+impl<'scope, 'a, ScopeImpl, ReceiverType> OperationState<'scope>
+    for ThreadPoolOperationState<'scope, 'a, ScopeImpl, ReceiverType>
 where
-    ReceiverType: ReceiverOf<ThreadLocalPool, ()> + Send + 'static,
+    'a: 'scope,
+    ReceiverType: ReceiverOf<ThreadLocalPool, ()> + Send + 'scope,
+    ScopeImpl: ScopeSend<'scope, 'a>,
 {
     fn start(self) {
         let mut rng = rand::thread_rng();
@@ -205,7 +219,7 @@ where
         state.threads[thread_idx]
             .0
             .schedule()
-            .connect(self.receiver)
+            .connect(&self.scope, self.receiver)
             .start();
     }
 }

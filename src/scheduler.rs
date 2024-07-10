@@ -3,7 +3,9 @@ use crate::io::EnableDefaultIO;
 use crate::just::Just;
 use crate::just_done::JustDone;
 use crate::just_error::JustError;
+use crate::scope::{Scope, ScopeSend};
 use crate::traits::{BindSender, OperationState, ReceiverOf, TypedSender, TypedSenderConnect};
+use std::marker::PhantomData;
 use std::ops::BitOr;
 use threadpool::ThreadPool;
 
@@ -113,15 +115,22 @@ impl TypedSender<'_> for ImmediateSender {
     type Value = ();
 }
 
-impl<'a, ReceiverType> TypedSenderConnect<'a, ReceiverType> for ImmediateSender
+impl<'scope, 'a, ScopeImpl, ReceiverType> TypedSenderConnect<'scope, 'a, ScopeImpl, ReceiverType>
+    for ImmediateSender
 where
-    ReceiverType: ReceiverOf<
-        <ImmediateSender as TypedSender<'a>>::Scheduler,
-        <ImmediateSender as TypedSender<'a>>::Value,
-    >,
+    'a: 'scope,
+    ReceiverType: 'scope
+        + ReceiverOf<
+            <ImmediateSender as TypedSender<'a>>::Scheduler,
+            <ImmediateSender as TypedSender<'a>>::Value,
+        >,
+    ScopeImpl: Scope<'scope, 'a>,
 {
-    fn connect(self, receiver: ReceiverType) -> impl OperationState {
-        ImmediateOperationState { receiver }
+    fn connect(self, _: &ScopeImpl, receiver: ReceiverType) -> impl OperationState<'scope> {
+        ImmediateOperationState {
+            phantom: PhantomData,
+            receiver,
+        }
     }
 }
 
@@ -136,16 +145,17 @@ where
     }
 }
 
-struct ImmediateOperationState<ReceiverType>
+struct ImmediateOperationState<'a, ReceiverType>
 where
     ReceiverType: ReceiverOf<ImmediateScheduler, ()>,
 {
+    phantom: PhantomData<&'a i32>,
     receiver: ReceiverType,
 }
 
-impl<ReceiverType> OperationState for ImmediateOperationState<ReceiverType>
+impl<'a, ReceiverType> OperationState<'a> for ImmediateOperationState<'a, ReceiverType>
 where
-    ReceiverType: ReceiverOf<ImmediateScheduler, ()>,
+    ReceiverType: ReceiverOf<ImmediateScheduler, ()> + 'a,
 {
     fn start(self) {
         self.receiver.set_value(ImmediateScheduler {}, ());
@@ -173,19 +183,23 @@ impl TypedSender<'_> for ThreadPoolSender {
     type Scheduler = ThreadPool;
 }
 
-impl<'a, ReceiverType> TypedSenderConnect<'a, ReceiverType> for ThreadPoolSender
+impl<'scope, 'a, ScopeImpl, ReceiverType> TypedSenderConnect<'scope, 'a, ScopeImpl, ReceiverType>
+    for ThreadPoolSender
 where
-    ReceiverType: Send
-        + 'static
+    'a: 'scope,
+    ReceiverType: 'scope
+        + Send
         + ReceiverOf<
             <ThreadPoolSender as TypedSender<'a>>::Scheduler,
             <ThreadPoolSender as TypedSender<'a>>::Value,
         >,
+    ScopeImpl: ScopeSend<'scope, 'a>,
 {
-    fn connect(self, receiver: ReceiverType) -> impl OperationState {
+    fn connect(self, scope: &ScopeImpl, receiver: ReceiverType) -> impl OperationState<'scope> {
         ThreadPoolOperationState {
             pool: self.pool,
-            receiver,
+            receiver: scope.wrap_send(receiver),
+            phantom: PhantomData,
         }
     }
 }
@@ -201,15 +215,16 @@ where
     }
 }
 
-struct ThreadPoolOperationState<Receiver>
+struct ThreadPoolOperationState<'a, Receiver>
 where
     Receiver: ReceiverOf<ThreadPool, ()> + Send + 'static,
 {
+    phantom: PhantomData<&'a i32>,
     pool: ThreadPool,
     receiver: Receiver,
 }
 
-impl<Receiver> OperationState for ThreadPoolOperationState<Receiver>
+impl<'a, Receiver> OperationState<'a> for ThreadPoolOperationState<'a, Receiver>
 where
     Receiver: ReceiverOf<ThreadPool, ()> + Send + 'static,
 {
@@ -276,31 +291,37 @@ where
     type Value = ();
 }
 
-impl<ReceiverType, Sch> TypedSenderConnect<'_, ReceiverType> for LazySchedulerTS<Sch>
+impl<'scope, 'a, ScopeImpl, ReceiverType, Sch>
+    TypedSenderConnect<'scope, 'a, ScopeImpl, ReceiverType> for LazySchedulerTS<Sch>
 where
-    ReceiverType: ReceiverOf<Sch, ()>,
+    'a: 'scope,
+    ReceiverType: 'scope + ReceiverOf<Sch, ()>,
     Sch: Scheduler<LocalScheduler = Sch>,
+    ScopeImpl: Scope<'scope, 'a>,
 {
-    fn connect(self, receiver: ReceiverType) -> impl OperationState {
+    fn connect(self, _: &ScopeImpl, receiver: ReceiverType) -> impl OperationState<'scope> {
         LazySchedulerOperationState {
             sch: self.sch,
             receiver,
+            phantom: PhantomData,
         }
     }
 }
 
-struct LazySchedulerOperationState<Sch, ReceiverType>
+struct LazySchedulerOperationState<'a, Sch, ReceiverType>
 where
-    ReceiverType: ReceiverOf<Sch, ()>,
+    ReceiverType: ReceiverOf<Sch, ()> + 'a,
     Sch: Scheduler<LocalScheduler = Sch>,
 {
+    phantom: PhantomData<&'a i32>,
     sch: Sch,
     receiver: ReceiverType,
 }
 
-impl<Sch, ReceiverType> OperationState for LazySchedulerOperationState<Sch, ReceiverType>
+impl<'a, Sch, ReceiverType> OperationState<'a>
+    for LazySchedulerOperationState<'a, Sch, ReceiverType>
 where
-    ReceiverType: ReceiverOf<Sch, ()>,
+    ReceiverType: ReceiverOf<Sch, ()> + 'a,
     Sch: Scheduler<LocalScheduler = Sch>,
 {
     fn start(self) {

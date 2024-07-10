@@ -1,8 +1,10 @@
 use crate::embarrasingly_parallel::cross_thread_pool::CrossThreadPool;
 use crate::embarrasingly_parallel::tasks::{SendTask, Task};
 use crate::scheduler::Scheduler;
+use crate::scope::Scope;
 use crate::sync::{cross_thread_channel, same_thread_channel};
 use crate::traits::{BindSender, OperationState, ReceiverOf, TypedSender, TypedSenderConnect};
+use std::marker::PhantomData;
 use std::ops::BitOr;
 use std::thread;
 
@@ -87,21 +89,25 @@ impl TypedSender<'_> for ThreadLocalPoolTS {
     type Value = ();
 }
 
-impl<ReceiverType> TypedSenderConnect<'_, ReceiverType> for ThreadLocalPoolTS
+impl<'scope, 'a, ScopeImpl, ReceiverType> TypedSenderConnect<'scope, 'a, ScopeImpl, ReceiverType>
+    for ThreadLocalPoolTS
 where
-    ReceiverType: ReceiverOf<ThreadLocalPool, ()> + 'static,
+    'a: 'scope,
+    ReceiverType: 'scope + ReceiverOf<ThreadLocalPool, ()>,
+    ScopeImpl: Scope<'scope, 'a>,
 {
-    fn connect(self, receiver: ReceiverType) -> impl OperationState {
+    fn connect(self, scope: &ScopeImpl, receiver: ReceiverType) -> impl OperationState<'scope> {
         ThreadLocalPoolOperationState {
             sch: self.sch,
-            receiver,
+            receiver: scope.wrap(receiver),
+            phantom: PhantomData,
         }
     }
 }
 
 impl<BindSenderImpl> BitOr<BindSenderImpl> for ThreadLocalPoolTS
 where
-    BindSenderImpl: BindSender<Self> + 'static,
+    BindSenderImpl: BindSender<Self>,
 {
     type Output = BindSenderImpl::Output;
 
@@ -110,15 +116,16 @@ where
     }
 }
 
-struct ThreadLocalPoolOperationState<ReceiverType>
+struct ThreadLocalPoolOperationState<'a, ReceiverType>
 where
     ReceiverType: ReceiverOf<ThreadLocalPool, ()> + 'static,
 {
+    phantom: PhantomData<&'a i32>,
     sch: ThreadLocalPool,
     receiver: ReceiverType,
 }
 
-impl<ReceiverType> OperationState for ThreadLocalPoolOperationState<ReceiverType>
+impl<'a, ReceiverType> OperationState<'a> for ThreadLocalPoolOperationState<'a, ReceiverType>
 where
     ReceiverType: ReceiverOf<ThreadLocalPool, ()> + 'static,
 {

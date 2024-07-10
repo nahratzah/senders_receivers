@@ -1,5 +1,6 @@
 use crate::errors::{Error, Result};
 use crate::functor::{Closure, Functor, NoErrFunctor};
+use crate::scope::Scope;
 use crate::traits::{
     BindSender, OperationState, Receiver, ReceiverOf, Sender, TypedSender, TypedSenderConnect,
 };
@@ -129,22 +130,31 @@ where
     type Scheduler = Out::Scheduler;
 }
 
-impl<'a, ReceiverType, FnType, Out, NestedSender> TypedSenderConnect<'a, ReceiverType>
+impl<'scope, 'a, ScopeImpl, ReceiverType, FnType, Out, NestedSender>
+    TypedSenderConnect<'scope, 'a, ScopeImpl, ReceiverType>
     for LetErrorSender<'a, NestedSender, FnType, Out>
 where
+    'a: 'scope,
     NestedSender: TypedSender<'a, Scheduler = Out::Scheduler, Value = Out::Value>
-        + TypedSenderConnect<'a, ReceiverWrapper<'a, ReceiverType, FnType, Out>>,
-    FnType: Functor<'a, Error, Output = Result<Out>>,
-    Out: TypedSender<'a> + TypedSenderConnect<'a, ReceiverType>,
-    ReceiverType: ReceiverOf<Out::Scheduler, Out::Value>,
+        + TypedSenderConnect<
+            'scope,
+            'a,
+            ScopeImpl,
+            ReceiverWrapper<'scope, 'a, ScopeImpl, ReceiverType, FnType, Out>,
+        >,
+    FnType: 'scope + Functor<'a, Error, Output = Result<Out>>,
+    Out: TypedSender<'a> + TypedSenderConnect<'scope, 'a, ScopeImpl, ReceiverType>,
+    ReceiverType: 'scope + ReceiverOf<Out::Scheduler, Out::Value>,
+    ScopeImpl: 'scope + Scope<'scope, 'a>,
 {
-    fn connect(self, receiver: ReceiverType) -> impl OperationState {
+    fn connect(self, scope: &ScopeImpl, receiver: ReceiverType) -> impl OperationState<'scope> {
         let receiver = ReceiverWrapper {
             receiver,
             fn_impl: self.fn_impl,
             phantom: PhantomData,
+            scope: scope.clone(),
         };
-        self.nested.connect(receiver)
+        self.nested.connect(scope, receiver)
     }
 }
 
@@ -163,22 +173,28 @@ where
     }
 }
 
-struct ReceiverWrapper<'a, ReceiverType, FnType, Out>
+struct ReceiverWrapper<'scope, 'a, ScopeImpl, ReceiverType, FnType, Out>
 where
-    ReceiverType: ReceiverOf<Out::Scheduler, Out::Value>,
-    FnType: Functor<'a, Error, Output = Result<Out>>,
+    'a: 'scope,
+    ReceiverType: 'scope + ReceiverOf<Out::Scheduler, Out::Value>,
+    FnType: 'scope + Functor<'a, Error, Output = Result<Out>>,
     Out: TypedSender<'a>,
+    ScopeImpl: Scope<'scope, 'a>,
 {
     receiver: ReceiverType,
     fn_impl: FnType,
-    phantom: PhantomData<&'a fn() -> Out>,
+    phantom: PhantomData<(&'a fn() -> Out, &'scope ())>,
+    scope: ScopeImpl,
 }
 
-impl<'a, ReceiverType, FnType, Out> Receiver for ReceiverWrapper<'a, ReceiverType, FnType, Out>
+impl<'scope, 'a, ScopeImpl, ReceiverType, FnType, Out> Receiver
+    for ReceiverWrapper<'scope, 'a, ScopeImpl, ReceiverType, FnType, Out>
 where
-    ReceiverType: ReceiverOf<Out::Scheduler, Out::Value>,
-    FnType: Functor<'a, Error, Output = Result<Out>>,
-    Out: TypedSender<'a> + TypedSenderConnect<'a, ReceiverType>,
+    'a: 'scope,
+    ReceiverType: 'scope + ReceiverOf<Out::Scheduler, Out::Value>,
+    FnType: 'scope + Functor<'a, Error, Output = Result<Out>>,
+    Out: TypedSender<'a> + TypedSenderConnect<'scope, 'a, ScopeImpl, ReceiverType>,
+    ScopeImpl: Scope<'scope, 'a>,
 {
     fn set_done(self) {
         self.receiver.set_done();
@@ -186,18 +202,20 @@ where
 
     fn set_error(self, error: Error) {
         match self.fn_impl.tuple_invoke(error) {
-            Ok(sender) => sender.connect(self.receiver).start(),
+            Ok(sender) => sender.connect(&self.scope, self.receiver).start(),
             Err(error) => self.receiver.set_error(error),
         };
     }
 }
 
-impl<'a, ReceiverType, FnType, Out> ReceiverOf<Out::Scheduler, Out::Value>
-    for ReceiverWrapper<'a, ReceiverType, FnType, Out>
+impl<'scope, 'a, ScopeImpl, ReceiverType, FnType, Out> ReceiverOf<Out::Scheduler, Out::Value>
+    for ReceiverWrapper<'scope, 'a, ScopeImpl, ReceiverType, FnType, Out>
 where
-    ReceiverType: ReceiverOf<Out::Scheduler, Out::Value>,
-    FnType: Functor<'a, Error, Output = Result<Out>>,
-    Out: TypedSender<'a> + TypedSenderConnect<'a, ReceiverType>,
+    'a: 'scope,
+    ReceiverType: 'scope + ReceiverOf<Out::Scheduler, Out::Value>,
+    FnType: 'scope + Functor<'a, Error, Output = Result<Out>>,
+    Out: TypedSender<'a> + TypedSenderConnect<'scope, 'a, ScopeImpl, ReceiverType>,
+    ScopeImpl: Scope<'scope, 'a>,
 {
     fn set_value(self, sch: Out::Scheduler, value: Out::Value) {
         self.receiver.set_value(sch, value);

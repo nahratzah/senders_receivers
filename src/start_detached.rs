@@ -1,5 +1,6 @@
 use crate::errors::{Error, Tuple};
 use crate::scheduler::Scheduler;
+use crate::scope::{detached_scope, ScopeDataSendPtr, ScopeImpl};
 use crate::traits::{OperationState, Receiver, ReceiverOf, TypedSender, TypedSenderConnect};
 
 /// Start an operation, but don't wait for its completion.
@@ -8,9 +9,19 @@ use crate::traits::{OperationState, Receiver, ReceiverOf, TypedSender, TypedSend
 /// Otherwise (value or done signal), the code will complete normally.
 pub fn start_detached<SenderImpl>(sender: SenderImpl)
 where
-    SenderImpl: TypedSender<'static> + TypedSenderConnect<'static, DiscardingReceiver>,
+    SenderImpl: TypedSender<'static>
+        + TypedSenderConnect<
+            'static,
+            'static,
+            ScopeImpl<'static, 'static, ScopeDataSendPtr>,
+            DiscardingReceiver,
+        >,
 {
-    sender.connect(DiscardingReceiver).start();
+    detached_scope(
+        move |scope: &ScopeImpl<'static, 'static, ScopeDataSendPtr>| {
+            sender.connect(scope, DiscardingReceiver).start();
+        },
+    )
 }
 
 pub struct DiscardingReceiver;
