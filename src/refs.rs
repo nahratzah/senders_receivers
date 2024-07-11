@@ -1,6 +1,5 @@
 use crate::scope::Scope;
 use std::fmt;
-use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::ops::{Deref, DerefMut};
 

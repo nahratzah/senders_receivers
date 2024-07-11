@@ -9,7 +9,7 @@ use crate::traits::{
 use crate::tuple_cat::TupleCat;
 use std::marker::PhantomData;
 use std::mem;
-use std::ops::{BitOr, Deref, DerefMut};
+use std::ops::{BitOr, DerefMut};
 
 /// Create a let-value [Sender].
 ///

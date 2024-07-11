@@ -21,10 +21,6 @@ where
     DoneSignal,
 }
 
-trait ForwardingWrapper {
-    fn forward(self);
-}
-
 pub struct InnerScopeReceiver<OuterState, Sch, Values, Rcv>
 where
     OuterState: ScopeData,
