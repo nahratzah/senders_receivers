@@ -1,10 +1,12 @@
 use crate::errors::{Error, Tuple};
+use crate::refs::ScopedRefMut;
 use crate::scheduler::Scheduler;
 use crate::scope::scope_data::ScopeData;
 use crate::scope::ScopeImpl;
 use crate::traits::{Receiver, ReceiverOf};
 use std::cell::{OnceCell, RefCell};
 use std::fmt;
+use std::mem;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
@@ -58,6 +60,12 @@ where
     ) -> (
         ScopeImpl<'inner_scope, 'outer_scope, ScopeDataNoSendPtr<OuterState, Sch, Values, Rcv>>,
         Self,
+        ScopedRefMut<
+            'inner_scope,
+            'outer_scope,
+            Rcv,
+            ScopeImpl<'inner_scope, 'outer_scope, ScopeDataNoSendPtr<OuterState, Sch, Values, Rcv>>,
+        >,
     )
     where
         'outer_scope: 'inner_scope,
@@ -72,8 +80,14 @@ where
             inner_data,
             shared_value,
         };
+        let rcv_ref = {
+            let mut scoped_data_ref = (*inner_scope.data.data).borrow_mut();
+            let rcv: &mut Rcv = scoped_data_ref.rcv.get_mut().unwrap();
+            let rcv = unsafe { mem::transmute::<&mut Rcv, &'inner_scope mut Rcv>(rcv) };
+            ScopedRefMut::new(rcv, inner_scope.clone())
+        };
 
-        (inner_scope, wrapper)
+        (inner_scope, wrapper, rcv_ref)
     }
 }
 
@@ -122,6 +136,7 @@ where
             .set(Argument::ErrorSignal(error))
             .is_err()
         {
+            self.inner_data.mark_panicked();
             panic!("signal double assigned");
         }
     }
@@ -133,6 +148,7 @@ where
             .set(Argument::DoneSignal)
             .is_err()
         {
+            self.inner_data.mark_panicked();
             panic!("signal double assigned");
         }
     }
@@ -148,17 +164,19 @@ where
     fn set_error(self, error: Error) {
         let mut opt_shared_value = self.shared_value.lock().unwrap();
         if opt_shared_value.is_some() {
+            self.inner_data.mark_panicked();
             panic!("signal double assigned");
         }
-        opt_shared_value.insert(Argument::ErrorSignal(error));
+        let _ = opt_shared_value.insert(Argument::ErrorSignal(error));
     }
 
     fn set_done(self) {
         let mut opt_shared_value = self.shared_value.lock().unwrap();
         if opt_shared_value.is_some() {
+            self.inner_data.mark_panicked();
             panic!("signal double assigned");
         }
-        opt_shared_value.insert(Argument::DoneSignal);
+        let _ = opt_shared_value.insert(Argument::DoneSignal);
     }
 }
 
@@ -177,6 +195,7 @@ where
             .set(Argument::ValueSignal(sch, values))
             .is_err()
         {
+            self.inner_data.mark_panicked();
             panic!("signal double assigned");
         }
     }
@@ -193,9 +212,10 @@ where
     fn set_value(self, sch: Sch, values: Values) {
         let mut opt_shared_value = self.shared_value.lock().unwrap();
         if opt_shared_value.is_some() {
+            self.inner_data.mark_panicked();
             panic!("signal double assigned");
         }
-        opt_shared_value.insert(Argument::ValueSignal(sch, values));
+        let _ = opt_shared_value.insert(Argument::ValueSignal(sch, values));
     }
 }
 

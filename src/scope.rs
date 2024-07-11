@@ -20,6 +20,7 @@ pub(crate) mod scope_fn_send_receiver;
 pub(crate) mod scoped_receiver;
 pub(crate) mod scoped_receiver_send;
 
+use crate::refs::ScopedRefMut;
 use receiver::{InnerScopeReceiver, InnerScopeSendReceiver};
 use scope_data::ScopeDataState;
 pub(crate) use scope_data::{ScopeData, ScopeDataPtr, ScopeDataSendPtr};
@@ -135,6 +136,12 @@ where
     ) -> (
         Self::NewScopeType<'nested_scope, Sch, Value, Rcv>,
         Self::NewScopeReceiver<Sch, Value, Rcv>,
+        ScopedRefMut<
+            'nested_scope,
+            'scope,
+            Rcv,
+            Self::NewScopeType<'nested_scope, Sch, Value, Rcv>,
+        >,
     )
     where
         'scope: 'nested_scope,
@@ -260,6 +267,12 @@ where
     ) -> (
         Self::NewScopeType<'nested_scope, Sch, Value, Rcv>,
         Self::NewScopeReceiver<Sch, Value, Rcv>,
+        ScopedRefMut<
+            'nested_scope,
+            'scope,
+            Rcv,
+            Self::NewScopeType<'nested_scope, Sch, Value, Rcv>,
+        >,
     )
     where
         'scope: 'nested_scope,

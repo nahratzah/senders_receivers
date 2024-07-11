@@ -1,5 +1,6 @@
 use crate::errors::{Error, Result, Tuple};
 use crate::functor::{BiClosure, BiFunctor, NoErrBiFunctor};
+use crate::refs::ScopedRefMut;
 use crate::scheduler::Scheduler;
 use crate::scope::Scope;
 use crate::traits::{
@@ -7,7 +8,8 @@ use crate::traits::{
 };
 use crate::tuple_cat::TupleCat;
 use std::marker::PhantomData;
-use std::ops::{BitOr, Deref};
+use std::mem;
+use std::ops::{BitOr, Deref, DerefMut};
 
 /// Create a let-value [Sender].
 ///
@@ -434,9 +436,16 @@ where
 {
     fn set_value(self, sch: Sch, value: Value) {
         let local_receiver_with_value = LocalReceiverWithValue::new(value, self.nested);
-        let value = local_receiver_with_value.values_ref();
-        let (local_scope, local_receiver) = self.scope.new_scope(local_receiver_with_value);
-        match self.fn_impl.tuple_invoke(sch, value) {
+        let (local_scope, local_receiver, rcv_ref) =
+            self.scope.new_scope(local_receiver_with_value);
+        let mut values_ref = ScopedRefMut::map(rcv_ref, |rcv| rcv.values_ref());
+        let values_ref: &'scope mut Value = unsafe {
+            // Might want to not do this... instead pass the values_ref straight to the function.
+            // But for that, the values_ref needs to have less associated template-arguments.
+            // 'env and State need to get lost, so the type becomes `ScopedRefMut<'scope, Value>`.
+            mem::transmute::<&mut Value, &'scope mut Value>(&mut *values_ref)
+        };
+        match self.fn_impl.tuple_invoke(sch, values_ref) {
             Ok(local_sender) => local_sender.connect(&local_scope, local_receiver).start(),
             Err(error) => local_receiver.set_error(error),
         };
@@ -477,8 +486,8 @@ where
         }
     }
 
-    fn values_ref(&'scope self) -> &'scope Value {
-        self.value.deref()
+    fn values_ref(&mut self) -> &mut Value {
+        self.value.deref_mut()
     }
 }
 

@@ -1,48 +1,63 @@
 use crate::scope::Scope;
 use std::fmt;
 use std::fmt::Debug;
+use std::marker::PhantomData;
 use std::ops::{Deref, DerefMut};
 
-#[derive(Debug)]
-pub struct ScopedRef<'scope, T, State>
+/// Reference which is bound to a scope.
+/// It ensures the reference remains valid, by keeping the scope live.
+pub struct ScopedRef<'scope, 'env, T, State>
 where
+    'env: 'scope,
     T: 'scope + ?Sized,
-    State: for<'env> Scope<'scope, 'env>,
+    State: Scope<'scope, 'env>,
 {
     actual: &'scope T,
     state: State,
+    phantom: PhantomData<&'env ()>,
 }
 
-#[derive(Debug)]
-pub struct ScopedRefMut<'scope, T, State>
+/// Reference which is bound to a scope.
+/// It ensures the reference remains valid, by keeping the scope live.
+pub struct ScopedRefMut<'scope, 'env, T, State>
 where
+    'env: 'scope,
     T: 'scope + ?Sized,
-    State: for<'env> Scope<'scope, 'env>,
+    State: Scope<'scope, 'env>,
 {
     actual: &'scope mut T,
     state: State,
+    phantom: PhantomData<&'env ()>,
 }
 
-impl<'a, T, State> ScopedRef<'a, T, State>
+impl<'scope, 'env, T, State> ScopedRef<'scope, 'env, T, State>
 where
-    T: 'a + ?Sized,
-    State: for<'env> Scope<'a, 'env>,
+    'env: 'scope,
+    T: 'scope + ?Sized,
+    State: Scope<'scope, 'env>,
 {
-    pub fn new(r: &'a T, state: State) -> Self {
+    /// Create a new [ScopedRef].
+    /// The referent must have a lifetime equal to the State,
+    /// and its lifetime must be guaranteed by the State.
+    pub fn new(r: &'scope T, state: State) -> Self {
         Self {
             actual: r,
             state: state,
+            phantom: PhantomData,
         }
     }
 
+    /// Clone the reference.
     pub fn clone(r: Self) -> Self {
         Self {
             actual: r.actual,
             state: r.state.clone(),
+            phantom: PhantomData,
         }
     }
 
-    pub fn map<F, U>(r: Self, f: F) -> ScopedRef<'a, U, State>
+    /// Transform the reference into a dependant reference.
+    pub fn map<F, U>(r: Self, f: F) -> ScopedRef<'scope, 'env, U, State>
     where
         F: FnOnce(&T) -> &U,
         U: ?Sized,
@@ -50,10 +65,13 @@ where
         ScopedRef {
             actual: f(r.actual),
             state: r.state,
+            phantom: PhantomData,
         }
     }
 
-    pub fn filter_map<F, U>(r: Self, f: F) -> Result<ScopedRef<'a, U, State>, Self>
+    /// Convert the reference into a dependent reference.
+    /// If the callback returns [None], the original reference will be returned in the [Err] result.
+    pub fn filter_map<F, U>(r: Self, f: F) -> Result<ScopedRef<'scope, 'env, U, State>, Self>
     where
         F: FnOnce(&T) -> Option<&U>,
         U: ?Sized,
@@ -62,12 +80,20 @@ where
             Some(actual) => Ok(ScopedRef {
                 actual,
                 state: r.state,
+                phantom: PhantomData,
             }),
             None => Err(r),
         }
     }
 
-    pub fn map_split<F, U, V>(r: Self, f: F) -> (ScopedRef<'a, U, State>, ScopedRef<'a, V, State>)
+    /// Split the reference in two references.
+    pub fn map_split<F, U, V>(
+        r: Self,
+        f: F,
+    ) -> (
+        ScopedRef<'scope, 'env, U, State>,
+        ScopedRef<'scope, 'env, V, State>,
+    )
     where
         F: FnOnce(&T) -> (&U, &V),
         U: ?Sized,
@@ -77,21 +103,36 @@ where
         let u = ScopedRef {
             actual: u,
             state: r.state.clone(),
+            phantom: PhantomData,
         };
         let v = ScopedRef {
             actual: v,
             state: r.state,
+            phantom: PhantomData,
         };
         (u, v)
     }
 }
 
-impl<'a, T, State> ScopedRefMut<'a, T, State>
+impl<'scope, 'env, T, State> ScopedRefMut<'scope, 'env, T, State>
 where
-    T: 'a + ?Sized,
-    State: for<'env> Scope<'a, 'env>,
+    'env: 'scope,
+    T: 'scope + ?Sized,
+    State: Scope<'scope, 'env>,
 {
-    pub fn map<F, U>(r: Self, f: F) -> ScopedRefMut<'a, U, State>
+    /// Create a new [ScopedRef].
+    /// The referent must have a lifetime equal to the State,
+    /// and its lifetime must be guaranteed by the State.
+    pub fn new(r: &'scope mut T, state: State) -> Self {
+        Self {
+            actual: r,
+            state: state,
+            phantom: PhantomData,
+        }
+    }
+
+    /// Transform the reference into a dependant reference.
+    pub fn map<F, U>(r: Self, f: F) -> ScopedRefMut<'scope, 'env, U, State>
     where
         F: FnOnce(&mut T) -> &mut U,
         U: ?Sized,
@@ -99,6 +140,7 @@ where
         ScopedRefMut {
             actual: f(r.actual),
             state: r.state,
+            phantom: PhantomData,
         }
     }
 
@@ -112,7 +154,9 @@ where
     //
     // The code: https://doc.rust-lang.org/src/core/cell.rs.html#1674-1688
     //
-    //pub fn filter_map<F, U>(r: Self, f: F) -> Result<ScopedRefMut<'a, U, State>, Self>
+    ///// Convert the reference into a dependent reference.
+    ///// If the callback returns [None], the original reference will be returned in the [Err] result.
+    //pub fn filter_map<F, U>(r: Self, f: F) -> Result<ScopedRefMut<'scope, 'env, U, State>, Self>
     //where F: FnOnce(&mut T) -> Option<&mut U>, U: ?Sized,
     //{
     //    match f(r.actual) {
@@ -125,10 +169,14 @@ where
     //    }
     //}
 
+    /// Split the reference in two references.
     pub fn map_split<F, U, V>(
         r: Self,
         f: F,
-    ) -> (ScopedRefMut<'a, U, State>, ScopedRefMut<'a, V, State>)
+    ) -> (
+        ScopedRefMut<'scope, 'env, U, State>,
+        ScopedRefMut<'scope, 'env, V, State>,
+    )
     where
         F: FnOnce(&mut T) -> (&mut U, &mut V),
         U: ?Sized,
@@ -138,19 +186,22 @@ where
         let u = ScopedRefMut {
             actual: u,
             state: r.state.clone(),
+            phantom: PhantomData,
         };
         let v = ScopedRefMut {
             actual: v,
             state: r.state,
+            phantom: PhantomData,
         };
         (u, v)
     }
 }
 
-impl<'a, T, State> Deref for ScopedRef<'a, T, State>
+impl<'scope, 'env, T, State> Deref for ScopedRef<'scope, 'env, T, State>
 where
-    T: 'a + ?Sized,
-    State: for<'env> Scope<'a, 'env>,
+    'env: 'scope,
+    T: 'scope + ?Sized,
+    State: Scope<'scope, 'env>,
 {
     type Target = T;
 
@@ -159,10 +210,11 @@ where
     }
 }
 
-impl<'a, T, State> Deref for ScopedRefMut<'a, T, State>
+impl<'scope, 'env, T, State> Deref for ScopedRefMut<'scope, 'env, T, State>
 where
-    T: 'a + ?Sized,
-    State: for<'env> Scope<'a, 'env>,
+    'env: 'scope,
+    T: 'scope + ?Sized,
+    State: Scope<'scope, 'env>,
 {
     type Target = T;
 
@@ -171,22 +223,50 @@ where
     }
 }
 
-impl<'a, T, State> DerefMut for ScopedRefMut<'a, T, State>
+impl<'scope, 'env, T, State> DerefMut for ScopedRefMut<'scope, 'env, T, State>
 where
-    T: 'a + ?Sized,
-    State: for<'env> Scope<'a, 'env>,
+    'env: 'scope,
+    T: 'scope + ?Sized,
+    State: Scope<'scope, 'env>,
 {
     fn deref_mut(&mut self) -> &mut T {
         self.actual
     }
 }
 
-impl<'a, T, State> fmt::Display for ScopedRefMut<'a, T, State>
+impl<'scope, 'env, T, State> fmt::Display for ScopedRefMut<'scope, 'env, T, State>
 where
-    T: 'a + ?Sized + fmt::Display,
-    State: for<'env> Scope<'a, 'env>,
+    'env: 'scope,
+    T: 'scope + ?Sized + fmt::Display,
+    State: Scope<'scope, 'env>,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.actual.fmt(f)
+    }
+}
+
+impl<'scope, 'env, T, State> fmt::Debug for ScopedRef<'scope, 'env, T, State>
+where
+    'env: 'scope,
+    T: 'scope + ?Sized,
+    State: Scope<'scope, 'env>,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ScopedRef")
+            .field("state", &self.state)
+            .finish_non_exhaustive()
+    }
+}
+
+impl<'scope, 'env, T, State> fmt::Debug for ScopedRefMut<'scope, 'env, T, State>
+where
+    'env: 'scope,
+    T: 'scope + ?Sized,
+    State: Scope<'scope, 'env>,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ScopedRefMut")
+            .field("state", &self.state)
+            .finish_non_exhaustive()
     }
 }
