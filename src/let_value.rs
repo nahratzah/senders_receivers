@@ -1,4 +1,4 @@
-use crate::errors::{Error, Result, Tuple};
+use crate::errors::{tuple_impls, Error, Result, Tuple};
 use crate::functor::{BiClosure, BiFunctor, NoErrBiFunctor};
 use crate::refs::ScopedRefMut;
 use crate::scheduler::Scheduler;
@@ -18,7 +18,7 @@ use std::ops::{BitOr, Deref, DerefMut};
 ///
 /// Example:
 /// ```
-/// use senders_receivers::{Just, LetValue, sync_wait};
+/// use senders_receivers::{Just, LetValue, SyncWait};
 ///
 /// // If using a function that returns a sender:
 /// let sender = Just::from((String::from("world"),))
@@ -26,8 +26,8 @@ use std::ops::{BitOr, Deref, DerefMut};
 ///                  Just::from((format!("Hello {}!", name),))
 ///              });
 /// assert_eq!(
-///     (String::from("Hello world!"),),
-///     sync_wait(sender).unwrap().unwrap());
+///     (String::from("world"), String::from("Hello world!")),
+///     sender.sync_wait().unwrap().unwrap());
 ///
 /// // If using a function that returns a Result:
 /// let sender = Just::from((String::from("world"),))
@@ -35,15 +35,17 @@ use std::ops::{BitOr, Deref, DerefMut};
 ///                  Ok(Just::from((format!("Hello {}!", name),)))
 ///              });
 /// assert_eq!(
-///     (String::from("Hello world!"),),
-///     sync_wait(sender).unwrap().unwrap());
+///     (String::from("world"), String::from("Hello world!")),
+///     sender.sync_wait().unwrap().unwrap());
 /// ```
 pub struct LetValue<'scope, 'a, FnType, Out, Sch, Value>
 where
     'a: 'scope,
-    FnType: 'a + BiFunctor<'a, Sch, &'scope Value, Output = Result<Out>>,
+    FnType: 'a
+        + BiFunctor<'a, Sch, <&'scope mut Value as DistributeRefTuple>::Output, Output = Result<Out>>,
     Sch: Scheduler,
     Value: 'a + Tuple,
+    &'scope mut Value: DistributeRefTuple,
     Out: 'scope + TypedSender<'scope>,
     Out::Value: 'a,
     (Value, Out::Value): TupleCat,
@@ -57,9 +59,11 @@ impl<'scope, 'a, FnType, Out, Sch, Value> From<FnType>
     for LetValue<'scope, 'a, FnType, Out, Sch, Value>
 where
     'a: 'scope,
-    FnType: BiFunctor<'a, Sch, &'scope Value, Output = Result<Out>>,
+    FnType: 'a
+        + BiFunctor<'a, Sch, <&'scope mut Value as DistributeRefTuple>::Output, Output = Result<Out>>,
     Sch: Scheduler,
     Value: 'a + Tuple,
+    &'scope mut Value: DistributeRefTuple,
     Out: 'scope + TypedSender<'scope>,
     Out::Value: 'a,
     (Value, Out::Value): TupleCat,
@@ -73,16 +77,23 @@ where
     }
 }
 
-type ClosureLetValue<'scope, 'a, FnType, Out, Sch, Value> =
-    LetValue<'scope, 'a, BiClosure<'a, FnType, Result<Out>, Sch, &'scope Value>, Out, Sch, Value>;
+type ClosureLetValue<'scope, 'a, FnType, Out, Sch, Value> = LetValue<
+    'scope,
+    'a,
+    BiClosure<'a, FnType, Result<Out>, Sch, <&'scope mut Value as DistributeRefTuple>::Output>,
+    Out,
+    Sch,
+    Value,
+>;
 
 impl<'scope, 'a, FnType, Out, Sch, Value> From<FnType>
     for ClosureLetValue<'scope, 'a, FnType, Out, Sch, Value>
 where
     'a: 'scope,
-    FnType: 'a + FnOnce(Sch, &'scope Value) -> Result<Out>,
+    FnType: 'a + FnOnce(Sch, <&'scope mut Value as DistributeRefTuple>::Output) -> Result<Out>,
     Sch: Scheduler,
     Value: 'a + Tuple,
+    &'scope mut Value: DistributeRefTuple,
     Out: 'scope + TypedSender<'scope>,
     Out::Value: 'a,
     (Value, Out::Value): TupleCat,
@@ -93,16 +104,23 @@ where
     }
 }
 
-type NoErrLetValue<'scope, 'a, FnType, Out, Sch, Value> =
-    LetValue<'scope, 'a, NoErrBiFunctor<'a, FnType, Out, Sch, &'scope Value>, Out, Sch, Value>;
+type NoErrLetValue<'scope, 'a, FnType, Out, Sch, Value> = LetValue<
+    'scope,
+    'a,
+    NoErrBiFunctor<'a, FnType, Out, Sch, <&'scope mut Value as DistributeRefTuple>::Output>,
+    Out,
+    Sch,
+    Value,
+>;
 
 impl<'scope, 'a, FnType, Out, Sch, Value> From<FnType>
     for NoErrLetValue<'scope, 'a, FnType, Out, Sch, Value>
 where
     'a: 'scope,
-    FnType: BiFunctor<'a, Sch, &'scope Value, Output = Out>,
+    FnType: BiFunctor<'a, Sch, <&'scope mut Value as DistributeRefTuple>::Output, Output = Out>,
     Sch: Scheduler,
     Value: 'a + Tuple,
+    &'scope mut Value: DistributeRefTuple,
     Out: 'scope + TypedSender<'scope>,
     Out::Value: 'a,
     (Value, Out::Value): TupleCat,
@@ -113,16 +131,23 @@ where
     }
 }
 
-type NoErrClosureLetValue<'scope, 'a, FnType, Out, Sch, Value> =
-    NoErrLetValue<'scope, 'a, BiClosure<'a, FnType, Out, Sch, &'scope Value>, Out, Sch, Value>;
+type NoErrClosureLetValue<'scope, 'a, FnType, Out, Sch, Value> = NoErrLetValue<
+    'scope,
+    'a,
+    BiClosure<'a, FnType, Out, Sch, <&'scope mut Value as DistributeRefTuple>::Output>,
+    Out,
+    Sch,
+    Value,
+>;
 
 impl<'scope, 'a, FnType, Out, Sch, Value> From<FnType>
     for NoErrClosureLetValue<'scope, 'a, FnType, Out, Sch, Value>
 where
     'a: 'scope,
-    FnType: 'a + FnOnce(Sch, &'scope Value) -> Out,
+    FnType: 'a + FnOnce(Sch, <&'scope mut Value as DistributeRefTuple>::Output) -> Out,
     Sch: Scheduler,
     Value: 'a + Tuple,
+    &'scope mut Value: DistributeRefTuple,
     Out: 'scope + TypedSender<'scope>,
     Out::Value: 'a,
     (Value, Out::Value): TupleCat,
@@ -136,9 +161,11 @@ where
 impl<'scope, 'a, FnType, Out, Sch, Value> Sender for LetValue<'scope, 'a, FnType, Out, Sch, Value>
 where
     'a: 'scope,
-    FnType: 'a + BiFunctor<'a, Sch, &'scope Value, Output = Result<Out>>,
+    FnType: 'a
+        + BiFunctor<'a, Sch, <&'scope mut Value as DistributeRefTuple>::Output, Output = Result<Out>>,
     Sch: Scheduler,
     Value: 'a + Tuple,
+    &'scope mut Value: DistributeRefTuple,
     Out: 'scope + TypedSender<'scope>,
     Out::Value: 'a,
     (Value, Out::Value): TupleCat,
@@ -151,9 +178,11 @@ impl<'scope, 'a, NestedSender, FnType, Out, Sch, Value> BindSender<NestedSender>
 where
     'a: 'scope,
     NestedSender: TypedSender<'a, Scheduler = Sch, Value = Value>,
-    FnType: 'a + BiFunctor<'a, Sch, &'scope Value, Output = Result<Out>>,
+    FnType: 'a
+        + BiFunctor<'a, Sch, <&'scope mut Value as DistributeRefTuple>::Output, Output = Result<Out>>,
     Sch: Scheduler,
     Value: 'a + Tuple,
+    &'scope mut Value: DistributeRefTuple,
     Out: 'scope + TypedSender<'scope>,
     Out::Value: 'a,
     (Value, Out::Value): TupleCat,
@@ -174,9 +203,11 @@ pub struct LetValueTS<'scope, 'a, NestedSender, FnType, Out, Sch, Value>
 where
     'a: 'scope,
     NestedSender: TypedSender<'a, Scheduler = Sch, Value = Value>,
-    FnType: 'a + BiFunctor<'a, Sch, &'scope Value, Output = Result<Out>>,
+    FnType: 'a
+        + BiFunctor<'a, Sch, <&'scope mut Value as DistributeRefTuple>::Output, Output = Result<Out>>,
     Sch: Scheduler,
     Value: 'a + Tuple,
+    &'scope mut Value: DistributeRefTuple,
     Out: 'scope + TypedSender<'scope>,
     Out::Value: 'a,
     (Value, Out::Value): TupleCat,
@@ -193,9 +224,11 @@ where
     BindSenderImpl: BindSender<Self>,
     'a: 'scope,
     NestedSender: TypedSender<'a, Scheduler = Sch, Value = Value>,
-    FnType: 'a + BiFunctor<'a, Sch, &'scope Value, Output = Result<Out>>,
+    FnType: 'a
+        + BiFunctor<'a, Sch, <&'scope mut Value as DistributeRefTuple>::Output, Output = Result<Out>>,
     Sch: Scheduler,
     Value: 'a + Tuple,
+    &'scope mut Value: DistributeRefTuple,
     Out: 'scope + TypedSender<'scope>,
     Out::Value: 'a,
     (Value, Out::Value): TupleCat,
@@ -213,9 +246,11 @@ impl<'scope, 'a, NestedSender, FnType, Out, Sch, Value> TypedSender<'a>
 where
     'a: 'scope,
     NestedSender: TypedSender<'a, Scheduler = Sch, Value = Value>,
-    FnType: 'a + BiFunctor<'a, Sch, &'scope Value, Output = Result<Out>>,
+    FnType: 'a
+        + BiFunctor<'a, Sch, <&'scope mut Value as DistributeRefTuple>::Output, Output = Result<Out>>,
     Sch: Scheduler,
     Value: 'a + Tuple,
+    &'scope mut Value: DistributeRefTuple,
     Out: 'scope + TypedSender<'scope>,
     Out::Value: 'a,
     (Value, Out::Value): TupleCat,
@@ -237,9 +272,11 @@ where
             ScopeImpl,
             LetValueReceiver<'scope, 'a, ScopeImpl, ReceiverImpl, FnType, Out, Sch, Value>,
         >,
-    FnType: 'a + BiFunctor<'a, Sch, &'scope Value, Output = Result<Out>>,
+    FnType: 'a
+        + BiFunctor<'a, Sch, <&'scope mut Value as DistributeRefTuple>::Output, Output = Result<Out>>,
     Sch: Scheduler,
     Value: 'a + Tuple,
+    &'scope mut Value: DistributeRefTuple,
     Out: 'scope
         + TypedSender<'scope>
         + for<'nested_scope> TypedSenderConnect<
@@ -293,9 +330,11 @@ where
     'a: 'scope,
     ScopeImpl: Scope<'scope, 'a>,
     NestedReceiver: 'scope + ReceiverOf<Out::Scheduler, <(Value, Out::Value) as TupleCat>::Output>,
-    FnType: 'a + BiFunctor<'a, Sch, &'scope Value, Output = Result<Out>>,
+    FnType: 'a
+        + BiFunctor<'a, Sch, <&'scope mut Value as DistributeRefTuple>::Output, Output = Result<Out>>,
     Sch: Scheduler,
     Value: 'a + Tuple,
+    &'scope mut Value: DistributeRefTuple,
     Out: 'scope
         + TypedSender<'scope>
         + for<'nested_scope> TypedSenderConnect<
@@ -343,9 +382,11 @@ where
     'a: 'scope,
     ScopeImpl: Scope<'scope, 'a>,
     NestedReceiver: 'scope + ReceiverOf<Out::Scheduler, <(Value, Out::Value) as TupleCat>::Output>,
-    FnType: 'a + BiFunctor<'a, Sch, &'scope Value, Output = Result<Out>>,
+    FnType: 'a
+        + BiFunctor<'a, Sch, <&'scope mut Value as DistributeRefTuple>::Output, Output = Result<Out>>,
     Sch: Scheduler,
     Value: 'a + Tuple,
+    &'scope mut Value: DistributeRefTuple,
     Out: 'scope
         + TypedSender<'scope>
         + for<'nested_scope> TypedSenderConnect<
@@ -396,9 +437,11 @@ where
     'a: 'scope,
     ScopeImpl: Scope<'scope, 'a>,
     NestedReceiver: 'scope + ReceiverOf<Out::Scheduler, <(Value, Out::Value) as TupleCat>::Output>,
-    FnType: 'a + BiFunctor<'a, Sch, &'scope Value, Output = Result<Out>>,
+    FnType: 'a
+        + BiFunctor<'a, Sch, <&'scope mut Value as DistributeRefTuple>::Output, Output = Result<Out>>,
     Sch: Scheduler,
     Value: 'a + Tuple,
+    &'scope mut Value: DistributeRefTuple,
     Out: 'scope
         + TypedSender<'scope>
         + for<'nested_scope> TypedSenderConnect<
@@ -438,6 +481,7 @@ where
         let local_receiver_with_value = LocalReceiverWithValue::new(value, self.nested);
         let (local_scope, local_receiver, rcv_ref) =
             self.scope.new_scope(local_receiver_with_value);
+
         let mut values_ref = ScopedRefMut::map(rcv_ref, |rcv| rcv.values_ref());
         let values_ref: &'scope mut Value = unsafe {
             // Might want to not do this... instead pass the values_ref straight to the function.
@@ -445,6 +489,8 @@ where
             // 'env and State need to get lost, so the type becomes `ScopedRefMut<'scope, Value>`.
             mem::transmute::<&mut Value, &'scope mut Value>(&mut *values_ref)
         };
+        let values_ref = DistributeRefTuple::distribute(values_ref);
+
         match self.fn_impl.tuple_invoke(sch, values_ref) {
             Ok(local_sender) => local_sender.connect(&local_scope, local_receiver).start(),
             Err(error) => local_receiver.set_error(error),
@@ -526,3 +572,69 @@ where
         self.rcv.set_value(sch, (*self.value, value).cat());
     }
 }
+
+pub trait DistributeRefTuple {
+    type Output;
+
+    fn distribute(_: Self) -> Self::Output;
+}
+
+macro_rules! make_distribute_ref_tuple {
+    () => {
+        impl DistributeRefTuple for &mut () {
+            type Output = ();
+
+            fn distribute(_: Self) -> Self::Output {
+                ()
+            }
+        }
+
+        impl DistributeRefTuple for &() {
+            type Output = ();
+
+            fn distribute(_: Self) -> Self::Output {
+                ()
+            }
+        }
+    };
+    ($v:ident : $T:ident) => {
+        impl<'a, $T> DistributeRefTuple for &'a mut ($T,) {
+            type Output = (&'a mut $T,);
+
+            fn distribute(x: Self) -> Self::Output {
+                let ($v,) = x;
+                ($v,)
+            }
+        }
+
+        impl<'a, $T> DistributeRefTuple for &'a ($T,) {
+            type Output = (&'a $T,);
+
+            fn distribute(x: Self) -> Self::Output {
+                let ($v,) = x;
+                ($v,)
+            }
+        }
+    };
+    ($($v:ident : $T:ident),+) => {
+        impl<'a, $($T),+> DistributeRefTuple for &'a mut ($($T),+) {
+            type Output = ($(&'a mut $T),+);
+
+            fn distribute(x: Self) -> Self::Output {
+                let ($($v),+) = x;
+                ($($v),+)
+            }
+        }
+
+        impl<'a, $($T),+> DistributeRefTuple for &'a ($($T),+) {
+            type Output = ($(&'a $T),+);
+
+            fn distribute(x: Self) -> Self::Output {
+                let ($($v),+) = x;
+                ($($v),+)
+            }
+        }
+    };
+}
+
+tuple_impls!(make_distribute_ref_tuple);

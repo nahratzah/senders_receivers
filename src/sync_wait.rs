@@ -39,11 +39,11 @@ impl<Sch: Scheduler, Tpl: Tuple> ReceiverOf<Sch, Tpl> for NoSendReceiver<Tpl> {
     }
 }
 
-pub struct SendReceiver<Tpl: Tuple + Send + 'static> {
+pub struct SendReceiver<Tpl: Tuple + Send> {
     tx: mpsc::SyncSender<SyncWaitOutcome<Tpl>>,
 }
 
-impl<Tpl: Tuple + Send + 'static> Receiver for SendReceiver<Tpl> {
+impl<Tpl: Tuple + Send> Receiver for SendReceiver<Tpl> {
     fn set_done(self) {
         self.tx
             .send(SyncWaitOutcome::Done)
@@ -57,11 +57,72 @@ impl<Tpl: Tuple + Send + 'static> Receiver for SendReceiver<Tpl> {
     }
 }
 
-impl<Sch: Scheduler, Tpl: Tuple + Send + 'static> ReceiverOf<Sch, Tpl> for SendReceiver<Tpl> {
+impl<Sch: Scheduler, Tpl: Tuple + Send> ReceiverOf<Sch, Tpl> for SendReceiver<Tpl> {
     fn set_value(self, _: Sch, values: Tpl) {
         self.tx
             .send(SyncWaitOutcome::Value(values))
             .expect("send must succeed");
+    }
+}
+
+/// Trait that implements the `sync_wait` method.
+pub trait SyncWait<'a, Value>
+where
+    Value: Tuple,
+{
+    /// Execute a [TypedSender], and yield the outcome of the operation.
+    ///
+    /// The return type is a `Result<Option<..>, Error>`.  
+    /// If the typed sender yields an error, it'll be in the error position of the Result.  
+    /// Otherwise, if the operation is canceled (`done` signal), an empty Option will be returned.  
+    /// Otherwise the operation succeeds, and an `Ok(Some(..))` is returned.
+    ///
+    /// This function requires that the send operation completes on the same thread.
+    /// (And without using a queue-scheduler.)
+    /// It'll accept a value that doesn't implement [Send] (for example [Rc](std::rc::Rc) values).
+    /// If you do need to cross threads, you'll need to use [sync_wait_send] instead.
+    ///
+    /// Example:
+    /// ```
+    /// use senders_receivers::{Just, SyncWait};
+    /// use std::rc::Rc;
+    ///
+    /// let sender = Just::from((Rc::new(String::from("bla")),));
+    /// match sender.sync_wait() {
+    ///     Err(e) => println!("error signal: {:?}", e),
+    ///     Ok(None) => println!("done signal"),
+    ///     Ok(Some(tuple)) => println!("value signal: {:?}", tuple), // tuple: Rc<String> holding "bla"
+    /// };
+    /// ```
+    fn sync_wait(self) -> Result<Option<Value>>;
+}
+
+impl<'a, Value, T> SyncWait<'a, Value> for T
+where
+    Value: 'a + Tuple,
+    T: 'a
+        + TypedSender<'a>
+        + for<'scope> TypedSenderConnect<
+            'scope,
+            'a,
+            ScopeImpl<'scope, 'a, ScopeDataPtr>,
+            NoSendReceiver<Value>,
+        >,
+    NoSendReceiver<Value>:
+        ReceiverOf<<T as TypedSender<'a>>::Scheduler, <T as TypedSender<'a>>::Value>,
+{
+    fn sync_wait(self) -> Result<Option<Value>> {
+        type SenderType<Value> = same_thread_channel::Sender<SyncWaitOutcome<Value>>;
+        type ReceiverType<Value> = same_thread_channel::Receiver<SyncWaitOutcome<Value>>;
+
+        let (tx, rx): (SenderType<Value>, ReceiverType<Value>) = same_thread_channel::channel(1);
+        let receiver = NoSendReceiver { tx };
+        scope(move |scope: &ScopeImpl<'_, 'a, ScopeDataPtr>| self.connect(scope, receiver).start());
+        match rx.recv().expect("a single value must be delivered") {
+            SyncWaitOutcome::Value(tuple) => Ok(Some(tuple)),
+            SyncWaitOutcome::Error(error) => Err(error),
+            SyncWaitOutcome::Done => Ok(None),
+        }
     }
 }
 
@@ -104,8 +165,8 @@ where
     type ReceiverType<Value> = same_thread_channel::Receiver<SyncWaitOutcome<Value>>;
 
     let (tx, rx): (
-        SenderType<SenderImpl::Value>,
-        ReceiverType<SenderImpl::Value>,
+        SenderType<<SenderImpl as TypedSender<'a>>::Value>,
+        ReceiverType<<SenderImpl as TypedSender<'a>>::Value>,
     ) = same_thread_channel::channel(1);
     let receiver = NoSendReceiver { tx };
     scope(move |scope: &ScopeImpl<'_, 'a, ScopeDataPtr>| sender.connect(scope, receiver).start());
@@ -113,6 +174,69 @@ where
         SyncWaitOutcome::Value(tuple) => Ok(Some(tuple)),
         SyncWaitOutcome::Error(error) => Err(error),
         SyncWaitOutcome::Done => Ok(None),
+    }
+}
+
+/// Trait that implements the `sync_wait_send` method.
+pub trait SyncWaitSend<'a, Value>
+where
+    Value: Tuple,
+{
+    /// Execute a [TypedSender], and yield the outcome of the operation.
+    ///
+    /// The return type is a `Result<Option<..>, Error>`.  
+    /// If the typed sender yields an error, it'll be in the error position of the Result.  
+    /// Otherwise, if the operation is canceled (`done` signal), an empty Option will be returned.  
+    /// Otherwise the operation succeeds, and an `Ok(Some(..))` is returned.
+    ///
+    /// This function requires that the send operation completes on the same thread.
+    /// (And without using a queue-scheduler.)
+    /// It'll accept a value that doesn't implement [Send] (for example [Rc](std::rc::Rc) values).
+    /// If you do need to cross threads, you'll need to use [sync_wait_send] instead.
+    ///
+    /// Example:
+    /// ```
+    /// use senders_receivers::{Just, SyncWait};
+    /// use std::rc::Rc;
+    ///
+    /// let sender = Just::from((Rc::new(String::from("bla")),));
+    /// match sender.sync_wait() {
+    ///     Err(e) => println!("error signal: {:?}", e),
+    ///     Ok(None) => println!("done signal"),
+    ///     Ok(Some(tuple)) => println!("value signal: {:?}", tuple), // tuple: Rc<String> holding "bla"
+    /// };
+    /// ```
+    fn sync_wait_send(self) -> Result<Option<Value>>;
+}
+
+impl<'a, Value, T> SyncWaitSend<'a, Value> for T
+where
+    Value: 'a + Tuple + Send,
+    T: 'a
+        + TypedSender<'a>
+        + for<'scope> TypedSenderConnect<
+            'scope,
+            'a,
+            ScopeImpl<'scope, 'a, ScopeDataSendPtr>,
+            SendReceiver<Value>,
+        >,
+    SendReceiver<Value>:
+        ReceiverOf<<T as TypedSender<'a>>::Scheduler, <T as TypedSender<'a>>::Value>,
+{
+    fn sync_wait_send(self) -> Result<Option<Value>> {
+        type SenderType<Value> = mpsc::SyncSender<SyncWaitOutcome<Value>>;
+        type ReceiverType<Value> = mpsc::Receiver<SyncWaitOutcome<Value>>;
+
+        let (tx, rx): (SenderType<Value>, ReceiverType<Value>) = mpsc::sync_channel(1);
+        let receiver = SendReceiver { tx };
+        scope_send(move |scope: &ScopeImpl<'_, 'a, ScopeDataSendPtr>| {
+            self.connect(scope, receiver).start()
+        });
+        match rx.recv().expect("a single value must be delivered") {
+            SyncWaitOutcome::Value(tuple) => Ok(Some(tuple)),
+            SyncWaitOutcome::Error(error) => Err(error),
+            SyncWaitOutcome::Done => Ok(None),
+        }
     }
 }
 

@@ -20,17 +20,17 @@ use std::ops::BitOr;
 /// The [UponError::from] implementations use [ImmediateScheduler] as their scheduler.
 /// Example:
 /// ```
-/// use senders_receivers::{Error, ImmediateScheduler, JustError, UponError, sync_wait, new_error};
+/// use senders_receivers::{Error, ImmediateScheduler, JustError, UponError, SyncWait, new_error};
 /// use std::io;
 ///
 /// let sender = JustError::<ImmediateScheduler, (String,)>::new(new_error(io::Error::new(io::ErrorKind::Other, "oh no!")))
 ///              | UponError::from(|e: Error| (format!("error: {:?}", e),));
-/// println!("result: {}", sync_wait(sender).unwrap().unwrap().0);
+/// println!("result: {}", sender.sync_wait().unwrap().unwrap().0);
 /// ```
 ///
 /// If a specific scheduler is required, the [UponError::with_scheduler] constructor is the one to use:
 /// ```
-/// use senders_receivers::{Error, ImmediateScheduler, JustError, UponError, Transfer, WithScheduler, sync_wait_send, new_error};
+/// use senders_receivers::{Error, ImmediateScheduler, JustError, UponError, Transfer, WithScheduler, SyncWaitSend, new_error};
 /// use std::io;
 /// use threadpool::ThreadPool;
 ///
@@ -38,12 +38,12 @@ use std::ops::BitOr;
 /// let sender = JustError::<ImmediateScheduler, (String,)>::new(new_error(io::Error::new(io::ErrorKind::Other, "oh no!")))
 ///              | Transfer::new(pool.clone())
 ///              | UponError::with_scheduler(pool.clone(), |e: Error| (format!("error: {:?}", e),));
-/// println!("result: {}", sync_wait_send(sender).unwrap().unwrap().0);
+/// println!("result: {}", sender.sync_wait_send().unwrap().unwrap().0);
 /// ```
 ///
 /// If you wish to handle a specific error only, the way to do that is:
 /// ```
-/// use senders_receivers::{Error, ImmediateScheduler, JustError, UponError, sync_wait, new_error};
+/// use senders_receivers::{Error, ImmediateScheduler, JustError, UponError, SyncWait, new_error};
 /// use std::io;
 ///
 /// let sender = JustError::<ImmediateScheduler, (String,)>::new(new_error(io::Error::new(io::ErrorKind::Other, "oh no!")))
@@ -54,7 +54,7 @@ use std::ops::BitOr;
 ///                      None => Err(e),
 ///                    }
 ///              });
-/// println!("result: {}", sync_wait(sender).unwrap().unwrap().0);
+/// println!("result: {}", sender.sync_wait().unwrap().unwrap().0);
 /// ```
 pub struct UponError<'a, FnType, Sch, Out>
 where

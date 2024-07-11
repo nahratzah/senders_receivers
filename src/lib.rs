@@ -133,7 +133,7 @@ pub use let_value::LetValue;
 pub use refs::{ScopedRef, ScopedRefMut};
 pub use scheduler::{ImmediateScheduler, Scheduler, WithScheduler};
 pub use start_detached::start_detached;
-pub use sync_wait::{sync_wait, sync_wait_send};
+pub use sync_wait::{sync_wait, sync_wait_send, SyncWait, SyncWaitSend};
 pub use then::Then;
 pub use traits::{
     BindSender, OperationState, Receiver, ReceiverOf, Sender, TypedSender, TypedSenderConnect,

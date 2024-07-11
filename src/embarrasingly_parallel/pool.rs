@@ -103,7 +103,7 @@ impl ThreadPool {
     {
         start_detached(
             self.schedule()
-                | LetValue::from(move |sch: ThreadLocalPool, _: &()| {
+                | LetValue::from(move |sch: ThreadLocalPool, _: ()| {
                     f(sch);
                     JustDone::<ImmediateScheduler, ()>::default()
                 }),
@@ -119,7 +119,7 @@ impl ThreadPool {
             let f = f.clone();
             start_detached(
                 i.0.schedule()
-                    | LetValue::from(move |sch: ThreadLocalPool, _: &()| {
+                    | LetValue::from(move |sch: ThreadLocalPool, _: ()| {
                         f(sch);
                         JustDone::<ImmediateScheduler, ()>::default()
                     }),

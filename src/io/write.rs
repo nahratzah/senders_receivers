@@ -19,17 +19,19 @@ where
     ///
     /// ```
     /// use senders_receivers::io::Write;
-    /// use senders_receivers::{sync_wait, ImmediateScheduler, Just, LetValue, Scheduler};
+    /// use senders_receivers::{SyncWait, ImmediateScheduler, Just, LetValue, Then, Scheduler};
     /// use std::fs::File;
     ///
     /// fn do_the_thing<'a>(file: &'a mut File) {
-    ///     let wlen = sync_wait(
+    ///     let wlen = (
     ///         Just::from((file,))
-    ///             | LetValue::from(|sch, (file,): (&'a mut File,)| file.write(sch, b"abcd")),
-    ///     )
-    ///     .unwrap()
-    ///     .unwrap()
-    ///     .0;
+    ///             | LetValue::from(|sch, (file,): (&mut &'a mut File,)| file.write(sch, b"abcd"))
+    ///             | Then::from(|(file, wlen)| (wlen,))
+    ///         )
+    ///         .sync_wait()
+    ///         .unwrap()
+    ///         .unwrap()
+    ///         .0;
     ///     println!("wrote {} bytes", wlen);
     /// }
     /// ```
