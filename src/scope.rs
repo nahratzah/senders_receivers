@@ -147,7 +147,8 @@ pub trait ScopeSend<'scope, 'env>: Scope<'scope, 'env> + Send + Sync
 where
     'env: 'scope,
 {
-    type NewScopeSendType<'nested_scope, Sch, Values, Rcv>: ScopeSend<'nested_scope, 'scope>
+    // If Sch, Values, and Rcv are all Send, then this type will be Send+Sync.
+    type NewScopeSendType<'nested_scope, Sch, Values, Rcv>: Scope<'nested_scope, 'scope>
     where
         'scope: 'nested_scope,
         Sch: Scheduler,
@@ -217,7 +218,7 @@ where
 impl<'scope, 'env, State> Scope<'scope, 'env> for ScopeImpl<'scope, 'env, State>
 where
     'env: 'scope,
-    State: 'static + ScopeData,
+    State: ScopeData,
 {
     type NewScopeType<'nested_scope, Sch, Values, Rcv> = ScopeImpl<'nested_scope, 'scope, receiver::ScopeDataNoSendPtr<State, Sch, Values, Rcv>> where 'scope:'nested_scope,Sch:Scheduler,Values:Tuple,Rcv:'scope+ReceiverOf<Sch,Values>;
     type NewScopeReceiver<Sch, Values, Rcv> = InnerScopeReceiver<State, Sch, Values, Rcv> where Sch:Scheduler,Values:Tuple,Rcv:'scope+ReceiverOf<Sch,Values>;
@@ -227,14 +228,18 @@ where
         ReceiverType: 'scope + ReceiverOf<Sch, ()>,
         Sch: Scheduler,
     {
-        let rcv_fn: Option<Box<dyn FnOnce(ScopeFnArgument<Sch>)>> =
+        let rcv_fn: Option<Box<dyn FnOnce(ScopeFnArgument<Sch>)>> = {
+            let data = self.data.clone();
             Some(Box::new(move |scope_arg: ScopeFnArgument<Sch>| {
-                match scope_arg {
-                    ScopeFnArgument::ValueSignal(sch) => rcv.set_value(sch, ()),
-                    ScopeFnArgument::ErrorSignal(err) => rcv.set_error(err),
-                    ScopeFnArgument::DoneSignal => rcv.set_done(),
-                };
-            }));
+                data.run(move || {
+                    match scope_arg {
+                        ScopeFnArgument::ValueSignal(sch) => rcv.set_value(sch, ()),
+                        ScopeFnArgument::ErrorSignal(err) => rcv.set_error(err),
+                        ScopeFnArgument::DoneSignal => rcv.set_done(),
+                    };
+                });
+            }))
+        };
 
         // Remove the lifetime constraint.
         let rcv_fn = unsafe {
@@ -246,7 +251,7 @@ where
             .unwrap()
         };
 
-        ScopedReceiver::new(self.data.clone(), ScopeFnReceiver::new(rcv_fn))
+        ScopedReceiver::new(ScopeFnReceiver::new(rcv_fn))
     }
 
     fn new_scope<'nested_scope, Sch, Value, Rcv>(
@@ -269,7 +274,7 @@ where
 impl<'scope, 'env, State> ScopeSend<'scope, 'env> for ScopeImpl<'scope, 'env, State>
 where
     'env: 'scope,
-    State: 'static + Send + Sync + ScopeData,
+    State: Send + Sync + ScopeData,
 {
     type NewScopeSendType<'nested_scope, Sch, Values, Rcv> = ScopeImpl<'nested_scope, 'scope, receiver::ScopeDataSendPtr<State, Sch, Values, Rcv>> where 'scope:'nested_scope,Sch:Scheduler,Values:Tuple,Rcv:'scope+ReceiverOf<Sch,Values>;
     type NewScopeSendReceiver<Sch, Values, Rcv> = InnerScopeSendReceiver<State, Sch, Values, Rcv> where Sch:Scheduler,Values:Tuple,Rcv:'scope+ReceiverOf<Sch,Values>;
@@ -282,14 +287,18 @@ where
         ReceiverType: 'scope + ReceiverOf<Sch, ()> + Send,
         Sch: Scheduler,
     {
-        let rcv_fn: Option<Box<dyn Send + FnOnce(ScopeFnArgument<Sch>)>> =
+        let rcv_fn: Option<Box<dyn Send + FnOnce(ScopeFnArgument<Sch>)>> = {
+            let data = self.data.clone();
             Some(Box::new(move |scope_arg: ScopeFnArgument<Sch>| {
-                match scope_arg {
-                    ScopeFnArgument::ValueSignal(sch) => rcv.set_value(sch, ()),
-                    ScopeFnArgument::ErrorSignal(err) => rcv.set_error(err),
-                    ScopeFnArgument::DoneSignal => rcv.set_done(),
-                };
-            }));
+                data.run(move || {
+                    match scope_arg {
+                        ScopeFnArgument::ValueSignal(sch) => rcv.set_value(sch, ()),
+                        ScopeFnArgument::ErrorSignal(err) => rcv.set_error(err),
+                        ScopeFnArgument::DoneSignal => rcv.set_done(),
+                    };
+                });
+            }))
+        };
 
         // Remove the lifetime constraint.
         let rcv_fn = unsafe {
@@ -301,7 +310,7 @@ where
             .unwrap()
         };
 
-        ScopedReceiverSend::new(self.data.clone(), ScopeFnSendReceiver::new(rcv_fn))
+        ScopedReceiverSend::new(ScopeFnSendReceiver::new(rcv_fn))
     }
 
     fn new_scope_send<'nested_scope, Sch, Value, Rcv>(

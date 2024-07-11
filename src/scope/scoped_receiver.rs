@@ -1,10 +1,8 @@
 use crate::errors::Error;
 use crate::scheduler::Scheduler;
-use crate::scope::scope_data::ScopeData;
 use crate::scope::scope_fn_argument::ScopeFnArgument;
 use crate::scope::scope_fn_receiver::ScopeFnReceiver;
 use crate::traits::{Receiver, ReceiverOf};
-use std::fmt;
 use std::marker::PhantomData;
 
 type NestedReceiver<Sch> = ScopeFnReceiver<Sch, Box<dyn FnOnce(ScopeFnArgument<Sch>)>>;
@@ -13,25 +11,21 @@ type NestedReceiver<Sch> = ScopeFnReceiver<Sch, Box<dyn FnOnce(ScopeFnArgument<S
 ///
 /// Signals are forwarded to the wrapped receiver.
 /// The wrapped receiver lifetime is valid as long as this type exists.
-pub struct ScopedReceiver<Sch, StatePtr>
+pub struct ScopedReceiver<Sch>
 where
     Sch: Scheduler,
-    StatePtr: ScopeData,
 {
     phantom: PhantomData<fn(Sch)>,
-    data: StatePtr,
     nested: Option<NestedReceiver<Sch>>,
 }
 
-impl<Sch, StatePtr> ScopedReceiver<Sch, StatePtr>
+impl<Sch> ScopedReceiver<Sch>
 where
     Sch: Scheduler,
-    StatePtr: ScopeData,
 {
-    pub(super) fn new(data: StatePtr, nested: NestedReceiver<Sch>) -> Self {
+    pub(super) fn new(nested: NestedReceiver<Sch>) -> Self {
         ScopedReceiver {
             phantom: PhantomData,
-            data,
             nested: Some(nested),
         }
     }
@@ -42,15 +36,13 @@ where
     where
         F: FnOnce(NestedReceiver<Sch>),
     {
-        let nested_ref = &mut self.nested;
-        self.data.run(move || f(nested_ref.take().unwrap()));
+        f(self.nested.take().unwrap());
     }
 }
 
-impl<Sch, StatePtr> Receiver for ScopedReceiver<Sch, StatePtr>
+impl<Sch> Receiver for ScopedReceiver<Sch>
 where
     Sch: Scheduler,
-    StatePtr: ScopeData,
 {
     fn set_done(self) {
         self.invoke(move |r| r.set_done())
@@ -61,22 +53,11 @@ where
     }
 }
 
-impl<Sch, StatePtr> ReceiverOf<Sch, ()> for ScopedReceiver<Sch, StatePtr>
+impl<Sch> ReceiverOf<Sch, ()> for ScopedReceiver<Sch>
 where
     Sch: Scheduler,
-    StatePtr: ScopeData,
 {
     fn set_value(self, scheduler: Sch, _: ()) {
         self.invoke(move |r| r.set_value(scheduler, ()))
-    }
-}
-
-impl<Sch, StatePtr> fmt::Debug for ScopedReceiver<Sch, StatePtr>
-where
-    Sch: Scheduler,
-    StatePtr: ScopeData,
-{
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.data.fmt(f)
     }
 }
