@@ -3,9 +3,9 @@
 //! The idea is taken from [std::thread::scope], although the implementation is not entirely the same.
 //! - Different: we use [mem::transmute] to change lifetime.
 //! - Same: we use [catch_unwind] to notice if the receiver panics, and if it does we'll propagate it to the caller.
-use crate::errors::Tuple;
 use crate::scheduler::Scheduler;
 use crate::traits::ReceiverOf;
+use crate::tuple::Tuple;
 use std::fmt;
 use std::marker::PhantomData;
 use std::mem;

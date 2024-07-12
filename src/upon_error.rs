@@ -1,10 +1,11 @@
-use crate::errors::{Error, Result, Tuple};
+use crate::errors::{Error, Result};
 use crate::functor::{Closure, Functor, NoErrFunctor};
 use crate::scheduler::{ImmediateScheduler, Scheduler, WithScheduler};
 use crate::scope::Scope;
 use crate::traits::{
     BindSender, OperationState, Receiver, ReceiverOf, Sender, TypedSender, TypedSenderConnect,
 };
+use crate::tuple::Tuple;
 use std::convert::From;
 use std::marker::PhantomData;
 use std::ops::BitOr;

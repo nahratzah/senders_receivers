@@ -1,4 +1,6 @@
 use crate::scope::Scope;
+use crate::tuple::tuple_impls;
+use crate::tuple::DistributeRefTuple;
 use std::fmt;
 use std::marker::PhantomData;
 use std::ops::{Deref, DerefMut};
@@ -274,3 +276,103 @@ where
             .finish_non_exhaustive()
     }
 }
+
+macro_rules! make_distribute_scoped_ref {
+    () => {
+        impl<'scope, 'env, State> DistributeRefTuple for ScopedRef<'scope, 'env, (), State>
+        where
+            'env: 'scope,
+            State: Scope<'scope, 'env>,
+        {
+            type Output = ();
+
+            fn distribute(_: Self) -> Self::Output {
+                ()
+            }
+        }
+
+        impl<'scope, 'env, State> DistributeRefTuple for ScopedRefMut<'scope, 'env, (), State>
+        where
+            'env: 'scope,
+            State: Scope<'scope, 'env>,
+        {
+            type Output = ();
+
+            fn distribute(_: Self) -> Self::Output {
+                ()
+            }
+        }
+    };
+    ($v:ident : $T:ident) => {
+        impl<'scope, 'env, $T, State> DistributeRefTuple for ScopedRef<'scope, 'env, ($T,), State>
+        where
+            'env: 'scope,
+            $T: 'scope + ?Sized,
+            State: Scope<'scope, 'env>,
+        {
+            type Output = (ScopedRef<'scope, 'env, $T, State>,);
+
+            fn distribute(x: Self) -> Self::Output {
+                (ScopedRef::map(x,|v: &($T,)| &v.0),)
+            }
+        }
+
+        impl<'scope, 'env, $T, State> DistributeRefTuple for ScopedRefMut<'scope, 'env, ($T,), State>
+        where
+            'env: 'scope,
+            $T: 'scope + ?Sized,
+            State: Scope<'scope, 'env>,
+        {
+            type Output = (ScopedRefMut<'scope, 'env, $T, State>,);
+
+            fn distribute(x: Self) -> Self::Output {
+                (ScopedRefMut::map(x, |v: &mut ($T,)| &mut v.0),)
+            }
+        }
+    };
+    ($($v:ident : $T:ident),+) => {
+        impl<'scope, 'env, $($T),+, State> DistributeRefTuple for ScopedRef<'scope, 'env, ($($T),+), State>
+        where
+            'env: 'scope,
+            $($T: 'scope,)+
+            for<'a> &'a ($($T),+): DistributeRefTuple<Output=($(&'a $T),+)>,
+            State: Scope<'scope, 'env>,
+        {
+            type Output = ($(ScopedRef<'scope, 'env, $T, State>),+);
+
+            fn distribute(x: Self) -> Self::Output {
+                let ($($v),+) = DistributeRefTuple::distribute(x.actual);
+                (
+                    $(ScopedRef{
+                        actual: $v,
+                        state: x.state.clone(),
+                        phantom: PhantomData,
+                    }),+
+                )
+            }
+        }
+
+        impl<'scope, 'env, $($T),+, State> DistributeRefTuple for ScopedRefMut<'scope, 'env, ($($T),+), State>
+        where
+            'env: 'scope,
+            $($T: 'scope,)+
+            for<'a> &'a mut ($($T),+): DistributeRefTuple<Output=($(&'a mut $T),+)>,
+            State: Scope<'scope, 'env>,
+        {
+            type Output = ($(ScopedRefMut<'scope, 'env, $T, State>),+);
+
+            fn distribute(x: Self) -> Self::Output {
+                let ($($v),+) = DistributeRefTuple::distribute(x.actual);
+                (
+                    $(ScopedRefMut{
+                        actual: $v,
+                        state: x.state.clone(),
+                        phantom: PhantomData,
+                    }),+
+                )
+            }
+        }
+    };
+}
+
+tuple_impls!(make_distribute_scoped_ref);

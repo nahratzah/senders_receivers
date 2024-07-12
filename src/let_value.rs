@@ -1,4 +1,4 @@
-use crate::errors::{tuple_impls, Error, Result, Tuple};
+use crate::errors::{Error, Result};
 use crate::functor::{BiClosure, BiFunctor, NoErrBiFunctor};
 use crate::refs::ScopedRefMut;
 use crate::scheduler::Scheduler;
@@ -6,7 +6,9 @@ use crate::scope::Scope;
 use crate::traits::{
     BindSender, OperationState, Receiver, ReceiverOf, Sender, TypedSender, TypedSenderConnect,
 };
-use crate::tuple_cat::TupleCat;
+use crate::tuple::DistributeRefTuple;
+use crate::tuple::Tuple;
+use crate::tuple::TupleCat;
 use std::marker::PhantomData;
 use std::mem;
 use std::ops::{BitOr, DerefMut};
@@ -572,69 +574,3 @@ where
         self.rcv.set_value(sch, (*self.value, value).cat());
     }
 }
-
-pub trait DistributeRefTuple {
-    type Output;
-
-    fn distribute(_: Self) -> Self::Output;
-}
-
-macro_rules! make_distribute_ref_tuple {
-    () => {
-        impl DistributeRefTuple for &mut () {
-            type Output = ();
-
-            fn distribute(_: Self) -> Self::Output {
-                ()
-            }
-        }
-
-        impl DistributeRefTuple for &() {
-            type Output = ();
-
-            fn distribute(_: Self) -> Self::Output {
-                ()
-            }
-        }
-    };
-    ($v:ident : $T:ident) => {
-        impl<'a, $T> DistributeRefTuple for &'a mut ($T,) {
-            type Output = (&'a mut $T,);
-
-            fn distribute(x: Self) -> Self::Output {
-                let ($v,) = x;
-                ($v,)
-            }
-        }
-
-        impl<'a, $T> DistributeRefTuple for &'a ($T,) {
-            type Output = (&'a $T,);
-
-            fn distribute(x: Self) -> Self::Output {
-                let ($v,) = x;
-                ($v,)
-            }
-        }
-    };
-    ($($v:ident : $T:ident),+) => {
-        impl<'a, $($T),+> DistributeRefTuple for &'a mut ($($T),+) {
-            type Output = ($(&'a mut $T),+);
-
-            fn distribute(x: Self) -> Self::Output {
-                let ($($v),+) = x;
-                ($($v),+)
-            }
-        }
-
-        impl<'a, $($T),+> DistributeRefTuple for &'a ($($T),+) {
-            type Output = ($(&'a $T),+);
-
-            fn distribute(x: Self) -> Self::Output {
-                let ($($v),+) = x;
-                ($($v),+)
-            }
-        }
-    };
-}
-
-tuple_impls!(make_distribute_ref_tuple);

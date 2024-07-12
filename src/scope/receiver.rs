@@ -1,9 +1,10 @@
-use crate::errors::{Error, Tuple};
+use crate::errors::Error;
 use crate::refs::ScopedRefMut;
 use crate::scheduler::Scheduler;
 use crate::scope::scope_data::ScopeData;
 use crate::scope::ScopeImpl;
 use crate::traits::{Receiver, ReceiverOf};
+use crate::tuple::Tuple;
 use std::cell::{OnceCell, RefCell};
 use std::fmt;
 use std::mem;

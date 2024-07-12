@@ -1,6 +1,7 @@
-use crate::errors::{Error, Tuple};
+use crate::errors::Error;
 use crate::scheduler::Scheduler;
 use crate::scope::Scope;
+use crate::tuple::Tuple;
 
 /// Common receiver logic.
 /// All receivers can accept the done signal, and the error signal.

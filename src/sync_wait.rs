@@ -1,10 +1,11 @@
-use crate::errors::{Error, Result, Tuple};
+use crate::errors::{Error, Result};
 use crate::scheduler::Scheduler;
 use crate::scope::scope_data::{ScopeDataPtr, ScopeDataSendPtr};
 use crate::scope::ScopeImpl;
 use crate::scope::{scope, scope_send};
 use crate::sync::same_thread_channel;
 use crate::traits::{OperationState, Receiver, ReceiverOf, TypedSender, TypedSenderConnect};
+use crate::tuple::Tuple;
 use std::sync::mpsc;
 
 enum SyncWaitOutcome<Tpl: Tuple> {

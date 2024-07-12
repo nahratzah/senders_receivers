@@ -1,9 +1,10 @@
-use crate::errors::{Error, Tuple};
+use crate::errors::Error;
 use crate::scheduler::Scheduler;
 use crate::scope::Scope;
 use crate::traits::{
     BindSender, OperationState, Receiver, ReceiverOf, Sender, TypedSender, TypedSenderConnect,
 };
+use crate::tuple::Tuple;
 use std::marker::PhantomData;
 use std::ops::BitOr;
 

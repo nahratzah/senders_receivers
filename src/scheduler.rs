@@ -1,10 +1,11 @@
-use crate::errors::{Error, Tuple};
+use crate::errors::Error;
 use crate::io::EnableDefaultIO;
 use crate::just::Just;
 use crate::just_done::JustDone;
 use crate::just_error::JustError;
 use crate::scope::{Scope, ScopeSend};
 use crate::traits::{BindSender, OperationState, ReceiverOf, TypedSender, TypedSenderConnect};
+use crate::tuple::Tuple;
 use std::marker::PhantomData;
 use std::ops::BitOr;
 use threadpool::ThreadPool;

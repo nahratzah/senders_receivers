@@ -121,11 +121,11 @@ mod sync_wait;
 mod then;
 mod traits;
 mod transfer;
-mod tuple_cat;
+pub mod tuple;
 mod upon_done;
 mod upon_error;
 
-pub use errors::{new_error, Error, Result, Tuple};
+pub use errors::{new_error, Error, Result};
 pub use just::Just;
 pub use just_done::JustDone;
 pub use just_error::JustError;

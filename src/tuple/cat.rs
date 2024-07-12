@@ -1,5 +1,23 @@
+/// Implement tuple concatenation.
+///
+/// This trait is implemented for any pair of tuples.
+/// ```
+/// use senders_receivers::tuple::TupleCat;
+///
+/// let x = (1, 2, 3);
+/// let y = (4, 5, 6);
+/// let x_and_y = (x, y).cat();
+/// ```
+///
+/// Note: due to rust not having variadic-arguments,
+/// we implement this using a macro,
+/// and thus the implementation only exists for up-to-16 elements.
+///
+/// Let me know if you need more, it's trivial to expand the size.
 pub trait TupleCat {
+    /// Result of the concatenation.
     type Output;
+    /// Perform the concatenation.
     fn cat(self) -> Self::Output;
 }
 

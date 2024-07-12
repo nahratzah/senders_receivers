@@ -1,7 +1,8 @@
-use crate::errors::{Error, Tuple};
+use crate::errors::Error;
 use crate::scheduler::Scheduler;
 use crate::scope::{detached_scope, ScopeDataSendPtr, ScopeImpl};
 use crate::traits::{OperationState, Receiver, ReceiverOf, TypedSender, TypedSenderConnect};
+use crate::tuple::Tuple;
 
 /// Start an operation, but don't wait for its completion.
 ///
