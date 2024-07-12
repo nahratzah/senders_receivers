@@ -143,30 +143,35 @@ where
         }
     }
 
-    // XXX filter_map copied from std::cell::RefMut::filter_map.
-    // It doesn't work. And I think that's because the code is lying,
-    // and the std::cell::RefMut::filter_map isn't actually implemented as it says.
-    //
-    // Reasons why I believe that:
-    // - the code is syntactically invalid, due to missing comma between the branches of the match statement.
-    // - the compiler reject the construct, citing that the reference is borrowed twice.
-    //
-    // The code: https://doc.rust-lang.org/src/core/cell.rs.html#1674-1688
-    //
-    ///// Convert the reference into a dependent reference.
-    ///// If the callback returns [None], the original reference will be returned in the [Err] result.
-    //pub fn filter_map<F, U>(r: Self, f: F) -> Result<ScopedRefMut<'scope, 'env, U, State>, Self>
-    //where F: FnOnce(&mut T) -> Option<&mut U>, U: ?Sized,
-    //{
-    //    match f(r.actual) {
-    //        Some(new_ref) =>
-    //            return Ok(ScopedRefMut{
-    //                actual: new_ref,
-    //                state: r.state,
-    //            }),
-    //        None => Err(r),
-    //    }
-    //}
+    /// Convert the reference into a dependent reference.
+    /// If the callback returns [None], the original reference will be returned in the [Err] result.
+    pub fn filter_map<F, U>(r: Self, f: F) -> Result<ScopedRefMut<'scope, 'env, U, State>, Self>
+    where
+        F: FnOnce(&mut T) -> Option<&mut U>,
+        U: ?Sized,
+    {
+        // Current borrow-checker can't do this without unsafe.
+        let raw_result = unsafe {
+            let x_ptr: *mut T = r.actual;
+            match f(&mut *x_ptr) {
+                Some(y) => Ok(y),
+                None => Err(&mut *x_ptr),
+            }
+        };
+
+        match raw_result {
+            Ok(new_ref) => Ok(ScopedRefMut {
+                actual: new_ref,
+                state: r.state,
+                phantom: PhantomData,
+            }),
+            Err(new_ref) => Err(ScopedRefMut {
+                actual: new_ref,
+                state: r.state,
+                phantom: PhantomData,
+            }),
+        }
+    }
 
     /// Split the reference in two references.
     pub fn map_split<F, U, V>(
