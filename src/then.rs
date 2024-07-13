@@ -1,7 +1,6 @@
 use crate::errors::{Error, Result};
 use crate::functor::{Closure, Functor, NoErrFunctor};
 use crate::scheduler::Scheduler;
-use crate::scope::Scope;
 use crate::traits::{
     BindSender, OperationState, Receiver, ReceiverOf, Sender, TypedSender, TypedSenderConnect,
 };
@@ -191,7 +190,6 @@ where
     NestedSender::Value: 'a,
     FnType: 'a + Functor<'a, NestedSender::Value, Output = Result<Out>>,
     Out: 'a + Tuple,
-    ScopeImpl: Scope<'scope, 'a>,
 {
     fn connect(self, scope: &ScopeImpl, receiver: ReceiverImpl) -> impl OperationState<'scope> {
         let wrapped_receiver = ThenWrappedReceiver {

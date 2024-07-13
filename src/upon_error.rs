@@ -1,7 +1,6 @@
 use crate::errors::{Error, Result};
 use crate::functor::{Closure, Functor, NoErrFunctor};
 use crate::scheduler::{ImmediateScheduler, Scheduler, WithScheduler};
-use crate::scope::Scope;
 use crate::traits::{
     BindSender, OperationState, Receiver, ReceiverOf, Sender, TypedSender, TypedSenderConnect,
 };
@@ -245,7 +244,7 @@ where
         ScopeImpl,
         ErrorReceiver<'a, ReceiverType, FnType, Sch::LocalScheduler, Out>,
     >,
-    ScopeImpl: 'scope + Scope<'scope, 'a>,
+    ScopeImpl: 'scope + Clone,
 {
     fn connect(self, scope: &ScopeImpl, receiver: ReceiverType) -> impl OperationState<'scope> {
         let receiver = ReceiverWrapper {
@@ -288,7 +287,6 @@ where
         ErrorReceiver<'a, NestedReceiver, FnType, Sch::LocalScheduler, Out>,
     >,
     Out: 'a + Tuple,
-    ScopeImpl: Scope<'scope, 'a>,
 {
     nested: NestedReceiver,
     fn_impl: FnType,
@@ -310,7 +308,6 @@ where
         ErrorReceiver<'a, NestedReceiver, FnType, Sch::LocalScheduler, Out>,
     >,
     Out: 'a + Tuple,
-    ScopeImpl: Scope<'scope, 'a>,
 {
     fn set_done(self) {
         self.nested.set_done()
@@ -345,7 +342,6 @@ where
         ErrorReceiver<'a, NestedReceiver, FnType, Sch::LocalScheduler, Out>,
     >,
     Out: 'a + Tuple,
-    ScopeImpl: Scope<'scope, 'a>,
 {
     fn set_value(self, sch: Sch::LocalScheduler, v: Out) {
         self.nested.set_value(sch, v);

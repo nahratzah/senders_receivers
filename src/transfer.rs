@@ -1,6 +1,5 @@
 use crate::errors::Error;
 use crate::scheduler::Scheduler;
-use crate::scope::Scope;
 use crate::traits::{
     BindSender, OperationState, Receiver, ReceiverOf, Sender, TypedSender, TypedSenderConnect,
 };
@@ -118,7 +117,7 @@ where
             ScopeImpl,
             ContinuingReceiverWrapper<ReceiverType, Sch::LocalScheduler, NestedSender::Value>,
         >,
-    ScopeImpl: 'scope + Scope<'scope, 'a>,
+    ScopeImpl: 'scope + Clone,
 {
     fn connect(self, scope: &ScopeImpl, nested: ReceiverType) -> impl OperationState<'scope> {
         let receiver = ReceiverWrapper {
@@ -151,7 +150,6 @@ where
     NestedReceiver: 'scope + ReceiverOf<Sch::LocalScheduler, Value>,
     Sch: Scheduler,
     Value: 'a + Tuple,
-    ScopeImpl: Scope<'scope, 'a>,
 {
     nested: NestedReceiver,
     target_scheduler: Sch,
@@ -166,7 +164,6 @@ where
     NestedReceiver: 'scope + ReceiverOf<Sch::LocalScheduler, Value>,
     Sch: Scheduler,
     Value: 'a + Tuple,
-    ScopeImpl: Scope<'scope, 'a>,
 {
     fn set_done(self) {
         self.nested.set_done()
@@ -192,7 +189,6 @@ where
         ScopeImpl,
         ContinuingReceiverWrapper<NestedReceiver, Sch::LocalScheduler, Value>,
     >,
-    ScopeImpl: Scope<'scope, 'a>,
 {
     fn set_value(self, _: PreviousScheduler, values: Value) {
         self.target_scheduler

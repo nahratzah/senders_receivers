@@ -3,7 +3,7 @@ use crate::io::EnableDefaultIO;
 use crate::just::Just;
 use crate::just_done::JustDone;
 use crate::just_error::JustError;
-use crate::scope::{Scope, ScopeSend};
+use crate::scope::{ScopeWrap, ScopeWrapSend};
 use crate::traits::{BindSender, OperationState, ReceiverOf, TypedSender, TypedSenderConnect};
 use crate::tuple::Tuple;
 use std::marker::PhantomData;
@@ -125,7 +125,7 @@ where
             <ImmediateSender as TypedSender<'a>>::Scheduler,
             <ImmediateSender as TypedSender<'a>>::Value,
         >,
-    ScopeImpl: Scope<'scope, 'a>,
+    ScopeImpl: ScopeWrap<<ImmediateSender as TypedSender<'a>>::Scheduler, ReceiverType>,
 {
     fn connect(self, _: &ScopeImpl, receiver: ReceiverType) -> impl OperationState<'scope> {
         ImmediateOperationState {
@@ -194,7 +194,7 @@ where
             <ThreadPoolSender as TypedSender<'a>>::Scheduler,
             <ThreadPoolSender as TypedSender<'a>>::Value,
         >,
-    ScopeImpl: ScopeSend<'scope, 'a>,
+    ScopeImpl: ScopeWrapSend<<ThreadPoolSender as TypedSender<'a>>::Scheduler, ReceiverType>,
 {
     fn connect(self, scope: &ScopeImpl, receiver: ReceiverType) -> impl OperationState<'scope> {
         ThreadPoolOperationState {
@@ -298,7 +298,7 @@ where
     'a: 'scope,
     ReceiverType: 'scope + ReceiverOf<Sch, ()>,
     Sch: Scheduler<LocalScheduler = Sch>,
-    ScopeImpl: Scope<'scope, 'a>,
+    ScopeImpl: ScopeWrap<Sch, ReceiverType>,
 {
     fn connect(self, _: &ScopeImpl, receiver: ReceiverType) -> impl OperationState<'scope> {
         LazySchedulerOperationState {

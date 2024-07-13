@@ -1,7 +1,7 @@
 use crate::embarrasingly_parallel::tasks::SendTask;
 use crate::embarrasingly_parallel::thread_local_pool::ThreadLocalPool;
 use crate::scheduler::Scheduler;
-use crate::scope::ScopeSend;
+use crate::scope::ScopeWrapSend;
 use crate::sync::cross_thread_channel;
 use crate::traits::{BindSender, OperationState, ReceiverOf, TypedSender, TypedSenderConnect};
 use std::marker::PhantomData;
@@ -99,7 +99,7 @@ impl<'scope, 'a, ScopeImpl, ReceiverType> TypedSenderConnect<'scope, 'a, ScopeIm
 where
     'a: 'scope,
     ReceiverType: 'scope + ReceiverOf<ThreadLocalPool, ()> + Send,
-    ScopeImpl: ScopeSend<'scope, 'a>,
+    ScopeImpl: ScopeWrapSend<ThreadLocalPool, ReceiverType>,
 {
     fn connect(self, scope: &ScopeImpl, receiver: ReceiverType) -> impl OperationState<'scope> {
         CrossThreadPoolOperationState {

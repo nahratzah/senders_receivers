@@ -102,6 +102,68 @@ where
 
 // Scope type
 
+pub trait ScopeWrap<Sch, ReceiverType>: Clone + fmt::Debug
+where
+    Sch: Scheduler,
+    ReceiverType: ReceiverOf<Sch, ()>,
+{
+    /// Wrap a function inside a scoped function.
+    ///
+    /// As long as the scoped-function remains in existence,
+    /// the scope will remain alive.
+    ///
+    /// The returned receiver cannot [Send].
+    fn wrap(&self, rcv: ReceiverType) -> impl 'static + ReceiverOf<Sch, ()>;
+}
+
+pub trait ScopeWrapSend<Sch, ReceiverType>:
+    Clone + fmt::Debug + ScopeWrap<Sch, ReceiverType>
+where
+    Sch: Scheduler,
+    ReceiverType: Send + ReceiverOf<Sch, ()>,
+{
+    /// Wrap a function inside a scoped function.
+    ///
+    /// As long as the scoped-function remains in existence,
+    /// the scope will remain alive.
+    ///
+    /// The returned receiver can [Send].
+    fn wrap_send(&self, rcv: ReceiverType) -> impl 'static + ReceiverOf<Sch, ()> + Send;
+}
+
+pub trait ScopeNest<Sch, Values, ReceiverType>: Clone + fmt::Debug
+where
+    Sch: Scheduler,
+    Values: Tuple,
+    ReceiverType: ReceiverOf<Sch, Values>,
+{
+    type NewScopeData<'nested_scope>: 'nested_scope + ScopeData
+    where
+        Self: 'nested_scope,
+        ReceiverType: 'nested_scope;
+    type NewScopeType<'nested_scope>: 'nested_scope + Clone + fmt::Debug
+    where
+        Self: 'nested_scope,
+        ReceiverType: 'nested_scope;
+    type NewReceiver<'nested_scope>: 'nested_scope + ReceiverOf<Sch, Values>
+    where
+        Self: 'nested_scope,
+        ReceiverType: 'nested_scope;
+
+    fn new_scope<'nested_scope>(
+        &self,
+        rcv: ReceiverType,
+    ) -> (
+        Self::NewScopeType<'nested_scope>,
+        Self::NewReceiver<'nested_scope>,
+        ScopedRefMut<'nested_scope, ReceiverType, Self::NewScopeData<'nested_scope>>,
+    )
+    where
+        Self: 'nested_scope,
+        ReceiverType: 'nested_scope;
+}
+
+//#[deprecated(note="this is getting split into [ScopeWrap] and [ScopeNest]")]
 pub trait Scope<'scope, 'env>: Clone + fmt::Debug
 where
     'env: 'scope,
@@ -136,12 +198,7 @@ where
     ) -> (
         Self::NewScopeType<'nested_scope, Sch, Value, Rcv>,
         Self::NewScopeReceiver<Sch, Value, Rcv>,
-        ScopedRefMut<
-            'nested_scope,
-            'scope,
-            Rcv,
-            Self::NewScopeType<'nested_scope, Sch, Value, Rcv>,
-        >,
+        ScopedRefMut<'nested_scope, Rcv, Self::NewScopeType<'nested_scope, Sch, Value, Rcv>>,
     )
     where
         'scope: 'nested_scope,
@@ -150,6 +207,7 @@ where
         Rcv: 'scope + ReceiverOf<Sch, Value>;
 }
 
+//#[deprecated(note="this is getting split into [ScopeWrapSend] and [ScopeNest]")]
 pub trait ScopeSend<'scope, 'env>: Scope<'scope, 'env> + Send + Sync
 where
     'env: 'scope,
@@ -222,19 +280,15 @@ where
     }
 }
 
-impl<'scope, 'env, State> Scope<'scope, 'env> for ScopeImpl<'scope, 'env, State>
+impl<'scope, 'env, Sch, ReceiverType, State> ScopeWrap<Sch, ReceiverType>
+    for ScopeImpl<'scope, 'env, State>
 where
     'env: 'scope,
+    Sch: Scheduler,
+    ReceiverType: 'env + ReceiverOf<Sch, ()>,
     State: ScopeData,
 {
-    type NewScopeType<'nested_scope, Sch, Values, Rcv> = ScopeImpl<'nested_scope, 'scope, receiver::ScopeDataNoSendPtr<State, Sch, Values, Rcv>> where 'scope:'nested_scope,Sch:Scheduler,Values:Tuple,Rcv:'scope+ReceiverOf<Sch,Values>;
-    type NewScopeReceiver<Sch, Values, Rcv> = InnerScopeReceiver<State, Sch, Values, Rcv> where Sch:Scheduler,Values:Tuple,Rcv:'scope+ReceiverOf<Sch,Values>;
-
-    fn wrap<ReceiverType, Sch>(&self, rcv: ReceiverType) -> impl 'static + ReceiverOf<Sch, ()>
-    where
-        ReceiverType: 'scope + ReceiverOf<Sch, ()>,
-        Sch: Scheduler,
-    {
+    fn wrap(&self, rcv: ReceiverType) -> impl 'static + ReceiverOf<Sch, ()> {
         let rcv_fn: Option<Box<dyn FnOnce(ScopeFnArgument<Sch>)>> = {
             let data = self.data.clone();
             Some(Box::new(move |scope_arg: ScopeFnArgument<Sch>| {
@@ -260,46 +314,17 @@ where
 
         ScopedReceiver::new(ScopeFnReceiver::new(rcv_fn))
     }
-
-    fn new_scope<'nested_scope, Sch, Value, Rcv>(
-        &self,
-        rcv: Rcv,
-    ) -> (
-        Self::NewScopeType<'nested_scope, Sch, Value, Rcv>,
-        Self::NewScopeReceiver<Sch, Value, Rcv>,
-        ScopedRefMut<
-            'nested_scope,
-            'scope,
-            Rcv,
-            Self::NewScopeType<'nested_scope, Sch, Value, Rcv>,
-        >,
-    )
-    where
-        'scope: 'nested_scope,
-        Sch: Scheduler,
-        Value: Tuple,
-        Rcv: 'scope + ReceiverOf<Sch, Value>,
-    {
-        InnerScopeReceiver::new(self, rcv)
-    }
 }
 
-impl<'scope, 'env, State> ScopeSend<'scope, 'env> for ScopeImpl<'scope, 'env, State>
+impl<'scope, 'env, Sch, ReceiverType, State> ScopeWrapSend<Sch, ReceiverType>
+    for ScopeImpl<'scope, 'env, State>
 where
     'env: 'scope,
-    State: Send + Sync + ScopeData,
+    Sch: Scheduler,
+    ReceiverType: 'env + Send + ReceiverOf<Sch, ()>,
+    State: Send + ScopeData,
 {
-    type NewScopeSendType<'nested_scope, Sch, Values, Rcv> = ScopeImpl<'nested_scope, 'scope, receiver::ScopeDataSendPtr<State, Sch, Values, Rcv>> where 'scope:'nested_scope,Sch:Scheduler,Values:Tuple,Rcv:'scope+ReceiverOf<Sch,Values>;
-    type NewScopeSendReceiver<Sch, Values, Rcv> = InnerScopeSendReceiver<State, Sch, Values, Rcv> where Sch:Scheduler,Values:Tuple,Rcv:'scope+ReceiverOf<Sch,Values>;
-
-    fn wrap_send<ReceiverType, Sch>(
-        &self,
-        rcv: ReceiverType,
-    ) -> impl 'static + ReceiverOf<Sch, ()> + Send
-    where
-        ReceiverType: 'scope + ReceiverOf<Sch, ()> + Send,
-        Sch: Scheduler,
-    {
+    fn wrap_send(&self, rcv: ReceiverType) -> impl 'static + Send + ReceiverOf<Sch, ()> {
         let rcv_fn: Option<Box<dyn Send + FnOnce(ScopeFnArgument<Sch>)>> = {
             let data = self.data.clone();
             Some(Box::new(move |scope_arg: ScopeFnArgument<Sch>| {
@@ -325,21 +350,38 @@ where
 
         ScopedReceiverSend::new(ScopeFnSendReceiver::new(rcv_fn))
     }
+}
 
-    fn new_scope_send<'nested_scope, Sch, Value, Rcv>(
+impl<'scope, 'env, Sch, Values, ReceiverType, State> ScopeNest<Sch, Values, ReceiverType>
+    for ScopeImpl<'scope, 'env, State>
+where
+    'env: 'scope,
+    Sch: Scheduler,
+    Values: 'scope + Tuple,
+    ReceiverType: 'scope + ReceiverOf<Sch, Values>,
+    State: 'scope + ScopeData,
+{
+    type NewScopeData<'nested_scope> = State::NewScopeType<'nested_scope, 'scope, Sch, Values, ReceiverType>
+    where Self: 'nested_scope, Values:'scope, ReceiverType: 'nested_scope;
+    type NewScopeType<'nested_scope> = ScopeImpl<'nested_scope, 'scope, Self::NewScopeData<'nested_scope>>
+    where Self: 'nested_scope, Values:'scope, ReceiverType: 'nested_scope;
+    type NewReceiver<'nested_scope> = State::NewReceiver<'nested_scope, 'scope, Sch, Values, ReceiverType>
+    where Self: 'nested_scope, Values:'scope, ReceiverType: 'nested_scope;
+
+    fn new_scope<'nested_scope>(
         &self,
-        rcv: Rcv,
+        rcv: ReceiverType,
     ) -> (
-        Self::NewScopeSendType<'nested_scope, Sch, Value, Rcv>,
-        Self::NewScopeSendReceiver<Sch, Value, Rcv>,
+        Self::NewScopeType<'nested_scope>,
+        Self::NewReceiver<'nested_scope>,
+        ScopedRefMut<'nested_scope, ReceiverType, Self::NewScopeData<'nested_scope>>,
     )
     where
-        'scope: 'nested_scope,
-        Sch: Scheduler,
-        Value: Tuple,
-        Rcv: 'scope + ReceiverOf<Sch, Value>,
+        Self: 'nested_scope,
+        ReceiverType: 'nested_scope,
     {
-        InnerScopeSendReceiver::new(self, rcv)
+        let (new_state, new_receiver, receiver_ref) = self.data.new_scope(rcv);
+        (ScopeImpl::new(new_state), new_receiver, receiver_ref)
     }
 }
 

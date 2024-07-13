@@ -1,6 +1,5 @@
 use crate::errors::Error;
 use crate::scheduler::Scheduler;
-use crate::scope::Scope;
 use crate::tuple::Tuple;
 
 /// Common receiver logic.
@@ -53,7 +52,6 @@ pub trait TypedSenderConnect<'scope, 'a, ScopeImpl, ReceiverType>: TypedSender<'
 where
     'a: 'scope,
     ReceiverType: 'scope + ReceiverOf<Self::Scheduler, Self::Value>,
-    ScopeImpl: Scope<'scope, 'a>,
 {
     /// Attach a receiver.
     /// Will produce an operation state, that, once started, will invoke the receiver exactly once.

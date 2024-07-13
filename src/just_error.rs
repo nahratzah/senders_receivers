@@ -1,6 +1,5 @@
 use crate::errors::Error;
 use crate::scheduler::{ImmediateScheduler, Scheduler, WithScheduler};
-use crate::scope::Scope;
 use crate::traits::{
     BindSender, OperationState, Receiver, ReceiverOf, TypedSender, TypedSenderConnect,
 };
@@ -69,7 +68,6 @@ where
     Sch: Scheduler,
     Tpl: Tuple,
     ReceiverType: 'scope + ReceiverOf<Sch::LocalScheduler, Tpl> + 'a,
-    ScopeImpl: Scope<'scope, 'a>,
 {
     fn connect(self, _: &ScopeImpl, receiver: ReceiverType) -> impl OperationState<'scope> {
         JustErrorOperationState {

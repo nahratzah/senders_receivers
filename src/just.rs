@@ -1,6 +1,5 @@
 use crate::errors::Error;
 use crate::scheduler::{ImmediateScheduler, Scheduler, WithScheduler};
-use crate::scope::Scope;
 use crate::traits::{
     BindSender, OperationState, Receiver, ReceiverOf, TypedSender, TypedSenderConnect,
 };
@@ -86,7 +85,6 @@ where
         ScopeImpl,
         ReceiverWrapper<'a, ReceiverType, Sch::LocalScheduler, Tpl>,
     >,
-    ScopeImpl: Scope<'scope, 'a>,
 {
     fn connect(self, scope: &ScopeImpl, receiver: ReceiverType) -> impl OperationState<'scope> {
         let receiver = ReceiverWrapper {

@@ -1,7 +1,7 @@
 use crate::errors::{new_error, Error};
 use crate::io::default::EnableDefaultIO;
 use crate::scheduler::Scheduler;
-use crate::scope::Scope;
+use crate::scope::ScopeWrap;
 use crate::traits::{
     BindSender, OperationState, Receiver, ReceiverOf, TypedSender, TypedSenderConnect,
 };
@@ -83,7 +83,8 @@ where
             ReceiverWrapper<'a, ReceiverType, Sch::LocalScheduler, Fd>,
         >,
     ReceiverType: 'scope + ReceiverOf<Sch::LocalScheduler, (usize,)>,
-    ScopeImpl: Scope<'scope, 'a>,
+    ScopeImpl:
+        ScopeWrap<Sch::LocalScheduler, ReceiverWrapper<'a, ReceiverType, Sch::LocalScheduler, Fd>>,
 {
     fn connect(self, scope: &ScopeImpl, receiver: ReceiverType) -> impl OperationState<'scope> {
         self.sch.schedule().connect(

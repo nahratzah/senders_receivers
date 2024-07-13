@@ -2,7 +2,7 @@ use crate::errors::{Error, Result};
 use crate::functor::{BiClosure, BiFunctor, NoErrBiFunctor};
 use crate::refs::ScopedRefMut;
 use crate::scheduler::Scheduler;
-use crate::scope::Scope;
+use crate::scope::ScopeNest;
 use crate::traits::{
     BindSender, OperationState, Receiver, ReceiverOf, Sender, TypedSender, TypedSenderConnect,
 };
@@ -284,34 +284,23 @@ where
         + for<'nested_scope> TypedSenderConnect<
             'nested_scope,
             'scope,
-            ScopeImpl::NewScopeType<
-                'nested_scope,
-                <Out as TypedSender<'scope>>::Scheduler,
-                <Out as TypedSender<'scope>>::Value,
-                LocalReceiverWithValue<
-                    'scope,
-                    'a,
-                    <Out as TypedSender<'scope>>::Scheduler,
-                    Value,
-                    <Out as TypedSender<'scope>>::Value,
-                    ReceiverImpl,
-                >,
-            >,
-            ScopeImpl::NewScopeReceiver<
-                <Out as TypedSender<'scope>>::Scheduler,
-                <Out as TypedSender<'scope>>::Value,
-                LocalReceiverWithValue<
-                    'scope,
-                    'a,
-                    <Out as TypedSender<'scope>>::Scheduler,
-                    Value,
-                    <Out as TypedSender<'scope>>::Value,
-                    ReceiverImpl,
-                >,
-            >,
+            ScopeImpl::NewScopeType<'nested_scope>,
+            ScopeImpl::NewReceiver<'nested_scope>,
         >,
     Out::Value: 'a,
-    ScopeImpl: 'scope + Scope<'scope, 'a>,
+    ScopeImpl: 'scope
+        + ScopeNest<
+            <Out as TypedSender<'scope>>::Scheduler,
+            <Out as TypedSender<'scope>>::Value,
+            LocalReceiverWithValue<
+                'scope,
+                'a,
+                <Out as TypedSender<'scope>>::Scheduler,
+                Value,
+                <Out as TypedSender<'scope>>::Value,
+                ReceiverImpl,
+            >,
+        >,
     (Value, Out::Value): TupleCat,
     <(Value, Out::Value) as TupleCat>::Output: 'a + Tuple,
     ReceiverImpl: 'scope + ReceiverOf<Out::Scheduler, <(Value, Out::Value) as TupleCat>::Output>,
@@ -330,7 +319,18 @@ where
 struct LetValueReceiver<'scope, 'a, ScopeImpl, NestedReceiver, FnType, Out, Sch, Value>
 where
     'a: 'scope,
-    ScopeImpl: Scope<'scope, 'a>,
+    ScopeImpl: ScopeNest<
+        <Out as TypedSender<'scope>>::Scheduler,
+        <Out as TypedSender<'scope>>::Value,
+        LocalReceiverWithValue<
+            'scope,
+            'a,
+            <Out as TypedSender<'scope>>::Scheduler,
+            Value,
+            <Out as TypedSender<'scope>>::Value,
+            NestedReceiver,
+        >,
+    >,
     NestedReceiver: 'scope + ReceiverOf<Out::Scheduler, <(Value, Out::Value) as TupleCat>::Output>,
     FnType: 'a
         + BiFunctor<'a, Sch, <&'scope mut Value as DistributeRefTuple>::Output, Output = Result<Out>>,
@@ -342,31 +342,8 @@ where
         + for<'nested_scope> TypedSenderConnect<
             'nested_scope,
             'scope,
-            ScopeImpl::NewScopeType<
-                'nested_scope,
-                <Out as TypedSender<'scope>>::Scheduler,
-                <Out as TypedSender<'scope>>::Value,
-                LocalReceiverWithValue<
-                    'scope,
-                    'a,
-                    <Out as TypedSender<'scope>>::Scheduler,
-                    Value,
-                    <Out as TypedSender<'scope>>::Value,
-                    NestedReceiver,
-                >,
-            >,
-            ScopeImpl::NewScopeReceiver<
-                <Out as TypedSender<'scope>>::Scheduler,
-                <Out as TypedSender<'scope>>::Value,
-                LocalReceiverWithValue<
-                    'scope,
-                    'a,
-                    <Out as TypedSender<'scope>>::Scheduler,
-                    Value,
-                    <Out as TypedSender<'scope>>::Value,
-                    NestedReceiver,
-                >,
-            >,
+            ScopeImpl::NewScopeType<'nested_scope>,
+            ScopeImpl::NewReceiver<'nested_scope>,
         >,
     Out::Value: 'a,
     (Value, Out::Value): TupleCat,
@@ -382,7 +359,18 @@ impl<'scope, 'a, ScopeImpl, NestedReceiver, FnType, Out, Sch, Value> Receiver
     for LetValueReceiver<'scope, 'a, ScopeImpl, NestedReceiver, FnType, Out, Sch, Value>
 where
     'a: 'scope,
-    ScopeImpl: Scope<'scope, 'a>,
+    ScopeImpl: ScopeNest<
+        <Out as TypedSender<'scope>>::Scheduler,
+        <Out as TypedSender<'scope>>::Value,
+        LocalReceiverWithValue<
+            'scope,
+            'a,
+            <Out as TypedSender<'scope>>::Scheduler,
+            Value,
+            <Out as TypedSender<'scope>>::Value,
+            NestedReceiver,
+        >,
+    >,
     NestedReceiver: 'scope + ReceiverOf<Out::Scheduler, <(Value, Out::Value) as TupleCat>::Output>,
     FnType: 'a
         + BiFunctor<'a, Sch, <&'scope mut Value as DistributeRefTuple>::Output, Output = Result<Out>>,
@@ -394,31 +382,8 @@ where
         + for<'nested_scope> TypedSenderConnect<
             'nested_scope,
             'scope,
-            ScopeImpl::NewScopeType<
-                'nested_scope,
-                <Out as TypedSender<'scope>>::Scheduler,
-                <Out as TypedSender<'scope>>::Value,
-                LocalReceiverWithValue<
-                    'scope,
-                    'a,
-                    <Out as TypedSender<'scope>>::Scheduler,
-                    Value,
-                    <Out as TypedSender<'scope>>::Value,
-                    NestedReceiver,
-                >,
-            >,
-            ScopeImpl::NewScopeReceiver<
-                <Out as TypedSender<'scope>>::Scheduler,
-                <Out as TypedSender<'scope>>::Value,
-                LocalReceiverWithValue<
-                    'scope,
-                    'a,
-                    <Out as TypedSender<'scope>>::Scheduler,
-                    Value,
-                    <Out as TypedSender<'scope>>::Value,
-                    NestedReceiver,
-                >,
-            >,
+            ScopeImpl::NewScopeType<'nested_scope>,
+            ScopeImpl::NewReceiver<'nested_scope>,
         >,
     Out::Value: 'a,
     (Value, Out::Value): TupleCat,
@@ -437,7 +402,18 @@ impl<'scope, 'a, ScopeImpl, NestedReceiver, FnType, Out, Sch, Value> ReceiverOf<
     for LetValueReceiver<'scope, 'a, ScopeImpl, NestedReceiver, FnType, Out, Sch, Value>
 where
     'a: 'scope,
-    ScopeImpl: Scope<'scope, 'a>,
+    ScopeImpl: ScopeNest<
+        <Out as TypedSender<'scope>>::Scheduler,
+        <Out as TypedSender<'scope>>::Value,
+        LocalReceiverWithValue<
+            'scope,
+            'a,
+            <Out as TypedSender<'scope>>::Scheduler,
+            Value,
+            <Out as TypedSender<'scope>>::Value,
+            NestedReceiver,
+        >,
+    >,
     NestedReceiver: 'scope + ReceiverOf<Out::Scheduler, <(Value, Out::Value) as TupleCat>::Output>,
     FnType: 'a
         + BiFunctor<'a, Sch, <&'scope mut Value as DistributeRefTuple>::Output, Output = Result<Out>>,
@@ -449,31 +425,8 @@ where
         + for<'nested_scope> TypedSenderConnect<
             'nested_scope,
             'scope,
-            ScopeImpl::NewScopeType<
-                'nested_scope,
-                <Out as TypedSender<'scope>>::Scheduler,
-                <Out as TypedSender<'scope>>::Value,
-                LocalReceiverWithValue<
-                    'scope,
-                    'a,
-                    <Out as TypedSender<'scope>>::Scheduler,
-                    Value,
-                    <Out as TypedSender<'scope>>::Value,
-                    NestedReceiver,
-                >,
-            >,
-            ScopeImpl::NewScopeReceiver<
-                <Out as TypedSender<'scope>>::Scheduler,
-                <Out as TypedSender<'scope>>::Value,
-                LocalReceiverWithValue<
-                    'scope,
-                    'a,
-                    <Out as TypedSender<'scope>>::Scheduler,
-                    Value,
-                    <Out as TypedSender<'scope>>::Value,
-                    NestedReceiver,
-                >,
-            >,
+            ScopeImpl::NewScopeType<'nested_scope>,
+            ScopeImpl::NewReceiver<'nested_scope>,
         >,
     Out::Value: 'a,
     (Value, Out::Value): TupleCat,
@@ -484,7 +437,17 @@ where
         let (local_scope, local_receiver, rcv_ref) =
             self.scope.new_scope(local_receiver_with_value);
 
-        let mut values_ref = ScopedRefMut::map(rcv_ref, |rcv| rcv.values_ref());
+        let mut values_ref = ScopedRefMut::map(
+            rcv_ref,
+            |rcv: &mut LocalReceiverWithValue<
+                'scope,
+                'a,
+                <Out as TypedSender<'scope>>::Scheduler,
+                Value,
+                <Out as TypedSender<'scope>>::Value,
+                NestedReceiver,
+            >| rcv.values_ref(),
+        );
         let values_ref: &'scope mut Value = unsafe {
             // Might want to not do this... instead pass the values_ref straight to the function.
             // But for that, the values_ref needs to have less associated template-arguments.

@@ -4,7 +4,7 @@ use crate::embarrasingly_parallel::worker::Worker;
 use crate::just_done::JustDone;
 use crate::let_value::LetValue;
 use crate::scheduler::{ImmediateScheduler, Scheduler};
-use crate::scope::ScopeSend;
+use crate::scope::ScopeWrapSend;
 use crate::start_detached::start_detached;
 use crate::traits::{BindSender, OperationState, ReceiverOf, TypedSender, TypedSenderConnect};
 use rand::Rng;
@@ -170,7 +170,7 @@ impl<'scope, 'a, ScopeImpl, ReceiverType> TypedSenderConnect<'scope, 'a, ScopeIm
 where
     'a: 'scope,
     ReceiverType: 'scope + ReceiverOf<ThreadLocalPool, ()> + Send,
-    ScopeImpl: ScopeSend<'scope, 'a>,
+    ScopeImpl: ScopeWrapSend<ThreadLocalPool, ReceiverType>,
 {
     fn connect(self, scope: &ScopeImpl, receiver: ReceiverType) -> impl OperationState<'scope> {
         ThreadPoolOperationState {
@@ -197,7 +197,7 @@ struct ThreadPoolOperationState<'scope, 'a, ScopeImpl, ReceiverType>
 where
     'a: 'scope,
     ReceiverType: ReceiverOf<ThreadLocalPool, ()> + Send + 'scope,
-    ScopeImpl: ScopeSend<'scope, 'a>,
+    ScopeImpl: ScopeWrapSend<ThreadLocalPool, ReceiverType>,
 {
     phantom: PhantomData<(&'scope (), &'a ())>,
     sch: ThreadPool,
@@ -210,7 +210,7 @@ impl<'scope, 'a, ScopeImpl, ReceiverType> OperationState<'scope>
 where
     'a: 'scope,
     ReceiverType: ReceiverOf<ThreadLocalPool, ()> + Send + 'scope,
-    ScopeImpl: ScopeSend<'scope, 'a>,
+    ScopeImpl: ScopeWrapSend<ThreadLocalPool, ReceiverType>,
 {
     fn start(self) {
         let mut rng = rand::thread_rng();

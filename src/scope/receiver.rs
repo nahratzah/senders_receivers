@@ -35,7 +35,7 @@ where
 
 pub struct InnerScopeSendReceiver<OuterState, Sch, Values, Rcv>
 where
-    OuterState: Send + Sync + ScopeData,
+    OuterState: ScopeData,
     Sch: Scheduler,
     Values: Tuple,
     Rcv: ReceiverOf<Sch, Values>,
@@ -52,70 +52,72 @@ where
     Rcv: ReceiverOf<Sch, Values>,
 {
     pub(super) fn new<'inner_scope, 'outer_scope>(
-        outer_scope: &ScopeImpl<'outer_scope, '_, OuterState>,
+        outer_scope: &OuterState,
         rcv: Rcv,
     ) -> (
-        ScopeImpl<'inner_scope, 'outer_scope, ScopeDataNoSendPtr<OuterState, Sch, Values, Rcv>>,
+        ScopeDataNoSendPtr<OuterState, Sch, Values, Rcv>,
         Self,
-        ScopedRefMut<
-            'inner_scope,
-            'outer_scope,
-            Rcv,
-            ScopeImpl<'inner_scope, 'outer_scope, ScopeDataNoSendPtr<OuterState, Sch, Values, Rcv>>,
-        >,
+        ScopedRefMut<'inner_scope, Rcv, ScopeDataNoSendPtr<OuterState, Sch, Values, Rcv>>,
     )
     where
         'outer_scope: 'inner_scope,
         Rcv: 'outer_scope,
     {
         let shared_value: SharedValueNoSend<Sch, Values> = Rc::new(RefCell::new(OnceCell::new()));
-        let inner_data =
-            ScopeDataNoSendPtr::new(outer_scope.data.clone(), shared_value.clone(), rcv);
+        let inner_data = ScopeDataNoSendPtr::new(outer_scope.clone(), shared_value.clone(), rcv);
 
-        let inner_scope = ScopeImpl::new(inner_data.clone());
-        let wrapper = Self {
-            inner_data,
-            shared_value,
-        };
         let rcv_ref = {
-            let mut scoped_data_ref = (*inner_scope.data.data).borrow_mut();
+            let mut scoped_data_ref = (*inner_data.data).borrow_mut();
             let rcv: &mut Rcv = scoped_data_ref.rcv.get_mut().unwrap();
             let rcv = unsafe { mem::transmute::<&mut Rcv, &'inner_scope mut Rcv>(rcv) };
-            ScopedRefMut::new(rcv, inner_scope.clone())
+            ScopedRefMut::new(rcv, inner_data.clone())
+        };
+        let wrapper = Self {
+            inner_data: inner_data.clone(),
+            shared_value,
         };
 
-        (inner_scope, wrapper, rcv_ref)
+        (inner_data, wrapper, rcv_ref)
     }
 }
 
 impl<OuterState, Sch, Values, Rcv> InnerScopeSendReceiver<OuterState, Sch, Values, Rcv>
 where
-    OuterState: Send + Sync + ScopeData,
+    OuterState: ScopeData,
     Sch: Scheduler,
     Values: Tuple,
     Rcv: ReceiverOf<Sch, Values>,
 {
     pub(super) fn new<'inner_scope, 'outer_scope>(
-        outer_scope: &ScopeImpl<'outer_scope, '_, OuterState>,
+        outer_scope: &OuterState,
         rcv: Rcv,
     ) -> (
-        ScopeImpl<'inner_scope, 'outer_scope, ScopeDataSendPtr<OuterState, Sch, Values, Rcv>>,
+        ScopeDataSendPtr<OuterState, Sch, Values, Rcv>,
         Self,
+        ScopedRefMut<'inner_scope, Rcv, ScopeDataSendPtr<OuterState, Sch, Values, Rcv>>,
     )
     where
         'outer_scope: 'inner_scope,
         Rcv: 'outer_scope,
     {
         let shared_value: SharedValueSend<Sch, Values> = Arc::new(Mutex::from(None));
-        let inner_data = ScopeDataSendPtr::new(outer_scope.data.clone(), shared_value.clone(), rcv);
+        let mut inner_data = ScopeDataSendPtr::new(outer_scope.clone(), shared_value.clone(), rcv);
 
-        let inner_scope = ScopeImpl::new(inner_data.clone());
+        let rcv_ref = {
+            let rcv: &mut Rcv = Arc::get_mut(&mut inner_data.data)
+                .unwrap()
+                .rcv
+                .get_mut()
+                .unwrap();
+            let rcv = unsafe { mem::transmute::<&mut Rcv, &'inner_scope mut Rcv>(rcv) };
+            ScopedRefMut::new(rcv, inner_data.clone())
+        };
         let wrapper = Self {
-            inner_data,
+            inner_data: inner_data.clone(),
             shared_value,
         };
 
-        (inner_scope, wrapper)
+        (inner_data, wrapper, rcv_ref)
     }
 }
 
@@ -153,7 +155,7 @@ where
 
 impl<OuterState, Sch, Values, Rcv> Receiver for InnerScopeSendReceiver<OuterState, Sch, Values, Rcv>
 where
-    OuterState: Send + Sync + ScopeData,
+    OuterState: ScopeData,
     Sch: Scheduler,
     Values: Tuple,
     Rcv: ReceiverOf<Sch, Values>,
@@ -201,7 +203,7 @@ where
 impl<OuterState, Sch, Values, Rcv> ReceiverOf<Sch, Values>
     for InnerScopeSendReceiver<OuterState, Sch, Values, Rcv>
 where
-    OuterState: Send + Sync + ScopeData,
+    OuterState: ScopeData,
     Sch: Scheduler,
     Values: Tuple,
     Rcv: ReceiverOf<Sch, Values>,
@@ -412,6 +414,35 @@ where
     Values: Tuple,
     Rcv: ReceiverOf<Sch, Values>,
 {
+    type NewScopeType<'nested_scope, 'scope, NestedSch, NestedValues, NestedRcv> = ScopeDataNoSendPtr<Self, NestedSch, NestedValues, NestedRcv>
+    where 'scope:'nested_scope, NestedSch:Scheduler, NestedValues:'scope+Tuple, NestedRcv: 'scope+ReceiverOf<NestedSch, NestedValues>, Self:'scope;
+    type NewReceiver<'nested_scope, 'scope, NestedSch, NestedValues, NestedRcv> = InnerScopeReceiver<Self, NestedSch, NestedValues, NestedRcv>
+    where 'scope:'nested_scope, NestedSch:Scheduler, NestedValues:'scope+Tuple, NestedRcv: 'scope+ReceiverOf<NestedSch, NestedValues>, Self:'scope;
+
+    fn new_scope<'nested_scope, 'scope, NestedSch, NestedValues, NestedRcv>(
+        &self,
+        rcv: NestedRcv,
+    ) -> (
+        Self::NewScopeType<'nested_scope, 'scope, NestedSch, NestedValues, NestedRcv>,
+        Self::NewReceiver<'nested_scope, 'scope, NestedSch, NestedValues, NestedRcv>,
+        ScopedRefMut<
+            'nested_scope,
+            NestedRcv,
+            Self::NewScopeType<'nested_scope, 'scope, NestedSch, NestedValues, NestedRcv>,
+        >,
+    )
+    where
+        'scope: 'nested_scope,
+        NestedSch: Scheduler,
+        NestedValues: 'scope + Tuple,
+        NestedRcv: 'scope + ReceiverOf<NestedSch, NestedValues>,
+        Self: 'scope,
+    {
+        Self::NewReceiver::<'nested_scope, 'scope, NestedSch, NestedValues, NestedRcv>::new(
+            &self, rcv,
+        )
+    }
+
     fn mark_panicked(&self) {
         self.data.borrow_mut().mark_panicked();
     }
@@ -424,6 +455,35 @@ where
     Values: Tuple,
     Rcv: ReceiverOf<Sch, Values>,
 {
+    type NewScopeType<'nested_scope, 'scope, NestedSch, NestedValues, NestedRcv> = ScopeDataSendPtr<Self, NestedSch, NestedValues, NestedRcv>
+    where 'scope:'nested_scope, NestedSch:Scheduler, NestedValues:'scope+Tuple, NestedRcv: 'scope+ReceiverOf<NestedSch, NestedValues>, Self:'scope;
+    type NewReceiver<'nested_scope, 'scope, NestedSch, NestedValues, NestedRcv> = InnerScopeSendReceiver<Self, NestedSch, NestedValues, NestedRcv>
+    where 'scope:'nested_scope, NestedSch:Scheduler, NestedValues:'scope+Tuple, NestedRcv: 'scope+ReceiverOf<NestedSch, NestedValues>, Self:'scope;
+
+    fn new_scope<'nested_scope, 'scope, NestedSch, NestedValues, NestedRcv>(
+        &self,
+        rcv: NestedRcv,
+    ) -> (
+        Self::NewScopeType<'nested_scope, 'scope, NestedSch, NestedValues, NestedRcv>,
+        Self::NewReceiver<'nested_scope, 'scope, NestedSch, NestedValues, NestedRcv>,
+        ScopedRefMut<
+            'nested_scope,
+            NestedRcv,
+            Self::NewScopeType<'nested_scope, 'scope, NestedSch, NestedValues, NestedRcv>,
+        >,
+    )
+    where
+        'scope: 'nested_scope,
+        NestedSch: Scheduler,
+        NestedValues: 'scope + Tuple,
+        NestedRcv: 'scope + ReceiverOf<NestedSch, NestedValues>,
+        Self: 'scope,
+    {
+        Self::NewReceiver::<'nested_scope, 'scope, NestedSch, NestedValues, NestedRcv>::new(
+            &self, rcv,
+        )
+    }
+
     fn mark_panicked(&self) {
         self.data.mark_panicked();
     }
