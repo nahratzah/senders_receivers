@@ -89,19 +89,27 @@ pub struct CrossThreadPoolTS {
     sch: CrossThreadPool,
 }
 
-impl TypedSender<'_> for CrossThreadPoolTS {
+impl TypedSender for CrossThreadPoolTS {
     type Scheduler = ThreadLocalPool;
     type Value = ();
 }
 
-impl<'scope, 'a, ScopeImpl, ReceiverType> TypedSenderConnect<'scope, 'a, ScopeImpl, ReceiverType>
+impl<'a, ScopeImpl, ReceiverType> TypedSenderConnect<'a, ScopeImpl, ReceiverType>
     for CrossThreadPoolTS
 where
-    'a: 'scope,
-    ReceiverType: 'scope + ReceiverOf<ThreadLocalPool, ()> + Send,
+    ReceiverType: ReceiverOf<ThreadLocalPool, ()> + Send,
     ScopeImpl: ScopeWrapSend<ThreadLocalPool, ReceiverType>,
 {
-    fn connect(self, scope: &ScopeImpl, receiver: ReceiverType) -> impl OperationState<'scope> {
+    fn connect<'scope>(
+        self,
+        scope: &ScopeImpl,
+        receiver: ReceiverType,
+    ) -> impl OperationState<'scope>
+    where
+        'a: 'scope,
+        ScopeImpl: 'scope,
+        ReceiverType: 'scope,
+    {
         CrossThreadPoolOperationState {
             phantom: PhantomData,
             sch: self.sch,
@@ -121,16 +129,17 @@ where
     }
 }
 
-struct CrossThreadPoolOperationState<'a, ReceiverType>
+struct CrossThreadPoolOperationState<'scope, ReceiverType>
 where
     ReceiverType: ReceiverOf<ThreadLocalPool, ()> + Send + 'static,
 {
-    phantom: PhantomData<&'a i32>,
+    phantom: PhantomData<&'scope i32>,
     sch: CrossThreadPool,
     receiver: ReceiverType,
 }
 
-impl<'a, ReceiverType> OperationState<'a> for CrossThreadPoolOperationState<'a, ReceiverType>
+impl<'scope, ReceiverType> OperationState<'scope>
+    for CrossThreadPoolOperationState<'scope, ReceiverType>
 where
     ReceiverType: ReceiverOf<ThreadLocalPool, ()> + Send + 'static,
 {

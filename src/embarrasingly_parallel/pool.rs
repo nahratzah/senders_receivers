@@ -103,7 +103,7 @@ impl ThreadPool {
     {
         start_detached(
             self.schedule()
-                | LetValue::from(move |sch: ThreadLocalPool, _: ()| {
+                | LetValue::from(move |sch: ThreadLocalPool, _: &mut ()| {
                     f(sch);
                     JustDone::<ImmediateScheduler, ()>::default()
                 }),
@@ -119,7 +119,7 @@ impl ThreadPool {
             let f = f.clone();
             start_detached(
                 i.0.schedule()
-                    | LetValue::from(move |sch: ThreadLocalPool, _: ()| {
+                    | LetValue::from(move |sch: ThreadLocalPool, _: &mut ()| {
                         f(sch);
                         JustDone::<ImmediateScheduler, ()>::default()
                     }),
@@ -160,19 +160,26 @@ pub struct ThreadPoolTS {
     sch: ThreadPool,
 }
 
-impl TypedSender<'_> for ThreadPoolTS {
+impl TypedSender for ThreadPoolTS {
     type Value = ();
     type Scheduler = ThreadLocalPool;
 }
 
-impl<'scope, 'a, ScopeImpl, ReceiverType> TypedSenderConnect<'scope, 'a, ScopeImpl, ReceiverType>
-    for ThreadPoolTS
+impl<'a, ScopeImpl, ReceiverType> TypedSenderConnect<'a, ScopeImpl, ReceiverType> for ThreadPoolTS
 where
-    'a: 'scope,
-    ReceiverType: 'scope + ReceiverOf<ThreadLocalPool, ()> + Send,
+    ReceiverType: ReceiverOf<ThreadLocalPool, ()> + Send,
     ScopeImpl: ScopeWrapSend<ThreadLocalPool, ReceiverType>,
 {
-    fn connect(self, scope: &ScopeImpl, receiver: ReceiverType) -> impl OperationState<'scope> {
+    fn connect<'scope>(
+        self,
+        scope: &ScopeImpl,
+        receiver: ReceiverType,
+    ) -> impl OperationState<'scope>
+    where
+        'a: 'scope,
+        ScopeImpl: 'scope,
+        ReceiverType: 'scope,
+    {
         ThreadPoolOperationState {
             phantom: PhantomData,
             sch: self.sch,
@@ -193,22 +200,20 @@ where
     }
 }
 
-struct ThreadPoolOperationState<'scope, 'a, ScopeImpl, ReceiverType>
+struct ThreadPoolOperationState<'scope, ScopeImpl, ReceiverType>
 where
-    'a: 'scope,
     ReceiverType: ReceiverOf<ThreadLocalPool, ()> + Send + 'scope,
     ScopeImpl: ScopeWrapSend<ThreadLocalPool, ReceiverType>,
 {
-    phantom: PhantomData<(&'scope (), &'a ())>,
+    phantom: PhantomData<&'scope ()>,
     sch: ThreadPool,
     receiver: ReceiverType,
     scope: ScopeImpl,
 }
 
-impl<'scope, 'a, ScopeImpl, ReceiverType> OperationState<'scope>
-    for ThreadPoolOperationState<'scope, 'a, ScopeImpl, ReceiverType>
+impl<'scope, ScopeImpl, ReceiverType> OperationState<'scope>
+    for ThreadPoolOperationState<'scope, ScopeImpl, ReceiverType>
 where
-    'a: 'scope,
     ReceiverType: ReceiverOf<ThreadLocalPool, ()> + Send + 'scope,
     ScopeImpl: ScopeWrapSend<ThreadLocalPool, ReceiverType>,
 {

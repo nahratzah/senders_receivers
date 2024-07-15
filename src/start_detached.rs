@@ -10,19 +10,12 @@ use crate::tuple::Tuple;
 /// Otherwise (value or done signal), the code will complete normally.
 pub fn start_detached<SenderImpl>(sender: SenderImpl)
 where
-    SenderImpl: TypedSender<'static>
-        + TypedSenderConnect<
-            'static,
-            'static,
-            ScopeImpl<'static, 'static, ScopeDataSendPtr>,
-            DiscardingReceiver,
-        >,
+    SenderImpl: TypedSender
+        + TypedSenderConnect<'static, ScopeImpl<'static, ScopeDataSendPtr>, DiscardingReceiver>,
 {
-    detached_scope(
-        move |scope: &ScopeImpl<'static, 'static, ScopeDataSendPtr>| {
-            sender.connect(scope, DiscardingReceiver).start();
-        },
-    )
+    detached_scope(move |scope: &ScopeImpl<'static, ScopeDataSendPtr>| {
+        sender.connect(scope, DiscardingReceiver).start();
+    })
 }
 
 pub struct DiscardingReceiver;
@@ -74,8 +67,8 @@ mod test {
     #[test]
     fn handles_done() {
         start_detached(
-            Just::from((String::from("dcba"),))
-                | LetValue::from(|sch: ImmediateScheduler, _| {
+            Just::from(())
+                | LetValue::from(|sch: ImmediateScheduler, _: &mut ()| {
                     sch.schedule_done::<(i32, i32, i32)>()
                 }),
         );

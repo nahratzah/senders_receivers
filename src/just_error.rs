@@ -56,20 +56,24 @@ impl<Sch: Scheduler, Tpl: Tuple> WithScheduler<Sch, Error> for JustError<Sch, Tp
     }
 }
 
-impl<Sch: Scheduler, Tpl: Tuple> TypedSender<'_> for JustError<Sch, Tpl> {
+impl<Sch: Scheduler, Tpl: Tuple> TypedSender for JustError<Sch, Tpl> {
     type Value = Tpl;
     type Scheduler = Sch::LocalScheduler;
 }
 
-impl<'scope, 'a, ScopeImpl, ReceiverType, Sch, Tpl>
-    TypedSenderConnect<'scope, 'a, ScopeImpl, ReceiverType> for JustError<Sch, Tpl>
+impl<'a, ScopeImpl, ReceiverType, Sch, Tpl> TypedSenderConnect<'a, ScopeImpl, ReceiverType>
+    for JustError<Sch, Tpl>
 where
-    'a: 'scope,
     Sch: Scheduler,
     Tpl: Tuple,
-    ReceiverType: 'scope + ReceiverOf<Sch::LocalScheduler, Tpl> + 'a,
+    ReceiverType: ReceiverOf<Sch::LocalScheduler, Tpl> + 'a,
 {
-    fn connect(self, _: &ScopeImpl, receiver: ReceiverType) -> impl OperationState<'scope> {
+    fn connect<'scope>(self, _: &ScopeImpl, receiver: ReceiverType) -> impl OperationState<'scope>
+    where
+        'a: 'scope,
+        ScopeImpl: 'scope,
+        ReceiverType: 'scope,
+    {
         JustErrorOperationState {
             error: self.error,
             receiver,

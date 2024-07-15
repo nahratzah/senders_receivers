@@ -84,19 +84,27 @@ pub struct ThreadLocalPoolTS {
     sch: ThreadLocalPool,
 }
 
-impl TypedSender<'_> for ThreadLocalPoolTS {
+impl TypedSender for ThreadLocalPoolTS {
     type Scheduler = ThreadLocalPool;
     type Value = ();
 }
 
-impl<'scope, 'a, ScopeImpl, ReceiverType> TypedSenderConnect<'scope, 'a, ScopeImpl, ReceiverType>
+impl<'a, ScopeImpl, ReceiverType> TypedSenderConnect<'a, ScopeImpl, ReceiverType>
     for ThreadLocalPoolTS
 where
-    'a: 'scope,
-    ReceiverType: 'scope + ReceiverOf<ThreadLocalPool, ()>,
+    ReceiverType: ReceiverOf<ThreadLocalPool, ()>,
     ScopeImpl: ScopeWrap<ThreadLocalPool, ReceiverType>,
 {
-    fn connect(self, scope: &ScopeImpl, receiver: ReceiverType) -> impl OperationState<'scope> {
+    fn connect<'scope>(
+        self,
+        scope: &ScopeImpl,
+        receiver: ReceiverType,
+    ) -> impl OperationState<'scope>
+    where
+        'a: 'scope,
+        ScopeImpl: 'scope,
+        ReceiverType: 'scope,
+    {
         ThreadLocalPoolOperationState {
             sch: self.sch,
             receiver: scope.wrap(receiver),
@@ -116,16 +124,17 @@ where
     }
 }
 
-struct ThreadLocalPoolOperationState<'a, ReceiverType>
+struct ThreadLocalPoolOperationState<'scope, ReceiverType>
 where
     ReceiverType: ReceiverOf<ThreadLocalPool, ()> + 'static,
 {
-    phantom: PhantomData<&'a i32>,
+    phantom: PhantomData<&'scope ()>,
     sch: ThreadLocalPool,
     receiver: ReceiverType,
 }
 
-impl<'a, ReceiverType> OperationState<'a> for ThreadLocalPoolOperationState<'a, ReceiverType>
+impl<'scope, ReceiverType> OperationState<'scope>
+    for ThreadLocalPoolOperationState<'scope, ReceiverType>
 where
     ReceiverType: ReceiverOf<ThreadLocalPool, ()> + 'static,
 {

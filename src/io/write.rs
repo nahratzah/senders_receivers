@@ -25,7 +25,7 @@ where
     /// fn do_the_thing<'a>(file: &'a mut File) {
     ///     let wlen = (
     ///         Just::from((file,))
-    ///             | LetValue::from(|sch, (file,): (&mut &'a mut File,)| file.write(sch, b"abcd"))
+    ///             | LetValue::from(|sch, (file,): &mut (&'a mut File,)| file.write(sch, b"abcd"))
     ///             | Then::from(|(file, wlen)| (wlen,))
     ///         )
     ///         .sync_wait()
@@ -52,41 +52,48 @@ pub struct WriteTS<'a, Sch, Fd>
 where
     Fd: io::Write + ?Sized,
     Sch: Scheduler,
-    Sch::Sender: TypedSender<'a, Value = ()>,
+    Sch::Sender: TypedSender<Value = ()>,
 {
     fd: &'a mut Fd,
     buf: &'a [u8],
     sch: Sch,
 }
 
-impl<'a, Sch, Fd> TypedSender<'a> for WriteTS<'a, Sch, Fd>
+impl<'a, Sch, Fd> TypedSender for WriteTS<'a, Sch, Fd>
 where
     Fd: 'a + io::Write + ?Sized,
     Sch: Scheduler,
-    Sch::Sender: TypedSender<'a, Value = ()>,
+    Sch::Sender: TypedSender<Value = ()>,
 {
     type Scheduler = Sch::LocalScheduler;
     type Value = (usize,);
 }
 
-impl<'scope, 'a, ScopeImpl, ReceiverType, Sch, Fd>
-    TypedSenderConnect<'scope, 'a, ScopeImpl, ReceiverType> for WriteTS<'a, Sch, Fd>
+impl<'a, ScopeImpl, ReceiverType, Sch, Fd> TypedSenderConnect<'a, ScopeImpl, ReceiverType>
+    for WriteTS<'a, Sch, Fd>
 where
-    'a: 'scope,
     Fd: 'a + io::Write + ?Sized,
     Sch: Scheduler + EnableDefaultIO,
-    Sch::Sender: TypedSender<'a, Value = ()>
+    Sch::Sender: TypedSender<Value = ()>
         + TypedSenderConnect<
-            'scope,
             'a,
             ScopeImpl,
             ReceiverWrapper<'a, ReceiverType, Sch::LocalScheduler, Fd>,
         >,
-    ReceiverType: 'scope + ReceiverOf<Sch::LocalScheduler, (usize,)>,
+    ReceiverType: ReceiverOf<Sch::LocalScheduler, (usize,)>,
     ScopeImpl:
         ScopeWrap<Sch::LocalScheduler, ReceiverWrapper<'a, ReceiverType, Sch::LocalScheduler, Fd>>,
 {
-    fn connect(self, scope: &ScopeImpl, receiver: ReceiverType) -> impl OperationState<'scope> {
+    fn connect<'scope>(
+        self,
+        scope: &ScopeImpl,
+        receiver: ReceiverType,
+    ) -> impl OperationState<'scope>
+    where
+        'a: 'scope,
+        ScopeImpl: 'scope,
+        ReceiverType: 'scope,
+    {
         self.sch.schedule().connect(
             scope,
             ReceiverWrapper {
@@ -103,7 +110,7 @@ impl<'a, BindSenderImpl, Sch, Fd> BitOr<BindSenderImpl> for WriteTS<'a, Sch, Fd>
 where
     BindSenderImpl: BindSender<Self>,
     Sch: Scheduler,
-    Sch::Sender: TypedSender<'a, Value = ()>,
+    Sch::Sender: TypedSender<Value = ()>,
     Fd: 'a + io::Write + ?Sized,
 {
     type Output = BindSenderImpl::Output;

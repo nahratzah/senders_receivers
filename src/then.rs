@@ -112,9 +112,9 @@ impl<'a, FnType, Out: Tuple, ArgTuple: Tuple> Sender for Then<'a, FnType, Out, A
 }
 
 impl<'a, FnType, Out, NestedSender> BindSender<NestedSender>
-    for Then<'a, FnType, Out, <NestedSender as TypedSender<'a>>::Value>
+    for Then<'a, FnType, Out, <NestedSender as TypedSender>::Value>
 where
-    NestedSender: TypedSender<'a>,
+    NestedSender: TypedSender,
     FnType: 'a + Functor<'a, NestedSender::Value, Output = Result<Out>>,
     NestedSender::Value: Tuple,
     Out: 'a + Tuple,
@@ -134,7 +134,7 @@ impl<'a, NestedSender, FnType, Out, BindSenderImpl> BitOr<BindSenderImpl>
     for ThenSender<'a, NestedSender, FnType, Out>
 where
     BindSenderImpl: BindSender<ThenSender<'a, NestedSender, FnType, Out>>,
-    NestedSender: TypedSender<'a>,
+    NestedSender: TypedSender,
     FnType: 'a + Functor<'a, NestedSender::Value, Output = Result<Out>>,
     NestedSender::Value: Tuple,
     Out: 'a + Tuple,
@@ -148,7 +148,7 @@ where
 
 pub struct ThenSender<'a, NestedSender, FnType, Out>
 where
-    NestedSender: TypedSender<'a>,
+    NestedSender: TypedSender,
     FnType: 'a + Functor<'a, NestedSender::Value, Output = Result<Out>>,
     Out: 'a + Tuple,
 {
@@ -157,9 +157,9 @@ where
     phantom: PhantomData<&'a fn() -> Out>,
 }
 
-impl<'a, NestedSender, FnType, Out> TypedSender<'a> for ThenSender<'a, NestedSender, FnType, Out>
+impl<'a, NestedSender, FnType, Out> TypedSender for ThenSender<'a, NestedSender, FnType, Out>
 where
-    NestedSender: TypedSender<'a>,
+    NestedSender: TypedSender,
     FnType: 'a + Functor<'a, NestedSender::Value, Output = Result<Out>>,
     Out: 'a + Tuple,
 {
@@ -167,15 +167,12 @@ where
     type Scheduler = NestedSender::Scheduler;
 }
 
-impl<'scope, 'a, ScopeImpl, ReceiverImpl, NestedSender, FnType, Out>
-    TypedSenderConnect<'scope, 'a, ScopeImpl, ReceiverImpl>
-    for ThenSender<'a, NestedSender, FnType, Out>
+impl<'a, ScopeImpl, ReceiverImpl, NestedSender, FnType, Out>
+    TypedSenderConnect<'a, ScopeImpl, ReceiverImpl> for ThenSender<'a, NestedSender, FnType, Out>
 where
-    'a: 'scope,
-    ReceiverImpl: 'scope + ReceiverOf<Self::Scheduler, Out>,
-    NestedSender: TypedSender<'a>
+    ReceiverImpl: ReceiverOf<Self::Scheduler, Out>,
+    NestedSender: TypedSender
         + TypedSenderConnect<
-            'scope,
             'a,
             ScopeImpl,
             ThenWrappedReceiver<
@@ -184,14 +181,23 @@ where
                 FnType,
                 Self::Scheduler,
                 Out,
-                <NestedSender as TypedSender<'a>>::Value,
+                <NestedSender as TypedSender>::Value,
             >,
         >,
     NestedSender::Value: 'a,
     FnType: 'a + Functor<'a, NestedSender::Value, Output = Result<Out>>,
     Out: 'a + Tuple,
 {
-    fn connect(self, scope: &ScopeImpl, receiver: ReceiverImpl) -> impl OperationState<'scope> {
+    fn connect<'scope>(
+        self,
+        scope: &ScopeImpl,
+        receiver: ReceiverImpl,
+    ) -> impl OperationState<'scope>
+    where
+        'a: 'scope,
+        ScopeImpl: 'scope,
+        ReceiverImpl: 'scope,
+    {
         let wrapped_receiver = ThenWrappedReceiver {
             nested: receiver,
             fn_impl: self.fn_impl,

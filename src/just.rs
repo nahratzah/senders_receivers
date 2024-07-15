@@ -67,26 +67,33 @@ impl<'a, Sch: Scheduler, Tpl: 'a + Tuple> WithScheduler<Sch, Tpl> for Just<'a, S
     }
 }
 
-impl<'a, Sch: Scheduler, Tpl: 'a + Tuple> TypedSender<'a> for Just<'a, Sch, Tpl> {
+impl<'a, Sch: Scheduler, Tpl: 'a + Tuple> TypedSender for Just<'a, Sch, Tpl> {
     type Value = Tpl;
     type Scheduler = Sch::LocalScheduler;
 }
 
-impl<'scope, 'a, ScopeImpl, ReceiverType, Sch, Tpl>
-    TypedSenderConnect<'scope, 'a, ScopeImpl, ReceiverType> for Just<'a, Sch, Tpl>
+impl<'a, ScopeImpl, ReceiverType, Sch, Tpl> TypedSenderConnect<'a, ScopeImpl, ReceiverType>
+    for Just<'a, Sch, Tpl>
 where
-    'a: 'scope,
     Sch: Scheduler,
     Tpl: 'a + Tuple,
-    ReceiverType: 'scope + ReceiverOf<Sch::LocalScheduler, Tpl>,
+    ReceiverType: ReceiverOf<Sch::LocalScheduler, Tpl>,
     Sch::Sender: TypedSenderConnect<
-        'scope,
         'a,
         ScopeImpl,
         ReceiverWrapper<'a, ReceiverType, Sch::LocalScheduler, Tpl>,
     >,
 {
-    fn connect(self, scope: &ScopeImpl, receiver: ReceiverType) -> impl OperationState<'scope> {
+    fn connect<'scope>(
+        self,
+        scope: &ScopeImpl,
+        receiver: ReceiverType,
+    ) -> impl OperationState<'scope>
+    where
+        'a: 'scope,
+        ScopeImpl: 'scope,
+        ReceiverType: 'scope,
+    {
         let receiver = ReceiverWrapper {
             phantom: PhantomData,
             receiver,

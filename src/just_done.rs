@@ -44,20 +44,24 @@ impl<Tpl: Tuple> Default for JustDone<ImmediateScheduler, Tpl> {
     }
 }
 
-impl<Sch: Scheduler, Tpl: Tuple> TypedSender<'_> for JustDone<Sch, Tpl> {
+impl<Sch: Scheduler, Tpl: Tuple> TypedSender for JustDone<Sch, Tpl> {
     type Value = Tpl;
     type Scheduler = Sch::LocalScheduler;
 }
 
-impl<'scope, 'a, ScopeImpl, ReceiverType, Sch, Tpl>
-    TypedSenderConnect<'scope, 'a, ScopeImpl, ReceiverType> for JustDone<Sch, Tpl>
+impl<'a, ScopeImpl, ReceiverType, Sch, Tpl> TypedSenderConnect<'a, ScopeImpl, ReceiverType>
+    for JustDone<Sch, Tpl>
 where
-    'a: 'scope,
     Sch: Scheduler,
     Tpl: Tuple,
-    ReceiverType: 'scope + ReceiverOf<Sch::LocalScheduler, Tpl>,
+    ReceiverType: ReceiverOf<Sch::LocalScheduler, Tpl>,
 {
-    fn connect(self, _: &ScopeImpl, receiver: ReceiverType) -> impl OperationState<'scope> {
+    fn connect<'scope>(self, _: &ScopeImpl, receiver: ReceiverType) -> impl OperationState<'scope>
+    where
+        'a: 'scope,
+        ScopeImpl: 'scope,
+        ReceiverType: 'scope,
+    {
         JustDoneOperationState {
             phantom: PhantomData,
             receiver,
@@ -65,17 +69,17 @@ where
     }
 }
 
-pub struct JustDoneOperationState<'a, ReceiverImpl>
+pub struct JustDoneOperationState<'scope, ReceiverImpl>
 where
-    ReceiverImpl: Receiver + 'a,
+    ReceiverImpl: Receiver + 'scope,
 {
-    phantom: PhantomData<&'a i32>,
+    phantom: PhantomData<&'scope ()>,
     receiver: ReceiverImpl,
 }
 
-impl<'a, ReceiverImpl> OperationState<'a> for JustDoneOperationState<'a, ReceiverImpl>
+impl<'scope, ReceiverImpl> OperationState<'scope> for JustDoneOperationState<'scope, ReceiverImpl>
 where
-    ReceiverImpl: Receiver + 'a,
+    ReceiverImpl: Receiver + 'scope,
 {
     fn start(self) {
         self.receiver.set_done();
