@@ -34,8 +34,8 @@ use std::ops::{BitOr, DerefMut};
 ///
 /// // If using a function that returns a Result:
 /// let sender = Just::from((String::from("world"),))
-///              | LetValue::from(|_, &mut (name,)| {
-///                  Ok(Just::from((format!("Hello {}!", name),)))
+///              | LetValue::from(|_, v: &mut (String,)| {
+///                  Ok(Just::from((format!("Hello {}!", v.0),)))
 ///              });
 /// assert_eq!(
 ///     (String::from("world"), String::from("Hello world!")),
@@ -229,10 +229,10 @@ where
     Value: 'a + Tuple,
     Out: 'a // XXX 'a is wrong here!
         + TypedSender
-        + for<'scope, 'nested_scope> TypedSenderConnect<
-            'scope,
-            ScopeImpl::NewScopeType<'nested_scope>,
-            ScopeImpl::NewReceiver<'nested_scope>,
+        + TypedSenderConnect<
+            'a, // XXX 'a is also wrong here!
+            ScopeImpl::NewScopeType,
+            ScopeImpl::NewReceiver,
         >,
     Out::Value: 'a,
     ScopeImpl: ScopeNest<
@@ -289,10 +289,10 @@ where
     Sch: Scheduler,
     Value: 'a + Tuple,
     Out: TypedSender
-        + for<'scope, 'nested_scope> TypedSenderConnect<
-            'scope,
-            ScopeImpl::NewScopeType<'nested_scope>,
-            ScopeImpl::NewReceiver<'nested_scope>,
+        + TypedSenderConnect<
+            'a, // XXX 'a is wrong here
+            ScopeImpl::NewScopeType,
+            ScopeImpl::NewReceiver,
         >,
     Out::Value: 'a,
     (Value, Out::Value): TupleCat,
@@ -322,10 +322,10 @@ where
     Sch: Scheduler,
     Value: 'a + Tuple,
     Out: TypedSender
-        + for<'scope, 'nested_scope> TypedSenderConnect<
-            'scope,
-            ScopeImpl::NewScopeType<'nested_scope>,
-            ScopeImpl::NewReceiver<'nested_scope>,
+        + TypedSenderConnect<
+            'a, // XXX 'a is wrong here
+            ScopeImpl::NewScopeType,
+            ScopeImpl::NewReceiver,
         >,
     Out::Value: 'a,
     (Value, Out::Value): TupleCat,
@@ -359,10 +359,10 @@ where
     Sch: Scheduler,
     Value: 'a + Tuple,
     Out: TypedSender
-        + for<'scope, 'nested_scope> TypedSenderConnect<
-            'scope,
-            ScopeImpl::NewScopeType<'nested_scope>,
-            ScopeImpl::NewReceiver<'nested_scope>,
+        + TypedSenderConnect<
+            'a, // XXX 'a is wrong here
+            ScopeImpl::NewScopeType,
+            ScopeImpl::NewReceiver,
         >,
     Out::Value: 'a,
     (Value, <Out as TypedSender>::Value): TupleCat,

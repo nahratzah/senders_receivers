@@ -101,15 +101,10 @@ where
 impl<'a, Value, T> SyncWait<'a, Value> for T
 where
     Value: 'a + Tuple,
-    T: for<'scope> TypedSenderConnect<
-        'a,
-        ScopeImpl<'scope, ScopeDataPtr>,
-        NoSendReceiver<Value>,
-        Value = Value,
-    >,
+    T: TypedSenderConnect<'a, ScopeImpl<ScopeDataPtr>, NoSendReceiver<Value>, Value = Value>,
 {
     fn sync_wait(self) -> Result<Option<Value>> {
-        scope(move |scope: &ScopeImpl<'_, ScopeDataPtr>| {
+        scope(move |scope: &ScopeImpl<ScopeDataPtr>| {
             let (tx, rx) = same_thread_channel::channel(1);
             let receiver = NoSendReceiver { tx };
             self.connect(scope, receiver).start();
@@ -149,10 +144,9 @@ where
 pub fn sync_wait<'a, SenderImpl>(sender: SenderImpl) -> Result<Option<SenderImpl::Value>>
 where
     SenderImpl: 'a
-        + TypedSender
-        + for<'scope> TypedSenderConnect<
+        + TypedSenderConnect<
             'a,
-            ScopeImpl<'scope, ScopeDataPtr>,
+            ScopeImpl<ScopeDataPtr>,
             NoSendReceiver<<SenderImpl as TypedSender>::Value>,
         >,
 {
@@ -164,7 +158,7 @@ where
         ReceiverType<<SenderImpl as TypedSender>::Value>,
     ) = same_thread_channel::channel(1);
     let receiver = NoSendReceiver { tx };
-    scope(move |scope: &ScopeImpl<'_, ScopeDataPtr>| sender.connect(scope, receiver).start());
+    scope(move |scope: &ScopeImpl<ScopeDataPtr>| sender.connect(scope, receiver).start());
     match rx.recv().expect("a single value must be delivered") {
         SyncWaitOutcome::Value(tuple) => Ok(Some(tuple)),
         SyncWaitOutcome::Error(error) => Err(error),
@@ -209,13 +203,13 @@ where
     Value: 'a + Tuple + Send,
     T: for<'scope> TypedSenderConnect<
         'a,
-        ScopeImpl<'scope, ScopeDataSendPtr>,
+        ScopeImpl<ScopeDataSendPtr>,
         SendReceiver<Value>,
         Value = Value,
     >,
 {
     fn sync_wait_send(self) -> Result<Option<Value>> {
-        scope_send(move |scope: &ScopeImpl<'_, ScopeDataSendPtr>| {
+        scope_send(move |scope: &ScopeImpl<ScopeDataSendPtr>| {
             let (tx, rx) = mpsc::sync_channel(1);
             let receiver = SendReceiver { tx };
             self.connect(scope, receiver).start();
@@ -258,7 +252,7 @@ where
         + TypedSender
         + for<'scope> TypedSenderConnect<
             'a,
-            ScopeImpl<'scope, ScopeDataSendPtr>,
+            ScopeImpl<ScopeDataSendPtr>,
             SendReceiver<<SenderImpl as TypedSender>::Value>,
         >,
     <SenderImpl as TypedSender>::Value: Send + 'static, // XXX would be nice to reduce lifetime to 'a?
@@ -271,9 +265,7 @@ where
         ReceiverType<SenderImpl::Value>,
     ) = mpsc::sync_channel(1);
     let receiver = SendReceiver { tx };
-    scope_send(move |scope: &ScopeImpl<'_, ScopeDataSendPtr>| {
-        sender.connect(scope, receiver).start()
-    });
+    scope_send(move |scope: &ScopeImpl<ScopeDataSendPtr>| sender.connect(scope, receiver).start());
     match rx.recv().expect("a single value must be delivered") {
         SyncWaitOutcome::Value(tuple) => Ok(Some(tuple)),
         SyncWaitOutcome::Error(error) => Err(error),

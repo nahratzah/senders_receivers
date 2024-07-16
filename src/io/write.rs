@@ -18,15 +18,16 @@ where
     /// Create a new sender-chain, which will write to this descriptor.
     ///
     /// ```
-    /// use senders_receivers::io::Write;
-    /// use senders_receivers::{SyncWait, ImmediateScheduler, Just, LetValue, Then, Scheduler};
+    /// use senders_receivers::io::{Write, WriteTS};
+    /// use senders_receivers::{SyncWait, ImmediateScheduler, Just, LetValue, Then, Scheduler, TypedSender, Result};
+    /// use senders_receivers::tuple::*; // for distribute.
     /// use std::fs::File;
     ///
     /// fn do_the_thing<'a>(file: &'a mut File) {
     ///     let wlen = (
-    ///         Just::from((file,))
-    ///             | LetValue::from(|sch, (file,): &mut (&'a mut File,)| file.write(sch, b"abcd"))
-    ///             | Then::from(|(file, wlen)| (wlen,))
+    ///         Just::from((file, String::from("abcd")))
+    ///             | LetValue::from(|sch, v: &mut (&'a mut File, String)| v.0.write(sch, v.1.as_bytes()))
+    ///             | Then::from(|(_, _, wlen)| (wlen,))
     ///         )
     ///         .sync_wait()
     ///         .unwrap()
@@ -48,6 +49,7 @@ where
     }
 }
 
+/// Typed-sender returned by the [Write] trait.
 pub struct WriteTS<'a, Sch, Fd>
 where
     Fd: io::Write + ?Sized,

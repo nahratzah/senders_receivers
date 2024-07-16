@@ -1,5 +1,5 @@
 use crate::errors::Error;
-use crate::io::EnableDefaultIO;
+//use crate::io::EnableDefaultIO;
 use crate::just::Just;
 use crate::just_done::JustDone;
 use crate::just_error::JustError;
@@ -107,7 +107,7 @@ impl Scheduler for ImmediateScheduler {
     }
 }
 
-impl EnableDefaultIO for ImmediateScheduler {}
+//impl EnableDefaultIO for ImmediateScheduler {}
 
 pub struct ImmediateSender {}
 
@@ -176,7 +176,7 @@ impl Scheduler for ThreadPool {
     }
 }
 
-impl EnableDefaultIO for ThreadPool {}
+//impl EnableDefaultIO for ThreadPool {}
 
 pub struct ThreadPoolSender {
     pool: ThreadPool,
@@ -282,10 +282,10 @@ where
     }
 }
 
-impl<Sch> EnableDefaultIO for LazyScheduler<Sch> where
-    Sch: Scheduler<LocalScheduler = Sch> + EnableDefaultIO
-{
-}
+//impl<Sch> EnableDefaultIO for LazyScheduler<Sch> where
+//    Sch: Scheduler<LocalScheduler = Sch> + EnableDefaultIO
+//{
+//}
 
 pub struct LazySchedulerTS<Sch>
 where

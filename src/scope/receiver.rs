@@ -413,32 +413,25 @@ where
     Values: Tuple,
     Rcv: ReceiverOf<Sch, Values>,
 {
-    type NewScopeType<'nested_scope, 'scope, NestedSch, NestedValues, NestedRcv> = ScopeDataNoSendPtr<Self, NestedSch, NestedValues, NestedRcv>
-    where 'scope:'nested_scope, NestedSch:Scheduler, NestedValues:'scope+Tuple, NestedRcv: 'scope+ReceiverOf<NestedSch, NestedValues>, Self:'scope;
-    type NewReceiver<'nested_scope, 'scope, NestedSch, NestedValues, NestedRcv> = InnerScopeReceiver<Self, NestedSch, NestedValues, NestedRcv>
-    where 'scope:'nested_scope, NestedSch:Scheduler, NestedValues:'scope+Tuple, NestedRcv: 'scope+ReceiverOf<NestedSch, NestedValues>, Self:'scope;
+    type NewScopeType<NestedSch, NestedValues, NestedRcv> = ScopeDataNoSendPtr<Self, NestedSch, NestedValues, NestedRcv>
+    where NestedSch:Scheduler, NestedValues:Tuple, NestedRcv: ReceiverOf<NestedSch, NestedValues>;
+    type NewReceiver<NestedSch, NestedValues, NestedRcv> = InnerScopeReceiver<Self, NestedSch, NestedValues, NestedRcv>
+    where NestedSch:Scheduler, NestedValues:Tuple, NestedRcv: ReceiverOf<NestedSch, NestedValues>;
 
-    fn new_scope<'nested_scope, 'scope, NestedSch, NestedValues, NestedRcv>(
+    fn new_scope<NestedSch, NestedValues, NestedRcv>(
         &self,
         rcv: NestedRcv,
     ) -> (
-        Self::NewScopeType<'nested_scope, 'scope, NestedSch, NestedValues, NestedRcv>,
-        Self::NewReceiver<'nested_scope, 'scope, NestedSch, NestedValues, NestedRcv>,
-        ScopedRefMut<
-            NestedRcv,
-            Self::NewScopeType<'nested_scope, 'scope, NestedSch, NestedValues, NestedRcv>,
-        >,
+        Self::NewScopeType<NestedSch, NestedValues, NestedRcv>,
+        Self::NewReceiver<NestedSch, NestedValues, NestedRcv>,
+        ScopedRefMut<NestedRcv, Self::NewScopeType<NestedSch, NestedValues, NestedRcv>>,
     )
     where
-        'scope: 'nested_scope,
         NestedSch: Scheduler,
-        NestedValues: 'scope + Tuple,
-        NestedRcv: 'scope + ReceiverOf<NestedSch, NestedValues>,
-        Self: 'scope,
+        NestedValues: Tuple,
+        NestedRcv: ReceiverOf<NestedSch, NestedValues>,
     {
-        Self::NewReceiver::<'nested_scope, 'scope, NestedSch, NestedValues, NestedRcv>::new(
-            &self, rcv,
-        )
+        Self::NewReceiver::<NestedSch, NestedValues, NestedRcv>::new(&self, rcv)
     }
 
     fn mark_panicked(&self) {
@@ -453,32 +446,25 @@ where
     Values: Tuple,
     Rcv: ReceiverOf<Sch, Values>,
 {
-    type NewScopeType<'nested_scope, 'scope, NestedSch, NestedValues, NestedRcv> = ScopeDataSendPtr<Self, NestedSch, NestedValues, NestedRcv>
-    where 'scope:'nested_scope, NestedSch:Scheduler, NestedValues:'scope+Tuple, NestedRcv: 'scope+ReceiverOf<NestedSch, NestedValues>, Self:'scope;
-    type NewReceiver<'nested_scope, 'scope, NestedSch, NestedValues, NestedRcv> = InnerScopeSendReceiver<Self, NestedSch, NestedValues, NestedRcv>
-    where 'scope:'nested_scope, NestedSch:Scheduler, NestedValues:'scope+Tuple, NestedRcv: 'scope+ReceiverOf<NestedSch, NestedValues>, Self:'scope;
+    type NewScopeType<NestedSch, NestedValues, NestedRcv> = ScopeDataSendPtr<Self, NestedSch, NestedValues, NestedRcv>
+    where NestedSch:Scheduler, NestedValues:Tuple, NestedRcv: ReceiverOf<NestedSch, NestedValues>;
+    type NewReceiver<NestedSch, NestedValues, NestedRcv> = InnerScopeSendReceiver<Self, NestedSch, NestedValues, NestedRcv>
+    where NestedSch:Scheduler, NestedValues:Tuple, NestedRcv: ReceiverOf<NestedSch, NestedValues>;
 
-    fn new_scope<'nested_scope, 'scope, NestedSch, NestedValues, NestedRcv>(
+    fn new_scope<NestedSch, NestedValues, NestedRcv>(
         &self,
         rcv: NestedRcv,
     ) -> (
-        Self::NewScopeType<'nested_scope, 'scope, NestedSch, NestedValues, NestedRcv>,
-        Self::NewReceiver<'nested_scope, 'scope, NestedSch, NestedValues, NestedRcv>,
-        ScopedRefMut<
-            NestedRcv,
-            Self::NewScopeType<'nested_scope, 'scope, NestedSch, NestedValues, NestedRcv>,
-        >,
+        Self::NewScopeType<NestedSch, NestedValues, NestedRcv>,
+        Self::NewReceiver<NestedSch, NestedValues, NestedRcv>,
+        ScopedRefMut<NestedRcv, Self::NewScopeType<NestedSch, NestedValues, NestedRcv>>,
     )
     where
-        'scope: 'nested_scope,
         NestedSch: Scheduler,
-        NestedValues: 'scope + Tuple,
-        NestedRcv: 'scope + ReceiverOf<NestedSch, NestedValues>,
-        Self: 'scope,
+        NestedValues: Tuple,
+        NestedRcv: ReceiverOf<NestedSch, NestedValues>,
     {
-        Self::NewReceiver::<'nested_scope, 'scope, NestedSch, NestedValues, NestedRcv>::new(
-            &self, rcv,
-        )
+        Self::NewReceiver::<NestedSch, NestedValues, NestedRcv>::new(&self, rcv)
     }
 
     fn mark_panicked(&self) {
