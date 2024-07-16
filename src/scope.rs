@@ -155,7 +155,7 @@ where
     ) -> (
         Self::NewScopeType<'nested_scope>,
         Self::NewReceiver<'nested_scope>,
-        ScopedRefMut<'nested_scope, ReceiverType, Self::NewScopeData<'nested_scope>>,
+        ScopedRefMut<ReceiverType, Self::NewScopeData<'nested_scope>>,
     )
     where
         Self: 'nested_scope,
@@ -273,7 +273,7 @@ where
     ) -> (
         Self::NewScopeType<'nested_scope>,
         Self::NewReceiver<'nested_scope>,
-        ScopedRefMut<'nested_scope, ReceiverType, Self::NewScopeData<'nested_scope>>,
+        ScopedRefMut<ReceiverType, Self::NewScopeData<'nested_scope>>,
     )
     where
         Self: 'nested_scope,

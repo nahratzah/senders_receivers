@@ -56,7 +56,7 @@ where
     ) -> (
         ScopeDataNoSendPtr<OuterState, Sch, Values, Rcv>,
         Self,
-        ScopedRefMut<'inner_scope, Rcv, ScopeDataNoSendPtr<OuterState, Sch, Values, Rcv>>,
+        ScopedRefMut<Rcv, ScopeDataNoSendPtr<OuterState, Sch, Values, Rcv>>,
     )
     where
         'outer_scope: 'inner_scope,
@@ -69,7 +69,7 @@ where
             let mut scoped_data_ref = (*inner_data.data).borrow_mut();
             let rcv: &mut Rcv = scoped_data_ref.rcv.get_mut().unwrap();
             let rcv = unsafe { mem::transmute::<&mut Rcv, &'inner_scope mut Rcv>(rcv) };
-            ScopedRefMut::new(rcv, inner_data.clone())
+            unsafe { ScopedRefMut::new(rcv, inner_data.clone()) } // rcv is part of inner_data, so we guarantee the lifetime
         };
         let wrapper = Self {
             inner_data: inner_data.clone(),
@@ -93,7 +93,7 @@ where
     ) -> (
         ScopeDataSendPtr<OuterState, Sch, Values, Rcv>,
         Self,
-        ScopedRefMut<'inner_scope, Rcv, ScopeDataSendPtr<OuterState, Sch, Values, Rcv>>,
+        ScopedRefMut<Rcv, ScopeDataSendPtr<OuterState, Sch, Values, Rcv>>,
     )
     where
         'outer_scope: 'inner_scope,
@@ -109,7 +109,7 @@ where
                 .get_mut()
                 .unwrap();
             let rcv = unsafe { mem::transmute::<&mut Rcv, &'inner_scope mut Rcv>(rcv) };
-            ScopedRefMut::new(rcv, inner_data.clone())
+            unsafe { ScopedRefMut::new(rcv, inner_data.clone()) } // rcv is part of inner_data, so we guarantee the lifetime
         };
         let wrapper = Self {
             inner_data: inner_data.clone(),
@@ -425,7 +425,6 @@ where
         Self::NewScopeType<'nested_scope, 'scope, NestedSch, NestedValues, NestedRcv>,
         Self::NewReceiver<'nested_scope, 'scope, NestedSch, NestedValues, NestedRcv>,
         ScopedRefMut<
-            'nested_scope,
             NestedRcv,
             Self::NewScopeType<'nested_scope, 'scope, NestedSch, NestedValues, NestedRcv>,
         >,
@@ -466,7 +465,6 @@ where
         Self::NewScopeType<'nested_scope, 'scope, NestedSch, NestedValues, NestedRcv>,
         Self::NewReceiver<'nested_scope, 'scope, NestedSch, NestedValues, NestedRcv>,
         ScopedRefMut<
-            'nested_scope,
             NestedRcv,
             Self::NewScopeType<'nested_scope, 'scope, NestedSch, NestedValues, NestedRcv>,
         >,

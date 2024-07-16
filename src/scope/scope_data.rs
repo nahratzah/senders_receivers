@@ -35,7 +35,6 @@ pub trait ScopeData: Clone + fmt::Debug {
         Self::NewScopeType<'nested_scope, 'scope, Sch, Values, ReceiverType>,
         Self::NewReceiver<'nested_scope, 'scope, Sch, Values, ReceiverType>,
         ScopedRefMut<
-            'nested_scope,
             ReceiverType,
             Self::NewScopeType<'nested_scope, 'scope, Sch, Values, ReceiverType>,
         >,
@@ -220,7 +219,6 @@ impl ScopeData for ScopeDataSendPtr {
         Self::NewScopeType<'nested_scope, 'scope, NestedSch, NestedValues, NestedRcv>,
         Self::NewReceiver<'nested_scope, 'scope, NestedSch, NestedValues, NestedRcv>,
         ScopedRefMut<
-            'nested_scope,
             NestedRcv,
             Self::NewScopeType<'nested_scope, 'scope, NestedSch, NestedValues, NestedRcv>,
         >,
@@ -307,7 +305,6 @@ impl ScopeData for ScopeDataPtr {
         Self::NewScopeType<'nested_scope, 'scope, NestedSch, NestedValues, NestedRcv>,
         Self::NewReceiver<'nested_scope, 'scope, NestedSch, NestedValues, NestedRcv>,
         ScopedRefMut<
-            'nested_scope,
             NestedRcv,
             Self::NewScopeType<'nested_scope, 'scope, NestedSch, NestedValues, NestedRcv>,
         >,
