@@ -1,6 +1,7 @@
 use super::receiver;
 use crate::refs::ScopedRefMut;
 use crate::scheduler::Scheduler;
+use crate::scope::receiver::InnerScopeConstructor;
 use crate::traits::ReceiverOf;
 use crate::tuple::Tuple;
 use std::cell::RefCell;
@@ -30,6 +31,9 @@ pub trait ScopeData: Clone + fmt::Debug {
         Values: Tuple,
         ReceiverType: ReceiverOf<Sch, Values>;
 
+    // I can't simplify the return types without moving the complexity elsewhere,
+    // or permitting default-types (which are currently unstable).
+    #[allow(clippy::type_complexity)]
     fn new_scope<Sch, Values, ReceiverType>(
         &self,
         rcv: ReceiverType,

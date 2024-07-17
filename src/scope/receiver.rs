@@ -21,6 +21,19 @@ where
     Done,
 }
 
+pub(super) trait InnerScopeConstructor<OuterState, Rcv>: Sized {
+    type ScopeDataPtr: Clone + fmt::Debug;
+
+    fn new(
+        outer_scope: &OuterState,
+        rcv: Rcv,
+    ) -> (
+        Self::ScopeDataPtr,
+        Self,
+        ScopedRefMut<Rcv, Self::ScopeDataPtr>,
+    );
+}
+
 pub struct InnerScopeReceiver<OuterState, Sch, Values, Rcv>
 where
     OuterState: ScopeData,
@@ -43,32 +56,31 @@ where
     shared_value: SharedValueSend<Sch, Values>,
 }
 
-impl<OuterState, Sch, Values, Rcv> InnerScopeReceiver<OuterState, Sch, Values, Rcv>
+impl<OuterState, Sch, Values, Rcv> InnerScopeConstructor<OuterState, Rcv>
+    for InnerScopeReceiver<OuterState, Sch, Values, Rcv>
 where
     OuterState: ScopeData,
     Sch: Scheduler,
     Values: Tuple,
     Rcv: ReceiverOf<Sch, Values>,
 {
-    pub(super) fn new<'inner_scope, 'outer_scope>(
+    type ScopeDataPtr = ScopeDataNoSendPtr<OuterState, Sch, Values, Rcv>;
+
+    fn new(
         outer_scope: &OuterState,
         rcv: Rcv,
     ) -> (
-        ScopeDataNoSendPtr<OuterState, Sch, Values, Rcv>,
+        Self::ScopeDataPtr,
         Self,
-        ScopedRefMut<Rcv, ScopeDataNoSendPtr<OuterState, Sch, Values, Rcv>>,
-    )
-    where
-        'outer_scope: 'inner_scope,
-        Rcv: 'outer_scope,
-    {
+        ScopedRefMut<Rcv, Self::ScopeDataPtr>,
+    ) {
         let shared_value: SharedValueNoSend<Sch, Values> = Rc::new(RefCell::new(OnceCell::new()));
         let inner_data = ScopeDataNoSendPtr::new(outer_scope.clone(), shared_value.clone(), rcv);
 
         let rcv_ref = {
             let mut scoped_data_ref = (*inner_data.data).borrow_mut();
             let rcv: &mut Rcv = scoped_data_ref.rcv.get_mut().unwrap();
-            let rcv = unsafe { mem::transmute::<&mut Rcv, &'inner_scope mut Rcv>(rcv) };
+            let rcv = unsafe { mem::transmute::<&mut Rcv, &mut Rcv>(rcv) };
             unsafe { ScopedRefMut::new(rcv, inner_data.clone()) } // rcv is part of inner_data, so we guarantee the lifetime
         };
         let wrapper = InnerScopeReceiver {
@@ -80,25 +92,24 @@ where
     }
 }
 
-impl<OuterState, Sch, Values, Rcv> InnerScopeSendReceiver<OuterState, Sch, Values, Rcv>
+impl<OuterState, Sch, Values, Rcv> InnerScopeConstructor<OuterState, Rcv>
+    for InnerScopeSendReceiver<OuterState, Sch, Values, Rcv>
 where
     OuterState: ScopeData,
     Sch: Scheduler,
     Values: Tuple,
     Rcv: ReceiverOf<Sch, Values>,
 {
-    pub(super) fn new<'inner_scope, 'outer_scope>(
+    type ScopeDataPtr = ScopeDataSendPtr<OuterState, Sch, Values, Rcv>;
+
+    fn new(
         outer_scope: &OuterState,
         rcv: Rcv,
     ) -> (
-        ScopeDataSendPtr<OuterState, Sch, Values, Rcv>,
+        Self::ScopeDataPtr,
         Self,
-        ScopedRefMut<Rcv, ScopeDataSendPtr<OuterState, Sch, Values, Rcv>>,
-    )
-    where
-        'outer_scope: 'inner_scope,
-        Rcv: 'outer_scope,
-    {
+        ScopedRefMut<Rcv, Self::ScopeDataPtr>,
+    ) {
         let shared_value: SharedValueSend<Sch, Values> = Arc::new(Mutex::from(None));
         let mut inner_data = ScopeDataSendPtr::new(outer_scope.clone(), shared_value.clone(), rcv);
 
@@ -108,7 +119,7 @@ where
                 .rcv
                 .get_mut()
                 .unwrap();
-            let rcv = unsafe { mem::transmute::<&mut Rcv, &'inner_scope mut Rcv>(rcv) };
+            let rcv = unsafe { mem::transmute::<&mut Rcv, &mut Rcv>(rcv) };
             unsafe { ScopedRefMut::new(rcv, inner_data.clone()) } // rcv is part of inner_data, so we guarantee the lifetime
         };
         let wrapper = InnerScopeSendReceiver {
