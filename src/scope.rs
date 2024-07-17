@@ -95,7 +95,7 @@ where
 {
     let (_, data) = ScopeDataSendPtr::new(move |_| {});
     let scope = ScopeImpl::new(data);
-    return f(&scope);
+    f(&scope)
 }
 
 // Scope type
@@ -179,9 +179,9 @@ where
             Some(Box::new(move |scope_arg: ScopeFnArgument<Sch>| {
                 data.run(move || {
                     match scope_arg {
-                        ScopeFnArgument::ValueSignal(sch) => rcv.set_value(sch, ()),
-                        ScopeFnArgument::ErrorSignal(err) => rcv.set_error(err),
-                        ScopeFnArgument::DoneSignal => rcv.set_done(),
+                        ScopeFnArgument::Value(sch) => rcv.set_value(sch, ()),
+                        ScopeFnArgument::Error(err) => rcv.set_error(err),
+                        ScopeFnArgument::Done => rcv.set_done(),
                     };
                 });
             }))
@@ -213,9 +213,9 @@ where
             Some(Box::new(move |scope_arg: ScopeFnArgument<Sch>| {
                 data.run(move || {
                     match scope_arg {
-                        ScopeFnArgument::ValueSignal(sch) => rcv.set_value(sch, ()),
-                        ScopeFnArgument::ErrorSignal(err) => rcv.set_error(err),
-                        ScopeFnArgument::DoneSignal => rcv.set_done(),
+                        ScopeFnArgument::Value(sch) => rcv.set_value(sch, ()),
+                        ScopeFnArgument::Error(err) => rcv.set_error(err),
+                        ScopeFnArgument::Done => rcv.set_done(),
                     };
                 });
             }))

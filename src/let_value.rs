@@ -55,7 +55,7 @@ where
     State: 'static + Clone + Debug,
 {
     fn_impl: FnType,
-    phantom: PhantomData<(&'a (), fn(Sch, Value, State) -> Out)>,
+    phantom: PhantomData<&'a fn(Sch, Value, State) -> Out>,
 }
 
 impl<'a, FnType, Out, Sch, Value, State> From<FnType>
@@ -189,7 +189,7 @@ where
 {
     nested: NestedSender,
     fn_impl: FnType,
-    phantom: PhantomData<(&'a (), fn(Sch, Value, State) -> Out)>,
+    phantom: PhantomData<&'a fn(Sch, Value, State) -> Out>,
 }
 
 impl<'a, BindSenderImpl, NestedSender, FnType, Out, Sch, Value, State> BitOr<BindSenderImpl>
@@ -317,7 +317,7 @@ where
     <(Value, Out::Value) as TupleCat>::Output: 'a + Tuple,
     State: 'static + Clone + Debug,
 {
-    phantom: PhantomData<(&'a (), fn(Sch, Value, State) -> Out)>,
+    phantom: PhantomData<&'a fn(Sch, Value, State) -> Out>,
     nested: NestedReceiver,
     scope: ScopeImpl,
     fn_impl: FnType,

@@ -11,14 +11,14 @@ use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 
-enum Argument<Sch, Values>
+enum Signal<Sch, Values>
 where
     Sch: Scheduler,
     Values: Tuple,
 {
-    ValueSignal(Sch, Values),
-    ErrorSignal(Error),
-    DoneSignal,
+    Value(Sch, Values),
+    Error(Error),
+    Done,
 }
 
 pub struct InnerScopeReceiver<OuterState, Sch, Values, Rcv>
@@ -71,7 +71,7 @@ where
             let rcv = unsafe { mem::transmute::<&mut Rcv, &'inner_scope mut Rcv>(rcv) };
             unsafe { ScopedRefMut::new(rcv, inner_data.clone()) } // rcv is part of inner_data, so we guarantee the lifetime
         };
-        let wrapper = Self {
+        let wrapper = InnerScopeReceiver {
             inner_data: inner_data.clone(),
             shared_value,
         };
@@ -111,7 +111,7 @@ where
             let rcv = unsafe { mem::transmute::<&mut Rcv, &'inner_scope mut Rcv>(rcv) };
             unsafe { ScopedRefMut::new(rcv, inner_data.clone()) } // rcv is part of inner_data, so we guarantee the lifetime
         };
-        let wrapper = Self {
+        let wrapper = InnerScopeSendReceiver {
             inner_data: inner_data.clone(),
             shared_value,
         };
@@ -131,7 +131,7 @@ where
         if self
             .shared_value
             .borrow_mut()
-            .set(Argument::ErrorSignal(error))
+            .set(Signal::Error(error))
             .is_err()
         {
             self.inner_data.mark_panicked();
@@ -140,12 +140,7 @@ where
     }
 
     fn set_done(self) {
-        if self
-            .shared_value
-            .borrow_mut()
-            .set(Argument::DoneSignal)
-            .is_err()
-        {
+        if self.shared_value.borrow_mut().set(Signal::Done).is_err() {
             self.inner_data.mark_panicked();
             panic!("signal double assigned");
         }
@@ -165,7 +160,7 @@ where
             self.inner_data.mark_panicked();
             panic!("signal double assigned");
         }
-        let _ = opt_shared_value.insert(Argument::ErrorSignal(error));
+        let _ = opt_shared_value.insert(Signal::Error(error));
     }
 
     fn set_done(self) {
@@ -174,7 +169,7 @@ where
             self.inner_data.mark_panicked();
             panic!("signal double assigned");
         }
-        let _ = opt_shared_value.insert(Argument::DoneSignal);
+        let _ = opt_shared_value.insert(Signal::Done);
     }
 }
 
@@ -190,7 +185,7 @@ where
         if self
             .shared_value
             .borrow_mut()
-            .set(Argument::ValueSignal(sch, values))
+            .set(Signal::Value(sch, values))
             .is_err()
         {
             self.inner_data.mark_panicked();
@@ -213,28 +208,27 @@ where
             self.inner_data.mark_panicked();
             panic!("signal double assigned");
         }
-        let _ = opt_shared_value.insert(Argument::ValueSignal(sch, values));
+        let _ = opt_shared_value.insert(Signal::Value(sch, values));
     }
 }
 
-fn forward<Sch, Values, Rcv>(rcv: Rcv, argument: Option<Argument<Sch, Values>>)
+fn forward<Sch, Values, Rcv>(rcv: Rcv, argument: Option<Signal<Sch, Values>>)
 where
     Sch: Scheduler,
     Values: Tuple,
     Rcv: ReceiverOf<Sch, Values>,
 {
-    match argument {
-        Some(argument) => match argument {
-            Argument::ValueSignal(sch, values) => rcv.set_value(sch, values),
-            Argument::ErrorSignal(error) => rcv.set_error(error),
-            Argument::DoneSignal => rcv.set_done(),
-        },
-        None => {}
+    if let Some(argument) = argument {
+        match argument {
+            Signal::Value(sch, values) => rcv.set_value(sch, values),
+            Signal::Error(error) => rcv.set_error(error),
+            Signal::Done => rcv.set_done(),
+        }
     }
 }
 
-type SharedValueNoSend<Sch, Values> = Rc<RefCell<OnceCell<Argument<Sch, Values>>>>;
-type SharedValueSend<Sch, Values> = Arc<Mutex<Option<Argument<Sch, Values>>>>;
+type SharedValueNoSend<Sch, Values> = Rc<RefCell<OnceCell<Signal<Sch, Values>>>>;
+type SharedValueSend<Sch, Values> = Arc<Mutex<Option<Signal<Sch, Values>>>>;
 
 struct ScopeDataNoSend<OuterState, Sch, Values, Rcv>
 where
@@ -431,7 +425,7 @@ where
         NestedValues: Tuple,
         NestedRcv: ReceiverOf<NestedSch, NestedValues>,
     {
-        Self::NewReceiver::<NestedSch, NestedValues, NestedRcv>::new(&self, rcv)
+        Self::NewReceiver::<NestedSch, NestedValues, NestedRcv>::new(self, rcv)
     }
 
     fn mark_panicked(&self) {
@@ -464,7 +458,7 @@ where
         NestedValues: Tuple,
         NestedRcv: ReceiverOf<NestedSch, NestedValues>,
     {
-        Self::NewReceiver::<NestedSch, NestedValues, NestedRcv>::new(&self, rcv)
+        Self::NewReceiver::<NestedSch, NestedValues, NestedRcv>::new(self, rcv)
     }
 
     fn mark_panicked(&self) {
@@ -543,9 +537,9 @@ where
         // So we'll do the next best thing, which is to describe it.
         let shared_value_description = match self.shared_value.borrow().get() {
             Some(argument_ref) => match argument_ref {
-                Argument::ValueSignal(..) => "holding value signal",
-                Argument::ErrorSignal(..) => "holding error signal",
-                Argument::DoneSignal => "holding done signal",
+                Signal::Value(..) => "holding value signal",
+                Signal::Error(..) => "holding error signal",
+                Signal::Done => "holding done signal",
             },
             None => "absent",
         };
@@ -578,9 +572,9 @@ where
         // So we'll do the next best thing, which is to describe it.
         let shared_value_description = match self.shared_value.lock().unwrap().as_ref() {
             Some(argument_ref) => match argument_ref {
-                Argument::ValueSignal(..) => "holding value signal",
-                Argument::ErrorSignal(..) => "holding error signal",
-                Argument::DoneSignal => "holding done signal",
+                Signal::Value(..) => "holding value signal",
+                Signal::Error(..) => "holding error signal",
+                Signal::Done => "holding done signal",
             },
             None => "absent",
         };

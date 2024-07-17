@@ -186,7 +186,7 @@ where
         ThreadPoolOperationState {
             phantom: PhantomData,
             sch: self.sch,
-            receiver: receiver,
+            receiver,
             scope: scope.clone(),
         }
     }

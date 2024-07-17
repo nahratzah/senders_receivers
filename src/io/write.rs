@@ -44,11 +44,11 @@ where
     ///     println!("wrote {} bytes", wlen);
     /// }
     /// ```
-    fn write<'a>(
-        &'a mut self,
+    fn write(
+        &mut self,
         sch: Sch,
         buf: refs::ScopedRef<[u8], State>,
-    ) -> WriteTS<'a, Sch, Self, State>;
+    ) -> WriteTS<'_, Sch, Self, State>;
 }
 
 impl<Sch, T, State> Write<Sch, State> for T
@@ -57,11 +57,11 @@ where
     T: io::Write + ?Sized,
     State: 'static + Clone + fmt::Debug,
 {
-    fn write<'a>(
-        &'a mut self,
+    fn write(
+        &mut self,
         sch: Sch,
         buf: refs::ScopedRef<[u8], State>,
-    ) -> WriteTS<'a, Sch, Self, State> {
+    ) -> WriteTS<'_, Sch, Self, State> {
         WriteTS { fd: self, buf, sch }
     }
 }
@@ -181,7 +181,7 @@ where
     State: 'static + Clone + fmt::Debug,
 {
     fn set_value(self, sch: Sch, _: ()) {
-        match self.fd.write(&*self.buf) {
+        match self.fd.write(&self.buf) {
             Ok(len) => self.nested.set_value(sch, (len,)),
             Err(error) => self.nested.set_error(new_error(error)),
         };

@@ -28,7 +28,7 @@ macro_rules! make_distribute_ref_tuple {
             type Output = ();
 
             fn distribute(_: Self) -> Self::Output {
-                ()
+
             }
         }
 
@@ -36,7 +36,7 @@ macro_rules! make_distribute_ref_tuple {
             type Output = ();
 
             fn distribute(_: Self) -> Self::Output {
-                ()
+
             }
         }
     };

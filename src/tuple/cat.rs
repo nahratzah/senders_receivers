@@ -54,7 +54,7 @@ macro_rules! implement_tuple_cat {
         impl TupleCat for ((), ()) {
             type Output = ();
             fn cat(self) -> Self::Output {
-                ()
+
             }
         }
     };

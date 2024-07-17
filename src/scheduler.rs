@@ -3,7 +3,6 @@ use crate::io::EnableDefaultIO;
 use crate::just::Just;
 use crate::just_done::JustDone;
 use crate::just_error::JustError;
-use crate::refs;
 use crate::scope::{ScopeWrap, ScopeWrapSend};
 use crate::traits::{BindSender, OperationState, ReceiverOf, TypedSender, TypedSenderConnect};
 use crate::tuple::Tuple;

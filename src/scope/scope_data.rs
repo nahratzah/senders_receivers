@@ -23,7 +23,7 @@ pub trait ScopeData: Clone + fmt::Debug {
         Values: Tuple,
         ReceiverType: ReceiverOf<Sch, Values>;
 
-    fn new_scope<'nested_scope, 'scope, Sch, Values, ReceiverType>(
+    fn new_scope<Sch, Values, ReceiverType>(
         &self,
         rcv: ReceiverType,
     ) -> (
@@ -40,7 +40,7 @@ pub trait ScopeData: Clone + fmt::Debug {
     where
         F: FnOnce() -> T,
     {
-        match catch_unwind(AssertUnwindSafe(move || f())) {
+        match catch_unwind(AssertUnwindSafe(f)) {
             Ok(result) => result,
             Err(unwind) => {
                 self.mark_panicked();
@@ -281,7 +281,7 @@ impl ScopeData for ScopeDataPtr {
     type NewReceiver<NestedSch, NestedValues, NestedRcv> = receiver::InnerScopeReceiver<Self, NestedSch, NestedValues, NestedRcv>
     where NestedSch:Scheduler, NestedValues:Tuple, NestedRcv: ReceiverOf<NestedSch, NestedValues>;
 
-    fn new_scope<'nested_scope, 'scope, NestedSch, NestedValues, NestedRcv>(
+    fn new_scope<NestedSch, NestedValues, NestedRcv>(
         &self,
         rcv: NestedRcv,
     ) -> (

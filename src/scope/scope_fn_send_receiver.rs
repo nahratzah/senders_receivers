@@ -35,11 +35,11 @@ where
     F: FnOnce(ScopeFnArgument<Sch>) + Send,
 {
     fn set_error(self, error: Error) {
-        (self.f)(ScopeFnArgument::ErrorSignal(error))
+        (self.f)(ScopeFnArgument::Error(error))
     }
 
     fn set_done(self) {
-        (self.f)(ScopeFnArgument::DoneSignal)
+        (self.f)(ScopeFnArgument::Done)
     }
 }
 
@@ -49,6 +49,6 @@ where
     F: FnOnce(ScopeFnArgument<Sch>) + Send,
 {
     fn set_value(self, sch: Sch, _: ()) {
-        (self.f)(ScopeFnArgument::ValueSignal(sch))
+        (self.f)(ScopeFnArgument::Value(sch))
     }
 }

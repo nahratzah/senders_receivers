@@ -8,7 +8,7 @@ pub enum ScopeFnArgument<Sch>
 where
     Sch: Scheduler,
 {
-    ValueSignal(Sch),
-    ErrorSignal(Error),
-    DoneSignal,
+    Value(Sch),
+    Error(Error),
+    Done,
 }

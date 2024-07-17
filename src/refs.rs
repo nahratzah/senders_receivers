@@ -40,13 +40,13 @@ where
     State: Clone + fmt::Debug,
 {
     /// Create a new [ScopedRef].
+    ///
+    /// # Safety
+    ///
     /// The referent must have a lifetime equal to the State,
     /// and its lifetime must be guaranteed by the State.
     pub unsafe fn new(r: &'_ T, state: State) -> Self {
-        Self {
-            actual: r,
-            state: state,
-        }
+        Self { actual: r, state }
     }
 
     /// Clone the reference.
@@ -96,13 +96,13 @@ where
     State: Clone + fmt::Debug,
 {
     /// Create a new [ScopedRef].
+    ///
+    /// # Safety
+    ///
     /// The referent must have a lifetime equal to the State,
     /// and its lifetime must be guaranteed by the State.
     pub unsafe fn new(r: &'_ mut T, state: State) -> Self {
-        Self {
-            actual: r,
-            state: state,
-        }
+        Self { actual: r, state }
     }
 
     /// Transform the reference into a dependant reference.
@@ -245,7 +245,7 @@ macro_rules! make_distribute_scoped_ref {
             type Output = ();
 
             fn distribute(_: Self) -> Self::Output {
-                ()
+
             }
         }
 
@@ -256,7 +256,7 @@ macro_rules! make_distribute_scoped_ref {
             type Output = ();
 
             fn distribute(_: Self) -> Self::Output {
-                ()
+
             }
         }
     };
@@ -316,16 +316,21 @@ macro_rules! make_distribute_scoped_ref {
 
 tuple_impls!(make_distribute_scoped_ref);
 
+type DebugFn = dyn Fn(&mut fmt::Formatter<'_>) -> fmt::Result;
+type LifetimedDebugFn<'a> = dyn 'a + Fn(&mut fmt::Formatter<'_>) -> fmt::Result;
+type DebugSendFn = dyn Send + Sync + Fn(&mut fmt::Formatter<'_>) -> fmt::Result;
+type LifetimedDebugSendFn<'a> = dyn 'a + Send + Sync + Fn(&mut fmt::Formatter<'_>) -> fmt::Result;
+
 /// State type used by [ScopedRef] and [ScopedRefMut] for sendable state.
 #[derive(Clone)]
 pub struct SendState {
-    data: Arc<dyn Send + Sync + Fn(&mut fmt::Formatter<'_>) -> fmt::Result>,
+    data: Arc<DebugSendFn>,
 }
 
 /// State type used by [ScopedRef] and [ScopedRefMut] for unsendable state.
 #[derive(Clone)]
 pub struct NoSendState {
-    data: Rc<dyn Fn(&mut fmt::Formatter<'_>) -> fmt::Result>,
+    data: Rc<DebugFn>,
 }
 
 impl fmt::Debug for SendState {
@@ -345,15 +350,12 @@ impl SendState {
     where
         State: Sync + Send + fmt::Debug,
     {
-        let data: Option<Arc<dyn Send + Sync + Fn(&mut fmt::Formatter<'_>) -> fmt::Result>> =
+        let data: Option<Arc<LifetimedDebugSendFn>> =
             Some(Arc::new(move |f: &mut fmt::Formatter<'_>| state.fmt(f)));
         let data = unsafe {
-            mem::transmute::<
-                Option<Arc<dyn Send + Sync + Fn(&mut fmt::Formatter<'_>) -> fmt::Result>>,
-                Option<Arc<dyn Send + Sync + Fn(&mut fmt::Formatter<'_>) -> fmt::Result>>,
-            >(data)
-            .take()
-            .unwrap()
+            mem::transmute::<Option<Arc<LifetimedDebugSendFn>>, Option<Arc<DebugSendFn>>>(data)
+                .take()
+                .unwrap()
         };
 
         Self { data }
@@ -365,15 +367,12 @@ impl NoSendState {
     where
         State: fmt::Debug,
     {
-        let data: Option<Rc<dyn Fn(&mut fmt::Formatter<'_>) -> fmt::Result>> =
+        let data: Option<Rc<LifetimedDebugFn>> =
             Some(Rc::new(move |f: &mut fmt::Formatter<'_>| state.fmt(f)));
         let data = unsafe {
-            mem::transmute::<
-                Option<Rc<dyn Fn(&mut fmt::Formatter<'_>) -> fmt::Result>>,
-                Option<Rc<dyn Fn(&mut fmt::Formatter<'_>) -> fmt::Result>>,
-            >(data)
-            .take()
-            .unwrap()
+            mem::transmute::<Option<Rc<LifetimedDebugFn>>, Option<Rc<DebugFn>>>(data)
+                .take()
+                .unwrap()
         };
 
         Self { data }

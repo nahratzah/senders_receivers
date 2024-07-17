@@ -27,7 +27,7 @@ where
     FnType: 'a + FnOnce(FirstArg, ScopedRefMut<Args, State>) -> Out,
     State: 'static + Clone + Debug,
 {
-    phantom: PhantomData<(&'a (), fn(FirstArg, Args, State) -> Out)>,
+    phantom: PhantomData<&'a fn(FirstArg, Args, State) -> Out>,
     fn_impl: FnType,
 }
 
@@ -69,7 +69,7 @@ where
     State: 'static + Clone + Debug,
 {
     functor: FunctorType,
-    phantom: PhantomData<(&'a (), fn(FirstArg, ArgTuple, State) -> Out)>,
+    phantom: PhantomData<&'a fn(FirstArg, ArgTuple, State) -> Out>,
 }
 
 impl<'a, FunctorType, Out, FirstArg, ArgTuple, State>
