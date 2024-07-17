@@ -10,6 +10,13 @@ use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
+/// Callback that's invoked when the scope lifetime ends.
+/// This version doesn't get shared between threads.
+type NoSendNotifyFn = dyn FnOnce(&dyn ScopeDataState);
+/// Callback that's invoked when the scope lifetime ends.
+/// This version can be shared among multiple threads.
+type SendNotifyFn = dyn Send + Sync + FnOnce(&dyn ScopeDataState);
+
 pub trait ScopeData: Clone + fmt::Debug {
     type NewScopeType<Sch, Values, ReceiverType>: ScopeData
     where
@@ -60,7 +67,7 @@ pub(super) trait ScopeDataState {
 struct ScopeDataSend {
     num_running_threads: AtomicUsize,
     a_thread_panicked: AtomicBool,
-    notify: Mutex<Option<Box<dyn Send + Sync + FnOnce(&dyn ScopeDataState)>>>,
+    notify: Mutex<Option<Box<SendNotifyFn>>>,
 }
 
 impl ScopeDataSend {
@@ -120,7 +127,7 @@ impl fmt::Debug for ScopeDataSend {
 struct ScopeDataNoSend {
     num_running_threads: usize,
     a_thread_panicked: bool,
-    notify: Option<Box<dyn FnOnce(&dyn ScopeDataState)>>,
+    notify: Option<Box<NoSendNotifyFn>>,
 }
 
 impl ScopeDataNoSend {
