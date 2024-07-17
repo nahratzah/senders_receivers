@@ -3,6 +3,7 @@ use crate::embarrasingly_parallel::thread_local_pool::ThreadLocalPool;
 use crate::embarrasingly_parallel::worker::Worker;
 use crate::just_done::JustDone;
 use crate::let_value::LetValue;
+use crate::refs;
 use crate::scheduler::{ImmediateScheduler, Scheduler};
 use crate::scope::ScopeWrapSend;
 use crate::start_detached::start_detached;
@@ -103,10 +104,12 @@ impl ThreadPool {
     {
         start_detached(
             self.schedule()
-                | LetValue::from(move |sch: ThreadLocalPool, _: &mut ()| {
-                    f(sch);
-                    JustDone::<ImmediateScheduler, ()>::default()
-                }),
+                | LetValue::from(
+                    move |sch: ThreadLocalPool, _: refs::ScopedRefMut<(), refs::NoSendState>| {
+                        f(sch);
+                        JustDone::<ImmediateScheduler, ()>::default()
+                    },
+                ),
         );
     }
 
@@ -119,7 +122,7 @@ impl ThreadPool {
             let f = f.clone();
             start_detached(
                 i.0.schedule()
-                    | LetValue::from(move |sch: ThreadLocalPool, _: &mut ()| {
+                    | LetValue::from(move |sch: ThreadLocalPool, _: refs::ScopedRefMut<(), refs::NoSendState>| {
                         f(sch);
                         JustDone::<ImmediateScheduler, ()>::default()
                     }),

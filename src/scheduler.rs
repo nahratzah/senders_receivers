@@ -1,8 +1,9 @@
 use crate::errors::Error;
-//use crate::io::EnableDefaultIO;
+use crate::io::EnableDefaultIO;
 use crate::just::Just;
 use crate::just_done::JustDone;
 use crate::just_error::JustError;
+use crate::refs;
 use crate::scope::{ScopeWrap, ScopeWrapSend};
 use crate::traits::{BindSender, OperationState, ReceiverOf, TypedSender, TypedSenderConnect};
 use crate::tuple::Tuple;
@@ -72,12 +73,13 @@ pub trait Scheduler: Eq + Clone + 'static {
     /// Use these in [LetValue], [LetDone], or [LetError], when you're not switching scheduler:
     /// ```
     /// use senders_receivers::{Scheduler, LetValue, start_detached};
+    /// use senders_receivers::refs;
     /// use threadpool::ThreadPool;
     ///
     /// let pool = ThreadPool::with_name("example".into(), 1);
     /// start_detached(
     ///     pool.schedule()
-    ///     | LetValue::from(|sch: ThreadPool, _: &mut ()| {
+    ///     | LetValue::from(|sch: ThreadPool, _: refs::ScopedRefMut<(), refs::NoSendState>| {
     ///         // Since we are already running in sch, we don't want a reschedule to happen.
     ///         // By using lazy, we basically tell the code that we're already running on that scheduler,
     ///         // and rescheduling isn't needed.
@@ -107,7 +109,7 @@ impl Scheduler for ImmediateScheduler {
     }
 }
 
-//impl EnableDefaultIO for ImmediateScheduler {}
+impl EnableDefaultIO for ImmediateScheduler {}
 
 pub struct ImmediateSender {}
 
@@ -176,7 +178,7 @@ impl Scheduler for ThreadPool {
     }
 }
 
-//impl EnableDefaultIO for ThreadPool {}
+impl EnableDefaultIO for ThreadPool {}
 
 pub struct ThreadPoolSender {
     pool: ThreadPool,
@@ -282,10 +284,10 @@ where
     }
 }
 
-//impl<Sch> EnableDefaultIO for LazyScheduler<Sch> where
-//    Sch: Scheduler<LocalScheduler = Sch> + EnableDefaultIO
-//{
-//}
+impl<Sch> EnableDefaultIO for LazyScheduler<Sch> where
+    Sch: Scheduler<LocalScheduler = Sch> + EnableDefaultIO
+{
+}
 
 pub struct LazySchedulerTS<Sch>
 where

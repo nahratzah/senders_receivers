@@ -7,4 +7,4 @@ mod default;
 mod write;
 
 pub use default::EnableDefaultIO;
-pub use write::{Write,WriteTS};
+pub use write::{Write, WriteTS};

@@ -1,7 +1,16 @@
+//! Reference logic for senders/receivers.
+//!
+//! In order to make [LetValue](crate::let_value::LetValue) work, we need to pass arguments by reference.
+//! And in order to make those references work, we need to have either higher-order references, or use a scoped reference.
+//! We use the latter, because I couldn't make the former work.
+
 use crate::tuple::tuple_impls;
 use crate::tuple::DistributeRefTuple;
 use std::fmt;
+use std::mem;
 use std::ops::{Deref, DerefMut};
+use std::rc::Rc;
+use std::sync::Arc;
 
 /// Reference which is bound to a scope.
 /// It ensures the reference remains valid, by keeping the scope live.
@@ -103,6 +112,15 @@ where
         U: ?Sized,
     {
         unsafe { ScopedRefMut::new(f(&mut *r.actual), r.state) }
+    }
+
+    /// Transform the reference into a dependant, non-mutable reference.
+    pub fn map_no_mut<F, U>(r: Self, f: F) -> ScopedRef<U, State>
+    where
+        F: FnOnce(&mut T) -> &U,
+        U: ?Sized,
+    {
+        unsafe { ScopedRef::new(f(&mut *r.actual), r.state) }
     }
 
     /// Convert the reference into a dependent reference.
@@ -277,12 +295,7 @@ macro_rules! make_distribute_scoped_ref {
 
             fn distribute(x: Self) -> Self::Output {
                 let ($($v),+) = DistributeRefTuple::distribute(unsafe{&*x.actual});
-                (
-                    $(ScopedRef{
-                        actual: $v,
-                        state: x.state.clone(),
-                    }),+
-                )
+                ($(unsafe{ScopedRef::new($v, x.state.clone())}),+)
             }
         }
 
@@ -295,15 +308,185 @@ macro_rules! make_distribute_scoped_ref {
 
             fn distribute(x: Self) -> Self::Output {
                 let ($($v),+) = DistributeRefTuple::distribute(unsafe{&mut *x.actual});
-                (
-                    $(ScopedRefMut{
-                        actual: $v,
-                        state: x.state.clone(),
-                    }),+
-                )
+                ($(unsafe{ScopedRefMut::new($v, x.state.clone())}),+)
             }
         }
     };
 }
 
 tuple_impls!(make_distribute_scoped_ref);
+
+/// State type used by [ScopedRef] and [ScopedRefMut] for sendable state.
+#[derive(Clone)]
+pub struct SendState {
+    data: Arc<dyn Send + Sync + Fn(&mut fmt::Formatter<'_>) -> fmt::Result>,
+}
+
+/// State type used by [ScopedRef] and [ScopedRefMut] for unsendable state.
+#[derive(Clone)]
+pub struct NoSendState {
+    data: Rc<dyn Fn(&mut fmt::Formatter<'_>) -> fmt::Result>,
+}
+
+impl fmt::Debug for SendState {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        (self.data)(f)
+    }
+}
+
+impl fmt::Debug for NoSendState {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        (self.data)(f)
+    }
+}
+
+impl SendState {
+    fn new<State>(state: State) -> Self
+    where
+        State: Sync + Send + fmt::Debug,
+    {
+        let data: Option<Arc<dyn Send + Sync + Fn(&mut fmt::Formatter<'_>) -> fmt::Result>> =
+            Some(Arc::new(move |f: &mut fmt::Formatter<'_>| state.fmt(f)));
+        let data = unsafe {
+            mem::transmute::<
+                Option<Arc<dyn Send + Sync + Fn(&mut fmt::Formatter<'_>) -> fmt::Result>>,
+                Option<Arc<dyn Send + Sync + Fn(&mut fmt::Formatter<'_>) -> fmt::Result>>,
+            >(data)
+            .take()
+            .unwrap()
+        };
+
+        Self { data }
+    }
+}
+
+impl NoSendState {
+    fn new<State>(state: State) -> Self
+    where
+        State: fmt::Debug,
+    {
+        let data: Option<Rc<dyn Fn(&mut fmt::Formatter<'_>) -> fmt::Result>> =
+            Some(Rc::new(move |f: &mut fmt::Formatter<'_>| state.fmt(f)));
+        let data = unsafe {
+            mem::transmute::<
+                Option<Rc<dyn Fn(&mut fmt::Formatter<'_>) -> fmt::Result>>,
+                Option<Rc<dyn Fn(&mut fmt::Formatter<'_>) -> fmt::Result>>,
+            >(data)
+            .take()
+            .unwrap()
+        };
+
+        Self { data }
+    }
+}
+
+/// We wanted to implement [From] for ScopedRefMut --> ScopedRefMut conversions.
+/// Sadly, this is impossible right now, because From has an implementation for conversions between its own type.
+/// Which we can't exclude.
+/// So we use a separate implementation instead.
+pub trait SRFrom<T> {
+    /// Construct from a value.
+    fn sr_from(r: T) -> Self;
+}
+
+/// Similarly to [SRFrom], we can't implement the [Into] state directly.
+/// So we have to implement a mirror of it.
+pub trait SRInto<T> {
+    /// Turn this into the indicated type.
+    /// The actual type is inferred.
+    fn sr_into(self) -> T;
+}
+
+impl<T, State> SRFrom<ScopedRefMut<T, State>> for ScopedRefMut<T, SendState>
+where
+    T: ?Sized,
+    State: Sync + Send + Clone + fmt::Debug,
+{
+    fn sr_from(r: ScopedRefMut<T, State>) -> Self {
+        unsafe { Self::new(&mut *r.actual, SendState::new(r.state)) }
+    }
+}
+
+impl<T, State> SRFrom<ScopedRefMut<T, State>> for ScopedRefMut<T, NoSendState>
+where
+    T: ?Sized,
+    State: Clone + fmt::Debug,
+{
+    fn sr_from(r: ScopedRefMut<T, State>) -> Self {
+        unsafe { Self::new(&mut *r.actual, NoSendState::new(r.state)) }
+    }
+}
+
+impl<T, State> SRFrom<ScopedRef<T, State>> for ScopedRef<T, SendState>
+where
+    T: ?Sized,
+    State: Sync + Send + Clone + fmt::Debug,
+{
+    fn sr_from(r: ScopedRef<T, State>) -> Self {
+        unsafe { Self::new(&*r.actual, SendState::new(r.state)) }
+    }
+}
+
+impl<T, State> SRFrom<ScopedRef<T, State>> for ScopedRef<T, NoSendState>
+where
+    T: ?Sized,
+    State: Clone + fmt::Debug,
+{
+    fn sr_from(r: ScopedRef<T, State>) -> Self {
+        unsafe { Self::new(&*r.actual, NoSendState::new(r.state)) }
+    }
+}
+
+impl<T, State> SRInto<ScopedRefMut<T, SendState>> for ScopedRefMut<T, State>
+where
+    T: ?Sized,
+    ScopedRefMut<T, SendState>: SRFrom<Self>,
+    State: Clone + fmt::Debug,
+{
+    fn sr_into(self) -> ScopedRefMut<T, SendState> {
+        ScopedRefMut::sr_from(self)
+    }
+}
+
+impl<T, State> SRInto<ScopedRef<T, SendState>> for ScopedRef<T, State>
+where
+    T: ?Sized,
+    ScopedRef<T, SendState>: SRFrom<Self>,
+    State: Clone + fmt::Debug,
+{
+    fn sr_into(self) -> ScopedRef<T, SendState> {
+        ScopedRef::sr_from(self)
+    }
+}
+
+impl<T, State> SRInto<ScopedRefMut<T, NoSendState>> for ScopedRefMut<T, State>
+where
+    T: ?Sized,
+    ScopedRefMut<T, NoSendState>: SRFrom<Self>,
+    State: Clone + fmt::Debug,
+{
+    fn sr_into(self) -> ScopedRefMut<T, NoSendState> {
+        ScopedRefMut::sr_from(self)
+    }
+}
+
+impl<T, State> SRInto<ScopedRef<T, NoSendState>> for ScopedRef<T, State>
+where
+    T: ?Sized,
+    ScopedRef<T, NoSendState>: SRFrom<Self>,
+    State: Clone + fmt::Debug,
+{
+    fn sr_into(self) -> ScopedRef<T, NoSendState> {
+        ScopedRef::sr_from(self)
+    }
+}
+
+impl<T, State> From<ScopedRefMut<T, State>> for ScopedRef<T, State>
+where
+    T: ?Sized,
+    State: Clone + fmt::Debug,
+{
+    fn from(r: ScopedRefMut<T, State>) -> Self {
+        unsafe { Self::new(&*r.actual, r.state) }
+    }
+}
