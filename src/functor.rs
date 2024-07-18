@@ -13,7 +13,7 @@ pub trait NoArgFunctor<'a> {
     /// Type returned by the functor invocation.
     type Output;
 
-    /// Invoke this functor, producing a new [Output].
+    /// Invoke this functor, producing a new [Self::Output].
     fn tuple_invoke(self) -> Self::Output;
 }
 

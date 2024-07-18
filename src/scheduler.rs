@@ -69,7 +69,7 @@ pub trait Scheduler: Eq + Clone + 'static {
 
     /// Create a scheduler, that won't reschedule immediately, but instead reschedule on the first ehm... reschedule.
     ///
-    /// Use these in [LetValue], [LetDone], or [LetError], when you're not switching scheduler:
+    /// Use these in [LetValue](crate::let_value::LetValue) when you're not switching scheduler:
     /// ```
     /// use senders_receivers::{Scheduler, LetValue, start_detached};
     /// use senders_receivers::refs;

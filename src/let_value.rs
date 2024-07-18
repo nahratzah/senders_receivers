@@ -20,6 +20,28 @@ use std::ops::{BitOr, DerefMut};
 /// A let-value sender is a sender, which, upon receiving a value, invokes a function.
 /// The function returns a new [TypedSender], which will be substitued in this place of the chain.
 ///
+/// Let-value takes a function which takes two arguments:
+/// - a [Scheduler], which can be used to continue on the same scheduler.
+/// - a [ScopedRefMut], which contains exclusive references to the value signal.
+///
+/// The state used by the [ScopedRefMut] argument is either [NoSendState](crate::refs::NoSendState) or [SendState](crate::refs::SendState).
+/// The [ScopedRefMut] can be expanded using the [DistributeRefTuple](crate::tuple::DistributeRefTuple) trait, and can be converted to a non-mutable reference:
+/// ```
+/// use std::fmt::Debug;
+/// use senders_receivers::refs;
+/// use senders_receivers::tuple::*;
+///
+/// fn example<State: Clone+Debug>(reference: refs::ScopedRefMut<(i32, String), State>) {
+///     // unpack the tuple
+///     let (number, string) = DistributeRefTuple::distribute(reference);
+///     // number: ScopedRefMut<i32, State>
+///     // string: ScopedRefMut<String, State>
+///
+///     // change string to be a non-mutable reference.
+///     let string: refs::ScopedRef<String, State> = string.into();
+/// }
+/// ```
+///
 /// Example:
 /// ```
 /// use senders_receivers::{Just, LetValue, SyncWait};
@@ -488,8 +510,7 @@ mod tests {
     use crate::just::Just;
     use crate::just_error::JustError;
     use crate::refs;
-    use crate::scheduler::Scheduler;
-    use crate::scheduler::{ImmediateScheduler, WithScheduler};
+    use crate::scheduler::{ImmediateScheduler, Scheduler};
     use crate::sync_wait::sync_wait;
 
     #[test]
