@@ -1,8 +1,10 @@
 use crate::embarrasingly_parallel::cross_thread_pool::CrossThreadPool;
 use crate::embarrasingly_parallel::tasks::{SendTask, Task};
 use crate::scheduler::Scheduler;
+use crate::scope::ScopeWrap;
 use crate::sync::{cross_thread_channel, same_thread_channel};
 use crate::traits::{BindSender, OperationState, ReceiverOf, TypedSender, TypedSenderConnect};
+use std::marker::PhantomData;
 use std::ops::BitOr;
 use std::thread;
 
@@ -82,26 +84,38 @@ pub struct ThreadLocalPoolTS {
     sch: ThreadLocalPool,
 }
 
-impl TypedSender<'_> for ThreadLocalPoolTS {
+impl TypedSender for ThreadLocalPoolTS {
     type Scheduler = ThreadLocalPool;
     type Value = ();
 }
 
-impl<ReceiverType> TypedSenderConnect<'_, ReceiverType> for ThreadLocalPoolTS
+impl<'a, ScopeImpl, ReceiverType> TypedSenderConnect<'a, ScopeImpl, ReceiverType>
+    for ThreadLocalPoolTS
 where
-    ReceiverType: ReceiverOf<ThreadLocalPool, ()> + 'static,
+    ReceiverType: ReceiverOf<ThreadLocalPool, ()>,
+    ScopeImpl: ScopeWrap<ThreadLocalPool, ReceiverType>,
 {
-    fn connect(self, receiver: ReceiverType) -> impl OperationState {
+    fn connect<'scope>(
+        self,
+        scope: &ScopeImpl,
+        receiver: ReceiverType,
+    ) -> impl OperationState<'scope>
+    where
+        'a: 'scope,
+        ScopeImpl: 'scope,
+        ReceiverType: 'scope,
+    {
         ThreadLocalPoolOperationState {
             sch: self.sch,
-            receiver,
+            receiver: scope.wrap(receiver),
+            phantom: PhantomData,
         }
     }
 }
 
 impl<BindSenderImpl> BitOr<BindSenderImpl> for ThreadLocalPoolTS
 where
-    BindSenderImpl: BindSender<Self> + 'static,
+    BindSenderImpl: BindSender<Self>,
 {
     type Output = BindSenderImpl::Output;
 
@@ -110,15 +124,17 @@ where
     }
 }
 
-struct ThreadLocalPoolOperationState<ReceiverType>
+struct ThreadLocalPoolOperationState<'scope, ReceiverType>
 where
     ReceiverType: ReceiverOf<ThreadLocalPool, ()> + 'static,
 {
+    phantom: PhantomData<&'scope ()>,
     sch: ThreadLocalPool,
     receiver: ReceiverType,
 }
 
-impl<ReceiverType> OperationState for ThreadLocalPoolOperationState<ReceiverType>
+impl<'scope, ReceiverType> OperationState<'scope>
+    for ThreadLocalPoolOperationState<'scope, ReceiverType>
 where
     ReceiverType: ReceiverOf<ThreadLocalPool, ()> + 'static,
 {

@@ -1,5 +1,6 @@
-use crate::errors::{Error, Tuple};
+use crate::errors::Error;
 use crate::scheduler::Scheduler;
+use crate::tuple::Tuple;
 
 /// Common receiver logic.
 /// All receivers can accept the done signal, and the error signal.
@@ -20,7 +21,7 @@ pub trait ReceiverOf<Sch: Scheduler, Values: Tuple>: Receiver {
 
 /// An operation state is a [TypedSender] with matching [ReceiverOf].
 /// It's ready to run, just waiting to be started.
-pub trait OperationState {
+pub trait OperationState<'scope> {
     /// Start the operation.
     fn start(self);
 }
@@ -35,7 +36,7 @@ pub trait Sender {}
 ///
 /// It can be extended with additional steps, by binding a [Sender] to it.
 /// Can be connected with a receiver, which is handled by the [TypedSenderConnect] trait.
-pub trait TypedSender<'a> {
+pub trait TypedSender {
     /// The type of the value signal.
     type Value: Tuple;
     /// The scheduler for this sender.
@@ -47,13 +48,21 @@ pub trait TypedSender<'a> {
 /// Senders are allowed to be arbitrarily restrictive about what type of receiver they'll accept.
 /// (This is how we can make cross-thread schedulers require a receiver to implement [Send],
 /// without requiring this trait on receivers for schedulers that don't require it.)
-pub trait TypedSenderConnect<'a, ReceiverType>: TypedSender<'a>
+pub trait TypedSenderConnect<'a, ScopeImpl, ReceiverType>: TypedSender
 where
     ReceiverType: ReceiverOf<Self::Scheduler, Self::Value>,
 {
     /// Attach a receiver.
     /// Will produce an operation state, that, once started, will invoke the receiver exactly once.
-    fn connect(self, receiver: ReceiverType) -> impl OperationState;
+    fn connect<'scope>(
+        self,
+        scope: &ScopeImpl,
+        receiver: ReceiverType,
+    ) -> impl OperationState<'scope>
+    where
+        'a: 'scope,
+        ScopeImpl: 'scope,
+        ReceiverType: 'scope;
 }
 
 /// [Sender] can extend [TypedSender].

@@ -1,11 +1,19 @@
-use crate::errors::{Error, Result, Tuple};
-use crate::functor::{BiClosure, BiFunctor, NoErrBiFunctor};
+pub mod functor;
+
+use crate::errors::{Error, Result};
+use crate::refs::SRInto;
+use crate::refs::ScopedRefMut;
 use crate::scheduler::Scheduler;
+use crate::scope::ScopeNest;
 use crate::traits::{
     BindSender, OperationState, Receiver, ReceiverOf, Sender, TypedSender, TypedSenderConnect,
 };
+use crate::tuple::Tuple;
+use crate::tuple::TupleCat;
+use functor::{BiClosure, BiFunctor, NoErrBiFunctor};
+use std::fmt::Debug;
 use std::marker::PhantomData;
-use std::ops::BitOr;
+use std::ops::{BitOr, DerefMut};
 
 /// Create a let-value [Sender].
 ///
@@ -14,126 +22,152 @@ use std::ops::BitOr;
 ///
 /// Example:
 /// ```
-/// use senders_receivers::{Just, LetValue, sync_wait};
+/// use senders_receivers::{Just, LetValue, SyncWait};
+/// use senders_receivers::refs;
 ///
 /// // If using a function that returns a sender:
 /// let sender = Just::from((String::from("world"),))
-///              | LetValue::from(|_, (name,)| {
-///                  Just::from((format!("Hello {}!", name),))
+///              | LetValue::from(|_, v: refs::ScopedRefMut<(String,), refs::NoSendState>| {
+///                  Just::from((format!("Hello {}!", v.0),))
 ///              });
 /// assert_eq!(
-///     (String::from("Hello world!"),),
-///     sync_wait(sender).unwrap().unwrap());
+///     (String::from("world"), String::from("Hello world!")),
+///     sender.sync_wait().unwrap().unwrap());
 ///
 /// // If using a function that returns a Result:
 /// let sender = Just::from((String::from("world"),))
-///              | LetValue::from(|_, (name,)| {
-///                  Ok(Just::from((format!("Hello {}!", name),)))
+///              | LetValue::from(|_, v: refs::ScopedRefMut<(String,), refs::NoSendState>| {
+///                  Ok(Just::from((format!("Hello {}!", v.0),)))
 ///              });
 /// assert_eq!(
-///     (String::from("Hello world!"),),
-///     sync_wait(sender).unwrap().unwrap());
+///     (String::from("world"), String::from("Hello world!")),
+///     sender.sync_wait().unwrap().unwrap());
 /// ```
-pub struct LetValue<'a, FnType, Out, FirstArg, ArgTuple>
+pub struct LetValue<'a, FnType, Out, Sch, Value, State>
 where
-    FnType: BiFunctor<'a, FirstArg, ArgTuple, Output = Result<Out>>,
-    FirstArg: Scheduler,
-    ArgTuple: Tuple,
-    Out: TypedSender<'a>,
+    FnType: 'a + BiFunctor<'a, Sch, Value, State, Output = Result<Out>>,
+    Sch: Scheduler,
+    Value: 'a + Tuple,
+    Out: TypedSender,
+    Out::Value: 'a,
+    (Value, Out::Value): TupleCat,
+    <(Value, Out::Value) as TupleCat>::Output: Tuple,
+    State: 'static + Clone + Debug,
 {
     fn_impl: FnType,
-    phantom: PhantomData<&'a fn(FirstArg, ArgTuple) -> Out>,
+    phantom: PhantomData<&'a fn(Sch, Value, State) -> Out>,
 }
 
-impl<'a, FnType, Out, FirstArg, ArgTuple> From<FnType>
-    for LetValue<'a, FnType, Out, FirstArg, ArgTuple>
+impl<'a, FnType, Out, Sch, Value, State> From<FnType>
+    for LetValue<'a, FnType, Out, Sch, Value, State>
 where
-    FnType: BiFunctor<'a, FirstArg, ArgTuple, Output = Result<Out>>,
-    FirstArg: Scheduler,
-    ArgTuple: Tuple,
-    Out: TypedSender<'a>,
+    FnType: 'a + BiFunctor<'a, Sch, Value, State, Output = Result<Out>>,
+    Sch: Scheduler,
+    Value: 'a + Tuple,
+    Out: TypedSender,
+    Out::Value: 'a,
+    (Value, Out::Value): TupleCat,
+    <(Value, Out::Value) as TupleCat>::Output: Tuple,
+    State: 'static + Clone + Debug,
 {
     fn from(fn_impl: FnType) -> Self {
-        LetValue {
+        Self {
             fn_impl,
             phantom: PhantomData,
         }
     }
 }
 
-type ClosureLetValue<'a, FnType, Out, FirstArg, ArgTuple> =
-    LetValue<'a, BiClosure<'a, FnType, Result<Out>, FirstArg, ArgTuple>, Out, FirstArg, ArgTuple>;
+type ClosureLetValue<'a, FnType, Out, Sch, Value, State> =
+    LetValue<'a, BiClosure<'a, FnType, Result<Out>, Sch, Value, State>, Out, Sch, Value, State>;
 
-impl<'a, FnType, Out, FirstArg, ArgTuple> From<FnType>
-    for ClosureLetValue<'a, FnType, Out, FirstArg, ArgTuple>
+impl<'a, FnType, Out, Sch, Value, State> From<FnType>
+    for ClosureLetValue<'a, FnType, Out, Sch, Value, State>
 where
-    FnType: 'a + FnOnce(FirstArg, ArgTuple) -> Result<Out>,
-    FirstArg: Scheduler,
-    ArgTuple: Tuple,
-    Out: TypedSender<'a>,
+    FnType: 'a + FnOnce(Sch, ScopedRefMut<Value, State>) -> Result<Out>,
+    Sch: Scheduler,
+    Value: 'a + Tuple,
+    Out: TypedSender,
+    Out::Value: 'a,
+    (Value, Out::Value): TupleCat,
+    <(Value, Out::Value) as TupleCat>::Output: Tuple,
+    State: 'static + Clone + Debug,
 {
     fn from(fn_impl: FnType) -> Self {
         Self::from(BiClosure::new(fn_impl))
     }
 }
 
-type NoErrLetValue<'a, FunctorType, Out, FirstArg, ArgTuple> =
-    LetValue<'a, NoErrBiFunctor<'a, FunctorType, Out, FirstArg, ArgTuple>, Out, FirstArg, ArgTuple>;
+type NoErrLetValue<'a, FnType, Out, Sch, Value, State> =
+    LetValue<'a, NoErrBiFunctor<'a, FnType, Out, Sch, Value, State>, Out, Sch, Value, State>;
 
-impl<'a, FnImpl, Out, FirstArg, ArgTuple> From<FnImpl>
-    for NoErrLetValue<'a, FnImpl, Out, FirstArg, ArgTuple>
+impl<'a, FnType, Out, Sch, Value, State> From<FnType>
+    for NoErrLetValue<'a, FnType, Out, Sch, Value, State>
 where
-    FnImpl: BiFunctor<'a, FirstArg, ArgTuple, Output = Out>,
-    FirstArg: Scheduler,
-    ArgTuple: Tuple,
-    Out: TypedSender<'a>,
+    FnType: BiFunctor<'a, Sch, Value, State, Output = Out>,
+    Sch: Scheduler,
+    Value: 'a + Tuple,
+    Out: TypedSender,
+    Out::Value: 'a,
+    (Value, Out::Value): TupleCat,
+    <(Value, Out::Value) as TupleCat>::Output: Tuple,
+    State: 'static + Clone + Debug,
 {
-    fn from(fn_impl: FnImpl) -> Self {
+    fn from(fn_impl: FnType) -> Self {
         Self::from(NoErrBiFunctor::new(fn_impl))
     }
 }
 
-type NoErrClosureLetValue<'a, FnImpl, Out, FirstArg, ArgTuple> =
-    NoErrLetValue<'a, BiClosure<'a, FnImpl, Out, FirstArg, ArgTuple>, Out, FirstArg, ArgTuple>;
+type NoErrClosureLetValue<'a, FnType, Out, Sch, Value, State> =
+    NoErrLetValue<'a, BiClosure<'a, FnType, Out, Sch, Value, State>, Out, Sch, Value, State>;
 
-impl<'a, FnImpl, Out, FirstArg, ArgTuple> From<FnImpl>
-    for NoErrClosureLetValue<'a, FnImpl, Out, FirstArg, ArgTuple>
+impl<'a, FnType, Out, Sch, Value, State> From<FnType>
+    for NoErrClosureLetValue<'a, FnType, Out, Sch, Value, State>
 where
-    FnImpl: 'a + FnOnce(FirstArg, ArgTuple) -> Out,
-    FirstArg: Scheduler,
-    ArgTuple: Tuple,
-    Out: TypedSender<'a>,
+    FnType: 'a + FnOnce(Sch, ScopedRefMut<Value, State>) -> Out,
+    Sch: Scheduler,
+    Value: 'a + Tuple,
+    Out: TypedSender,
+    Out::Value: 'a,
+    (Value, Out::Value): TupleCat,
+    <(Value, Out::Value) as TupleCat>::Output: Tuple,
+    State: 'static + Clone + Debug,
 {
-    fn from(fn_impl: FnImpl) -> Self {
+    fn from(fn_impl: FnType) -> Self {
         Self::from(BiClosure::new(fn_impl))
     }
 }
 
-impl<'a, FnType, Out: TypedSender<'a>, FirstArg: Scheduler, ArgTuple: Tuple> Sender
-    for LetValue<'a, FnType, Out, FirstArg, ArgTuple>
+impl<'a, FnType, Out, Sch, Value, State> Sender for LetValue<'a, FnType, Out, Sch, Value, State>
 where
-    FnType: BiFunctor<'a, FirstArg, ArgTuple, Output = Result<Out>>,
+    FnType: 'a + BiFunctor<'a, Sch, Value, State, Output = Result<Out>>,
+    Sch: Scheduler,
+    Value: 'a + Tuple,
+    Out: TypedSender,
+    Out::Value: 'a,
+    (Value, Out::Value): TupleCat,
+    <(Value, Out::Value) as TupleCat>::Output: Tuple,
+    State: 'static + Clone + Debug,
 {
 }
 
-impl<'a, FnType, Out, NestedSender> BindSender<NestedSender>
-    for LetValue<
-        'a,
-        FnType,
-        Out,
-        <NestedSender as TypedSender<'a>>::Scheduler,
-        <NestedSender as TypedSender<'a>>::Value,
-    >
+impl<'a, NestedSender, FnType, Out, Sch, Value, State> BindSender<NestedSender>
+    for LetValue<'a, FnType, Out, Sch, Value, State>
 where
-    NestedSender: TypedSender<'a>,
-    FnType: BiFunctor<'a, NestedSender::Scheduler, NestedSender::Value, Output = Result<Out>>,
-    NestedSender::Value: Tuple,
-    Out: TypedSender<'a>,
+    NestedSender: TypedSender<Scheduler = Sch, Value = Value>,
+    FnType: 'a + BiFunctor<'a, Sch, Value, State, Output = Result<Out>>,
+    Sch: Scheduler,
+    Value: 'a + Tuple,
+    Out: TypedSender,
+    Out::Value: 'a,
+    (Value, Out::Value): TupleCat,
+    <(Value, Out::Value) as TupleCat>::Output: Tuple,
+    State: 'static + Clone + Debug,
 {
-    type Output = LetValueSender<'a, NestedSender, FnType, Out>;
+    type Output = LetValueTS<'a, NestedSender, FnType, Out, Sch, Value, State>;
 
     fn bind(self, nested: NestedSender) -> Self::Output {
-        LetValueSender {
+        LetValueTS {
             nested,
             fn_impl: self.fn_impl,
             phantom: PhantomData,
@@ -141,14 +175,36 @@ where
     }
 }
 
-impl<'a, NestedSender, FnType, Out: TypedSender<'a>, BindSenderImpl> BitOr<BindSenderImpl>
-    for LetValueSender<'a, NestedSender, FnType, Out>
+pub struct LetValueTS<'a, NestedSender, FnType, Out, Sch, Value, State>
+where
+    NestedSender: TypedSender<Scheduler = Sch, Value = Value>,
+    FnType: 'a + BiFunctor<'a, Sch, Value, State, Output = Result<Out>>,
+    Sch: Scheduler,
+    Value: 'a + Tuple,
+    Out: TypedSender,
+    Out::Value: 'a,
+    (Value, Out::Value): TupleCat,
+    <(Value, Out::Value) as TupleCat>::Output: Tuple,
+    State: 'static + Clone + Debug,
+{
+    nested: NestedSender,
+    fn_impl: FnType,
+    phantom: PhantomData<&'a fn(Sch, Value, State) -> Out>,
+}
+
+impl<'a, BindSenderImpl, NestedSender, FnType, Out, Sch, Value, State> BitOr<BindSenderImpl>
+    for LetValueTS<'a, NestedSender, FnType, Out, Sch, Value, State>
 where
     BindSenderImpl: BindSender<Self>,
-    NestedSender: TypedSender<'a>,
-    FnType: BiFunctor<'a, NestedSender::Scheduler, NestedSender::Value, Output = Result<Out>>,
-    NestedSender::Value: Tuple,
-    Out: TypedSender<'a>,
+    NestedSender: TypedSender<Scheduler = Sch, Value = Value>,
+    FnType: 'a + BiFunctor<'a, Sch, Value, State, Output = Result<Out>>,
+    Sch: Scheduler,
+    Value: 'a + Tuple,
+    Out: TypedSender,
+    Out::Value: 'a,
+    (Value, Out::Value): TupleCat,
+    <(Value, Out::Value) as TupleCat>::Output: Tuple,
+    State: 'static + Clone + Debug,
 {
     type Output = BindSenderImpl::Output;
 
@@ -157,106 +213,271 @@ where
     }
 }
 
-pub struct LetValueSender<'a, NestedSender, FnType, Out>
+impl<'a, NestedSender, FnType, Out, Sch, Value, State> TypedSender
+    for LetValueTS<'a, NestedSender, FnType, Out, Sch, Value, State>
 where
-    NestedSender: TypedSender<'a>,
-    FnType: BiFunctor<'a, NestedSender::Scheduler, NestedSender::Value, Output = Result<Out>>,
-    Out: TypedSender<'a>,
+    NestedSender: TypedSender<Scheduler = Sch, Value = Value>,
+    FnType: 'a + BiFunctor<'a, Sch, Value, State, Output = Result<Out>>,
+    Sch: Scheduler,
+    Value: 'a + Tuple,
+    Out: TypedSender,
+    Out::Value: 'a,
+    (Value, Out::Value): TupleCat,
+    <(Value, Out::Value) as TupleCat>::Output: Tuple,
+    State: 'static + Clone + Debug,
 {
-    nested: NestedSender,
-    fn_impl: FnType,
-    phantom: PhantomData<&'a fn() -> Out>,
-}
-
-impl<'a, NestedSender, FnType, Out> TypedSender<'a>
-    for LetValueSender<'a, NestedSender, FnType, Out>
-where
-    NestedSender: TypedSender<'a>,
-    FnType: BiFunctor<'a, NestedSender::Scheduler, NestedSender::Value, Output = Result<Out>>,
-    Out: TypedSender<'a>,
-{
-    type Value = Out::Value;
+    type Value = <(Value, Out::Value) as TupleCat>::Output;
     type Scheduler = Out::Scheduler;
 }
 
-impl<'a, ReceiverImpl, NestedSender, FnType, Out> TypedSenderConnect<'a, ReceiverImpl>
-    for LetValueSender<'a, NestedSender, FnType, Out>
+impl<'a, ScopeImpl, ReceiverImpl, NestedSender, FnType, Out, Sch, Value, State>
+    TypedSenderConnect<'a, ScopeImpl, ReceiverImpl>
+    for LetValueTS<'a, NestedSender, FnType, Out, Sch, Value, State>
 where
-    ReceiverImpl: ReceiverOf<Out::Scheduler, Out::Value>,
-    NestedSender: TypedSender<'a>
+    NestedSender: TypedSender<Scheduler = Sch, Value = Value>
         + TypedSenderConnect<
             'a,
-            LetValueWrappedReceiver<
-                'a,
-                ReceiverImpl,
-                FnType,
-                Out,
-                <NestedSender as TypedSender<'a>>::Scheduler,
-                <NestedSender as TypedSender<'a>>::Value,
-            >,
+            ScopeImpl,
+            LetValueReceiver<'a, ScopeImpl, ReceiverImpl, FnType, Out, Sch, Value, State>,
         >,
-    NestedSender::Value: 'a,
-    FnType: BiFunctor<'a, NestedSender::Scheduler, NestedSender::Value, Output = Result<Out>>,
-    Out: TypedSender<'a> + TypedSenderConnect<'a, ReceiverImpl>,
+    FnType: 'a + BiFunctor<'a, Sch, Value, State, Output = Result<Out>>,
+    Sch: Scheduler,
+    Value: 'a + Tuple,
+    Out: 'a // XXX 'a is wrong here!
+        + TypedSender
+        + TypedSenderConnect<
+            'a, // XXX 'a is also wrong here!
+            ScopeImpl::NewScopeType,
+            ScopeImpl::NewReceiver,
+        >,
+    Out::Value: 'a,
+    ScopeImpl: ScopeNest<
+        <Out as TypedSender>::Scheduler,
+        <Out as TypedSender>::Value,
+        LocalReceiverWithValue<
+            <Out as TypedSender>::Scheduler,
+            Value,
+            <Out as TypedSender>::Value,
+            ReceiverImpl,
+        >,
+    >,
+    (Value, Out::Value): TupleCat,
+    <(Value, Out::Value) as TupleCat>::Output: 'a + Tuple,
+    ReceiverImpl: ReceiverOf<Out::Scheduler, <(Value, Out::Value) as TupleCat>::Output>,
+    State: 'static + Clone + Debug,
+    ScopedRefMut<Value, ScopeImpl::NewScopeData>: SRInto<ScopedRefMut<Value, State>>,
 {
-    fn connect(self, receiver: ReceiverImpl) -> impl OperationState {
-        let wrapped_receiver = LetValueWrappedReceiver {
-            nested: receiver,
-            fn_impl: self.fn_impl,
+    fn connect<'scope>(
+        self,
+        scope: &ScopeImpl,
+        receiver: ReceiverImpl,
+    ) -> impl OperationState<'scope>
+    where
+        'a: 'scope,
+        ScopeImpl: 'scope,
+        ReceiverImpl: 'scope,
+    {
+        let receiver = LetValueReceiver {
             phantom: PhantomData,
+            nested: receiver,
+            scope: scope.clone(),
+            fn_impl: self.fn_impl,
         };
-        self.nested.connect(wrapped_receiver)
+        self.nested.connect(scope, receiver)
     }
 }
 
-struct LetValueWrappedReceiver<'a, ReceiverImpl, FnType, Out, FirstArg, ArgTuple>
+struct LetValueReceiver<'a, ScopeImpl, NestedReceiver, FnType, Out, Sch, Value, State>
 where
-    ReceiverImpl: ReceiverOf<Out::Scheduler, Out::Value>,
-    FnType: BiFunctor<'a, FirstArg, ArgTuple, Output = Result<Out>>,
-    FirstArg: Scheduler,
-    ArgTuple: Tuple,
-    Out: TypedSender<'a> + TypedSenderConnect<'a, ReceiverImpl>,
+    ScopeImpl: ScopeNest<
+        <Out as TypedSender>::Scheduler,
+        <Out as TypedSender>::Value,
+        LocalReceiverWithValue<
+            <Out as TypedSender>::Scheduler,
+            Value,
+            <Out as TypedSender>::Value,
+            NestedReceiver,
+        >,
+    >,
+    NestedReceiver: ReceiverOf<
+        <Out as TypedSender>::Scheduler,
+        <(Value, <Out as TypedSender>::Value) as TupleCat>::Output,
+    >,
+    FnType: 'a + BiFunctor<'a, Sch, Value, State, Output = Result<Out>>,
+    Sch: Scheduler,
+    Value: 'a + Tuple,
+    Out: TypedSender
+        + TypedSenderConnect<
+            'a, // XXX 'a is wrong here
+            ScopeImpl::NewScopeType,
+            ScopeImpl::NewReceiver,
+        >,
+    Out::Value: 'a,
+    (Value, Out::Value): TupleCat,
+    <(Value, Out::Value) as TupleCat>::Output: 'a + Tuple,
+    State: 'static + Clone + Debug,
 {
-    nested: ReceiverImpl,
+    phantom: PhantomData<&'a fn(Sch, Value, State) -> Out>,
+    nested: NestedReceiver,
+    scope: ScopeImpl,
     fn_impl: FnType,
-    phantom: PhantomData<&'a fn(FirstArg, ArgTuple) -> Out>,
 }
 
-impl<'a, ReceiverImpl, FnType, Out, FirstArg, ArgTuple> Receiver
-    for LetValueWrappedReceiver<'a, ReceiverImpl, FnType, Out, FirstArg, ArgTuple>
+impl<'a, ScopeImpl, NestedReceiver, FnType, Out, Sch, Value, State> Receiver
+    for LetValueReceiver<'a, ScopeImpl, NestedReceiver, FnType, Out, Sch, Value, State>
 where
-    ReceiverImpl: ReceiverOf<Out::Scheduler, Out::Value>,
-    FnType: BiFunctor<'a, FirstArg, ArgTuple, Output = Result<Out>>,
-    FirstArg: Scheduler,
-    ArgTuple: Tuple,
-    Out: TypedSender<'a> + TypedSenderConnect<'a, ReceiverImpl>,
+    ScopeImpl: ScopeNest<
+        <Out as TypedSender>::Scheduler,
+        <Out as TypedSender>::Value,
+        LocalReceiverWithValue<
+            <Out as TypedSender>::Scheduler,
+            Value,
+            <Out as TypedSender>::Value,
+            NestedReceiver,
+        >,
+    >,
+    NestedReceiver: ReceiverOf<Out::Scheduler, <(Value, Out::Value) as TupleCat>::Output>,
+    FnType: 'a + BiFunctor<'a, Sch, Value, State, Output = Result<Out>>,
+    Sch: Scheduler,
+    Value: 'a + Tuple,
+    Out: TypedSender
+        + TypedSenderConnect<
+            'a, // XXX 'a is wrong here
+            ScopeImpl::NewScopeType,
+            ScopeImpl::NewReceiver,
+        >,
+    Out::Value: 'a,
+    (Value, Out::Value): TupleCat,
+    <(Value, Out::Value) as TupleCat>::Output: 'a + Tuple,
+    State: 'static + Clone + Debug,
 {
-    fn set_done(self) {
-        self.nested.set_done();
-    }
-
     fn set_error(self, error: Error) {
         self.nested.set_error(error);
     }
+
+    fn set_done(self) {
+        self.nested.set_done();
+    }
 }
 
-impl<'a, ReceiverImpl, FnType, Out, FirstArg, ArgTuple> ReceiverOf<FirstArg, ArgTuple>
-    for LetValueWrappedReceiver<'a, ReceiverImpl, FnType, Out, FirstArg, ArgTuple>
+impl<'a, ScopeImpl, NestedReceiver, FnType, Out, Sch, Value, State> ReceiverOf<Sch, Value>
+    for LetValueReceiver<'a, ScopeImpl, NestedReceiver, FnType, Out, Sch, Value, State>
 where
-    ReceiverImpl: ReceiverOf<Out::Scheduler, Out::Value>,
-    FnType: BiFunctor<'a, FirstArg, ArgTuple, Output = Result<Out>>,
-    FirstArg: Scheduler,
-    ArgTuple: Tuple,
-    Out: TypedSender<'a> + TypedSenderConnect<'a, ReceiverImpl>,
+    ScopeImpl: ScopeNest<
+        <Out as TypedSender>::Scheduler,
+        <Out as TypedSender>::Value,
+        LocalReceiverWithValue<
+            <Out as TypedSender>::Scheduler,
+            Value,
+            <Out as TypedSender>::Value,
+            NestedReceiver,
+        >,
+    >,
+    NestedReceiver:
+        ReceiverOf<Out::Scheduler, <(Value, <Out as TypedSender>::Value) as TupleCat>::Output>,
+    FnType: 'a + BiFunctor<'a, Sch, Value, State, Output = Result<Out>>,
+    Sch: Scheduler,
+    Value: 'a + Tuple,
+    Out: TypedSender
+        + TypedSenderConnect<
+            'a, // XXX 'a is wrong here
+            ScopeImpl::NewScopeType,
+            ScopeImpl::NewReceiver,
+        >,
+    Out::Value: 'a,
+    (Value, <Out as TypedSender>::Value): TupleCat,
+    <(Value, <Out as TypedSender>::Value) as TupleCat>::Output: 'a + Tuple,
+    State: 'static + Clone + Debug,
+    ScopedRefMut<Value, ScopeImpl::NewScopeData>: SRInto<ScopedRefMut<Value, State>>,
 {
-    fn set_value(self, scheduler: FirstArg, values: ArgTuple) {
-        match self.fn_impl.tuple_invoke(scheduler, values) {
-            Ok(sender) => {
-                let nested_state = sender.connect(self.nested);
-                nested_state.start()
-            }
-            Err(e) => self.nested.set_error(e),
+    fn set_value(self, sch: Sch, value: Value) {
+        let local_receiver_with_value = LocalReceiverWithValue::new(value, self.nested);
+        let (local_scope, local_receiver, rcv_ref) =
+            self.scope.new_scope(local_receiver_with_value);
+
+        let values_ref = ScopedRefMut::map(
+            rcv_ref,
+            |rcv: &mut LocalReceiverWithValue<
+                <Out as TypedSender>::Scheduler,
+                Value,
+                <Out as TypedSender>::Value,
+                NestedReceiver,
+            >| rcv.values_ref(),
+        );
+
+        match self.fn_impl.tuple_invoke(sch, values_ref.sr_into()) {
+            Ok(local_sender) => local_sender.connect(&local_scope, local_receiver).start(),
+            Err(error) => local_receiver.set_error(error),
         };
+    }
+}
+
+struct LocalReceiverWithValue<Sch, Value, OutValue, Rcv>
+where
+    Sch: Scheduler,
+    Value: Tuple,
+    OutValue: Tuple,
+    (Value, OutValue): TupleCat,
+    <(Value, OutValue) as TupleCat>::Output: Tuple,
+    Rcv: ReceiverOf<Sch, <(Value, OutValue) as TupleCat>::Output>,
+{
+    phantom: PhantomData<fn(Sch, OutValue)>,
+    value: Box<Value>,
+    rcv: Rcv,
+}
+
+impl<Sch, Value, OutValue, Rcv> LocalReceiverWithValue<Sch, Value, OutValue, Rcv>
+where
+    Sch: Scheduler,
+    Value: Tuple,
+    OutValue: Tuple,
+    (Value, OutValue): TupleCat,
+    <(Value, OutValue) as TupleCat>::Output: Tuple,
+    Rcv: ReceiverOf<Sch, <(Value, OutValue) as TupleCat>::Output>,
+{
+    fn new(value: Value, rcv: Rcv) -> Self {
+        Self {
+            phantom: PhantomData,
+            value: Box::new(value),
+            rcv,
+        }
+    }
+
+    fn values_ref(&mut self) -> &mut Value {
+        self.value.deref_mut()
+    }
+}
+
+impl<Sch, Value, OutValue, Rcv> Receiver for LocalReceiverWithValue<Sch, Value, OutValue, Rcv>
+where
+    Sch: Scheduler,
+    Value: Tuple,
+    OutValue: Tuple,
+    (Value, OutValue): TupleCat,
+    <(Value, OutValue) as TupleCat>::Output: Tuple,
+    Rcv: ReceiverOf<Sch, <(Value, OutValue) as TupleCat>::Output>,
+{
+    fn set_error(self, error: Error) {
+        self.rcv.set_error(error);
+    }
+
+    fn set_done(self) {
+        self.rcv.set_done();
+    }
+}
+
+impl<Sch, Value, OutValue, Rcv> ReceiverOf<Sch, OutValue>
+    for LocalReceiverWithValue<Sch, Value, OutValue, Rcv>
+where
+    Sch: Scheduler,
+    Value: Tuple,
+    OutValue: Tuple,
+    (Value, OutValue): TupleCat,
+    <(Value, OutValue) as TupleCat>::Output: Tuple,
+    Rcv: ReceiverOf<Sch, <(Value, OutValue) as TupleCat>::Output>,
+{
+    fn set_value(self, sch: Sch, value: OutValue) {
+        self.rcv.set_value(sch, (*self.value, value).cat());
     }
 }
 
@@ -266,6 +487,8 @@ mod tests {
     use crate::errors::{new_error, ErrorForTesting, Result};
     use crate::just::Just;
     use crate::just_error::JustError;
+    use crate::refs;
+    use crate::scheduler::Scheduler;
     use crate::scheduler::{ImmediateScheduler, WithScheduler};
     use crate::sync_wait::sync_wait;
 
@@ -275,9 +498,9 @@ mod tests {
             Some((6, 7, 8)),
             sync_wait(
                 Just::from((6,))
-                    | LetValue::from(|_, (x,)| {
-                        assert_eq!(x, 6);
-                        Just::from((x, 7, 8))
+                    | LetValue::from(|_, x: refs::ScopedRefMut<(i32,), refs::NoSendState>| {
+                        assert_eq!(x.0, 6);
+                        Just::from((7, 8))
                     })
             )
             .expect("should succeed")
@@ -288,8 +511,13 @@ mod tests {
     fn it_works_with_errors() {
         assert_eq!(
             Some((6, 7, 8)),
-            sync_wait(Just::from((6,)) | LetValue::from(|_, (x,)| Ok(Just::from((x, 7, 8)))))
-                .expect("should succeed")
+            sync_wait(
+                Just::from((6,))
+                    | LetValue::from(|_, _: refs::ScopedRefMut<(i32,), refs::NoSendState>| Ok(
+                        Just::from((7, 8))
+                    ))
+            )
+            .expect("should succeed")
         )
     }
 
@@ -297,9 +525,13 @@ mod tests {
     fn errors_from_preceding_sender_are_propagated() {
         match sync_wait(
             JustError::<ImmediateScheduler, ()>::from(new_error(ErrorForTesting::from("error")))
-                | LetValue::from(|_, ()| -> Just<ImmediateScheduler, (i32,)> {
-                    panic!("expect this function to not be invoked")
-                }),
+                | LetValue::from(
+                    |_,
+                     _: refs::ScopedRefMut<(), refs::NoSendState>|
+                     -> Just<ImmediateScheduler, (i32,)> {
+                        panic!("expect this function to not be invoked")
+                    },
+                ),
         ) {
             Ok(_) => panic!("expected an error"),
             Err(e) => {
@@ -315,9 +547,13 @@ mod tests {
     fn errors_from_functor_are_propagated() {
         match sync_wait(
             Just::from(())
-                | LetValue::from(|_, ()| -> Result<Just<ImmediateScheduler, (i32,)>> {
-                    Err(new_error(ErrorForTesting::from("error")))
-                }),
+                | LetValue::from(
+                    |_,
+                     _: refs::ScopedRefMut<(), refs::NoSendState>|
+                     -> Result<Just<ImmediateScheduler, (i32,)>> {
+                        Err(new_error(ErrorForTesting::from("error")))
+                    },
+                ),
         ) {
             Ok(_) => panic!("expected an error"),
             Err(e) => {
@@ -334,12 +570,11 @@ mod tests {
         // nested_sender refers to the sender returned by the functor.
         match sync_wait(
             Just::from(())
-                | LetValue::from(|sch: ImmediateScheduler, ()| {
-                    JustError::<ImmediateScheduler, ()>::with_scheduler(
-                        sch,
-                        new_error(ErrorForTesting::from("error")),
-                    )
-                }),
+                | LetValue::from(
+                    |sch: ImmediateScheduler, _: refs::ScopedRefMut<(), refs::NoSendState>| {
+                        sch.schedule_error::<()>(new_error(ErrorForTesting::from("error")))
+                    },
+                ),
         ) {
             Ok(_) => panic!("expected an error"),
             Err(e) => {

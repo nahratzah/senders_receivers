@@ -1,8 +1,8 @@
-use crate::errors::Tuple;
 use crate::scheduler::{ImmediateScheduler, Scheduler};
 use crate::traits::{
     BindSender, OperationState, Receiver, ReceiverOf, TypedSender, TypedSenderConnect,
 };
+use crate::tuple::Tuple;
 use std::marker::PhantomData;
 use std::ops::BitOr;
 
@@ -44,29 +44,45 @@ impl<Tpl: Tuple> Default for JustDone<ImmediateScheduler, Tpl> {
     }
 }
 
-impl<Sch: Scheduler, Tpl: Tuple> TypedSender<'_> for JustDone<Sch, Tpl> {
+impl<Sch: Scheduler, Tpl: Tuple> TypedSender for JustDone<Sch, Tpl> {
     type Value = Tpl;
     type Scheduler = Sch::LocalScheduler;
 }
 
-impl<Sch, ReceiverType, Tpl> TypedSenderConnect<'_, ReceiverType> for JustDone<Sch, Tpl>
+impl<'a, ScopeImpl, ReceiverType, Sch, Tpl> TypedSenderConnect<'a, ScopeImpl, ReceiverType>
+    for JustDone<Sch, Tpl>
 where
     Sch: Scheduler,
     Tpl: Tuple,
     ReceiverType: ReceiverOf<Sch::LocalScheduler, Tpl>,
 {
-    fn connect(self, receiver: ReceiverType) -> impl OperationState {
-        JustDoneOperationState { receiver }
+    fn connect<'scope>(self, _: &ScopeImpl, receiver: ReceiverType) -> impl OperationState<'scope>
+    where
+        'a: 'scope,
+        ScopeImpl: 'scope,
+        ReceiverType: 'scope,
+    {
+        JustDoneOperationState {
+            phantom: PhantomData,
+            receiver,
+        }
     }
 }
 
-pub struct JustDoneOperationState<ReceiverImpl: Receiver> {
+pub struct JustDoneOperationState<'scope, ReceiverImpl>
+where
+    ReceiverImpl: Receiver + 'scope,
+{
+    phantom: PhantomData<&'scope ()>,
     receiver: ReceiverImpl,
 }
 
-impl<ReceiverImpl: Receiver> OperationState for JustDoneOperationState<ReceiverImpl> {
+impl<'scope, ReceiverImpl> OperationState<'scope> for JustDoneOperationState<'scope, ReceiverImpl>
+where
+    ReceiverImpl: Receiver + 'scope,
+{
     fn start(self) {
-        self.receiver.set_done()
+        self.receiver.set_done();
     }
 }
 

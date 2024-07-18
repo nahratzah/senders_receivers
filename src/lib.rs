@@ -111,27 +111,28 @@ pub mod io;
 mod just;
 mod just_done;
 mod just_error;
-mod let_error;
 mod let_value;
+pub mod refs;
 mod scheduler;
+mod scope;
 mod start_detached;
 mod sync;
 mod sync_wait;
 mod then;
 mod traits;
 mod transfer;
+pub mod tuple;
 mod upon_done;
 mod upon_error;
 
-pub use errors::{new_error, Error, Result, Tuple};
+pub use errors::{new_error, Error, Result};
 pub use just::Just;
 pub use just_done::JustDone;
 pub use just_error::JustError;
-pub use let_error::LetError;
 pub use let_value::LetValue;
 pub use scheduler::{ImmediateScheduler, Scheduler, WithScheduler};
 pub use start_detached::start_detached;
-pub use sync_wait::{sync_wait, sync_wait_send};
+pub use sync_wait::{sync_wait, sync_wait_send, SyncWait, SyncWaitSend};
 pub use then::Then;
 pub use traits::{
     BindSender, OperationState, Receiver, ReceiverOf, Sender, TypedSender, TypedSenderConnect,

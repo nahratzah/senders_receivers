@@ -1,9 +1,10 @@
-use crate::errors::{Error, Result, Tuple};
+use crate::errors::{Error, Result};
 use crate::functor::{Closure, Functor, NoErrFunctor};
 use crate::scheduler::Scheduler;
 use crate::traits::{
     BindSender, OperationState, Receiver, ReceiverOf, Sender, TypedSender, TypedSenderConnect,
 };
+use crate::tuple::Tuple;
 use std::marker::PhantomData;
 use std::ops::BitOr;
 
@@ -33,7 +34,7 @@ use std::ops::BitOr;
 /// those operate on functors.
 pub struct Then<'a, FnType, Out, ArgTuple>
 where
-    FnType: Functor<'a, ArgTuple, Output = Result<Out>>,
+    FnType: 'a + Functor<'a, ArgTuple, Output = Result<Out>>,
     ArgTuple: Tuple,
     Out: 'a + Tuple,
 {
@@ -43,7 +44,7 @@ where
 
 impl<'a, FnType, Out, ArgTuple> From<FnType> for Then<'a, FnType, Out, ArgTuple>
 where
-    FnType: Functor<'a, ArgTuple, Output = Result<Out>>,
+    FnType: 'a + Functor<'a, ArgTuple, Output = Result<Out>>,
     ArgTuple: Tuple,
     Out: 'a + Tuple,
 {
@@ -78,7 +79,7 @@ type NoErrThen<'a, FunctorType, Out, ArgTuple> =
 
 impl<'a, FnImpl, Out, ArgTuple> From<FnImpl> for NoErrThen<'a, FnImpl, Out, ArgTuple>
 where
-    FnImpl: Functor<'a, ArgTuple, Output = Out>,
+    FnImpl: 'a + Functor<'a, ArgTuple, Output = Out>,
     ArgTuple: Tuple,
     Out: 'a + Tuple,
 {
@@ -106,15 +107,15 @@ where
 }
 
 impl<'a, FnType, Out: Tuple, ArgTuple: Tuple> Sender for Then<'a, FnType, Out, ArgTuple> where
-    FnType: Functor<'a, ArgTuple, Output = Result<Out>>
+    FnType: 'a + Functor<'a, ArgTuple, Output = Result<Out>>
 {
 }
 
 impl<'a, FnType, Out, NestedSender> BindSender<NestedSender>
-    for Then<'a, FnType, Out, <NestedSender as TypedSender<'a>>::Value>
+    for Then<'a, FnType, Out, <NestedSender as TypedSender>::Value>
 where
-    NestedSender: TypedSender<'a>,
-    FnType: Functor<'a, NestedSender::Value, Output = Result<Out>>,
+    NestedSender: TypedSender,
+    FnType: 'a + Functor<'a, NestedSender::Value, Output = Result<Out>>,
     NestedSender::Value: Tuple,
     Out: 'a + Tuple,
 {
@@ -133,8 +134,8 @@ impl<'a, NestedSender, FnType, Out, BindSenderImpl> BitOr<BindSenderImpl>
     for ThenSender<'a, NestedSender, FnType, Out>
 where
     BindSenderImpl: BindSender<ThenSender<'a, NestedSender, FnType, Out>>,
-    NestedSender: TypedSender<'a>,
-    FnType: Functor<'a, NestedSender::Value, Output = Result<Out>>,
+    NestedSender: TypedSender,
+    FnType: 'a + Functor<'a, NestedSender::Value, Output = Result<Out>>,
     NestedSender::Value: Tuple,
     Out: 'a + Tuple,
 {
@@ -147,8 +148,8 @@ where
 
 pub struct ThenSender<'a, NestedSender, FnType, Out>
 where
-    NestedSender: TypedSender<'a>,
-    FnType: Functor<'a, NestedSender::Value, Output = Result<Out>>,
+    NestedSender: TypedSender,
+    FnType: 'a + Functor<'a, NestedSender::Value, Output = Result<Out>>,
     Out: 'a + Tuple,
 {
     nested: NestedSender,
@@ -156,51 +157,61 @@ where
     phantom: PhantomData<&'a fn() -> Out>,
 }
 
-impl<'a, NestedSender, FnType, Out> TypedSender<'a> for ThenSender<'a, NestedSender, FnType, Out>
+impl<'a, NestedSender, FnType, Out> TypedSender for ThenSender<'a, NestedSender, FnType, Out>
 where
-    NestedSender: TypedSender<'a>,
-    FnType: Functor<'a, NestedSender::Value, Output = Result<Out>>,
+    NestedSender: TypedSender,
+    FnType: 'a + Functor<'a, NestedSender::Value, Output = Result<Out>>,
     Out: 'a + Tuple,
 {
     type Value = Out;
     type Scheduler = NestedSender::Scheduler;
 }
 
-impl<'a, ReceiverImpl, NestedSender, FnType, Out> TypedSenderConnect<'a, ReceiverImpl>
-    for ThenSender<'a, NestedSender, FnType, Out>
+impl<'a, ScopeImpl, ReceiverImpl, NestedSender, FnType, Out>
+    TypedSenderConnect<'a, ScopeImpl, ReceiverImpl> for ThenSender<'a, NestedSender, FnType, Out>
 where
     ReceiverImpl: ReceiverOf<Self::Scheduler, Out>,
-    NestedSender: TypedSender<'a>
+    NestedSender: TypedSender
         + TypedSenderConnect<
             'a,
+            ScopeImpl,
             ThenWrappedReceiver<
                 'a,
                 ReceiverImpl,
                 FnType,
                 Self::Scheduler,
                 Out,
-                <NestedSender as TypedSender<'a>>::Value,
+                <NestedSender as TypedSender>::Value,
             >,
         >,
     NestedSender::Value: 'a,
-    FnType: Functor<'a, NestedSender::Value, Output = Result<Out>>,
+    FnType: 'a + Functor<'a, NestedSender::Value, Output = Result<Out>>,
     Out: 'a + Tuple,
 {
-    fn connect(self, receiver: ReceiverImpl) -> impl OperationState {
+    fn connect<'scope>(
+        self,
+        scope: &ScopeImpl,
+        receiver: ReceiverImpl,
+    ) -> impl OperationState<'scope>
+    where
+        'a: 'scope,
+        ScopeImpl: 'scope,
+        ReceiverImpl: 'scope,
+    {
         let wrapped_receiver = ThenWrappedReceiver {
             nested: receiver,
             fn_impl: self.fn_impl,
             phantom: PhantomData,
         };
 
-        self.nested.connect(wrapped_receiver)
+        self.nested.connect(scope, wrapped_receiver)
     }
 }
 
 struct ThenWrappedReceiver<'a, ReceiverImpl, FnType, Sch, Out, ArgTuple>
 where
     ReceiverImpl: ReceiverOf<Sch, Out>,
-    FnType: Functor<'a, ArgTuple, Output = Result<Out>>,
+    FnType: 'a + Functor<'a, ArgTuple, Output = Result<Out>>,
     Sch: Scheduler,
     ArgTuple: Tuple,
     Out: 'a + Tuple,
@@ -214,7 +225,7 @@ impl<'a, ReceiverImpl, FnType, Sch, ArgTuple, Out> Receiver
     for ThenWrappedReceiver<'a, ReceiverImpl, FnType, Sch, Out, ArgTuple>
 where
     ReceiverImpl: ReceiverOf<Sch, Out>,
-    FnType: Functor<'a, ArgTuple, Output = Result<Out>>,
+    FnType: 'a + Functor<'a, ArgTuple, Output = Result<Out>>,
     Sch: Scheduler,
     ArgTuple: Tuple,
     Out: 'a + Tuple,
@@ -232,7 +243,7 @@ impl<'a, ReceiverImpl, FnType, Sch, ArgTuple, Out> ReceiverOf<Sch, ArgTuple>
     for ThenWrappedReceiver<'a, ReceiverImpl, FnType, Sch, Out, ArgTuple>
 where
     ReceiverImpl: ReceiverOf<Sch, Out>,
-    FnType: Functor<'a, ArgTuple, Output = Result<Out>>,
+    FnType: 'a + Functor<'a, ArgTuple, Output = Result<Out>>,
     Sch: Scheduler,
     ArgTuple: Tuple,
     Out: 'a + Tuple,

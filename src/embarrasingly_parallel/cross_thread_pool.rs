@@ -1,9 +1,10 @@
 use crate::embarrasingly_parallel::tasks::SendTask;
 use crate::embarrasingly_parallel::thread_local_pool::ThreadLocalPool;
 use crate::scheduler::Scheduler;
+use crate::scope::ScopeWrapSend;
 use crate::sync::cross_thread_channel;
-
 use crate::traits::{BindSender, OperationState, ReceiverOf, TypedSender, TypedSenderConnect};
+use std::marker::PhantomData;
 use std::ops::BitOr;
 use std::thread;
 
@@ -88,26 +89,38 @@ pub struct CrossThreadPoolTS {
     sch: CrossThreadPool,
 }
 
-impl<'a> TypedSender<'a> for CrossThreadPoolTS {
+impl TypedSender for CrossThreadPoolTS {
     type Scheduler = ThreadLocalPool;
     type Value = ();
 }
 
-impl<'a, ReceiverType> TypedSenderConnect<'a, ReceiverType> for CrossThreadPoolTS
+impl<'a, ScopeImpl, ReceiverType> TypedSenderConnect<'a, ScopeImpl, ReceiverType>
+    for CrossThreadPoolTS
 where
-    ReceiverType: ReceiverOf<ThreadLocalPool, ()> + Send + 'static,
+    ReceiverType: ReceiverOf<ThreadLocalPool, ()> + Send,
+    ScopeImpl: ScopeWrapSend<ThreadLocalPool, ReceiverType>,
 {
-    fn connect(self, receiver: ReceiverType) -> impl OperationState {
+    fn connect<'scope>(
+        self,
+        scope: &ScopeImpl,
+        receiver: ReceiverType,
+    ) -> impl OperationState<'scope>
+    where
+        'a: 'scope,
+        ScopeImpl: 'scope,
+        ReceiverType: 'scope,
+    {
         CrossThreadPoolOperationState {
+            phantom: PhantomData,
             sch: self.sch,
-            receiver,
+            receiver: scope.wrap_send(receiver),
         }
     }
 }
 
 impl<BindSenderImpl> BitOr<BindSenderImpl> for CrossThreadPoolTS
 where
-    BindSenderImpl: BindSender<Self> + Send + 'static,
+    BindSenderImpl: BindSender<Self> + Send,
 {
     type Output = BindSenderImpl::Output;
 
@@ -116,15 +129,17 @@ where
     }
 }
 
-struct CrossThreadPoolOperationState<ReceiverType>
+struct CrossThreadPoolOperationState<'scope, ReceiverType>
 where
     ReceiverType: ReceiverOf<ThreadLocalPool, ()> + Send + 'static,
 {
+    phantom: PhantomData<&'scope i32>,
     sch: CrossThreadPool,
     receiver: ReceiverType,
 }
 
-impl<ReceiverType> OperationState for CrossThreadPoolOperationState<ReceiverType>
+impl<'scope, ReceiverType> OperationState<'scope>
+    for CrossThreadPoolOperationState<'scope, ReceiverType>
 where
     ReceiverType: ReceiverOf<ThreadLocalPool, ()> + Send + 'static,
 {

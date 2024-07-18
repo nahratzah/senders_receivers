@@ -1,9 +1,10 @@
-use crate::errors::{Error, Result, Tuple};
+use crate::errors::{Error, Result};
 use crate::functor::{NoArgClosure, NoArgFunctor, NoErrNoArgFunctor};
 use crate::scheduler::{ImmediateScheduler, Scheduler, WithScheduler};
 use crate::traits::{
     BindSender, OperationState, Receiver, ReceiverOf, Sender, TypedSender, TypedSenderConnect,
 };
+use crate::tuple::Tuple;
 use std::convert::From;
 use std::marker::PhantomData;
 use std::ops::BitOr;
@@ -43,7 +44,7 @@ use std::ops::BitOr;
 /// ```
 pub struct UponDone<'a, FnType, Sch, Out>
 where
-    FnType: NoArgFunctor<'a, Output = Result<Out>>,
+    FnType: 'a + NoArgFunctor<'a, Output = Result<Out>>,
     Out: 'a + Tuple,
     Sch: Scheduler,
 {
@@ -54,7 +55,7 @@ where
 
 impl<'a, FnType, Out> From<FnType> for UponDone<'a, FnType, ImmediateScheduler, Out>
 where
-    FnType: NoArgFunctor<'a, Output = Result<Out>>,
+    FnType: 'a + NoArgFunctor<'a, Output = Result<Out>>,
     Out: 'a + Tuple,
 {
     fn from(fn_impl: FnType) -> Self {
@@ -84,7 +85,7 @@ type NoErrUponDone<'a, FunctorType, Sch, Out> =
 
 impl<'a, FnImpl, Out> From<FnImpl> for NoErrUponDone<'a, FnImpl, ImmediateScheduler, Out>
 where
-    FnImpl: NoArgFunctor<'a, Output = Out>,
+    FnImpl: 'a + NoArgFunctor<'a, Output = Out>,
     Out: 'a + Tuple,
 {
     fn from(fn_impl: FnImpl) -> Self {
@@ -133,7 +134,7 @@ where
 
 impl<'a, FnImpl, Sch, Out> WithScheduler<Sch, FnImpl> for NoErrUponDone<'a, FnImpl, Sch, Out>
 where
-    FnImpl: NoArgFunctor<'a, Output = Out>,
+    FnImpl: 'a + NoArgFunctor<'a, Output = Out>,
     Sch: Scheduler,
     Out: 'a + Tuple,
 {
@@ -155,7 +156,7 @@ where
 
 impl<'a, FnType, Sch, Out> Sender for UponDone<'a, FnType, Sch, Out>
 where
-    FnType: NoArgFunctor<'a, Output = Result<Out>>,
+    FnType: 'a + NoArgFunctor<'a, Output = Result<Out>>,
     Out: 'a + Tuple,
     Sch: Scheduler,
 {
@@ -163,8 +164,8 @@ where
 
 impl<'a, FnType, Sch, Out, NestedSender> BindSender<NestedSender> for UponDone<'a, FnType, Sch, Out>
 where
-    NestedSender: TypedSender<'a, Scheduler = Sch::LocalScheduler, Value = Out>,
-    FnType: NoArgFunctor<'a, Output = Result<Out>>,
+    NestedSender: TypedSender<Scheduler = Sch::LocalScheduler, Value = Out>,
+    FnType: 'a + NoArgFunctor<'a, Output = Result<Out>>,
     Out: 'a + Tuple,
     Sch: Scheduler,
 {
@@ -182,8 +183,8 @@ where
 
 pub struct UponDoneTS<'a, NestedSender, FnType, Sch, Out>
 where
-    NestedSender: TypedSender<'a, Scheduler = Sch::LocalScheduler, Value = Out>,
-    FnType: NoArgFunctor<'a, Output = Result<Out>>,
+    NestedSender: TypedSender<Scheduler = Sch::LocalScheduler, Value = Out>,
+    FnType: 'a + NoArgFunctor<'a, Output = Result<Out>>,
     Out: 'a + Tuple,
     Sch: Scheduler,
 {
@@ -193,11 +194,11 @@ where
     phantom: PhantomData<&'a fn() -> Out>,
 }
 
-impl<'a, NestedSender, FnType, Sch, Out> TypedSender<'a>
+impl<'a, NestedSender, FnType, Sch, Out> TypedSender
     for UponDoneTS<'a, NestedSender, FnType, Sch, Out>
 where
-    NestedSender: TypedSender<'a, Scheduler = Sch::LocalScheduler, Value = Out>,
-    FnType: NoArgFunctor<'a, Output = Result<Out>>,
+    NestedSender: TypedSender<Scheduler = Sch::LocalScheduler, Value = Out>,
+    FnType: 'a + NoArgFunctor<'a, Output = Result<Out>>,
     Out: 'a + Tuple,
     Sch: Scheduler,
 {
@@ -205,26 +206,45 @@ where
     type Value = Out;
 }
 
-impl<'a, ReceiverType, NestedSender, FnType, Sch, Out> TypedSenderConnect<'a, ReceiverType>
+impl<'a, ScopeImpl, ReceiverType, NestedSender, FnType, Sch, Out>
+    TypedSenderConnect<'a, ScopeImpl, ReceiverType>
     for UponDoneTS<'a, NestedSender, FnType, Sch, Out>
 where
     ReceiverType: ReceiverOf<Sch::LocalScheduler, Out>,
-    NestedSender: TypedSender<'a, Scheduler = Sch::LocalScheduler, Value = Out>
-        + TypedSenderConnect<'a, ReceiverWrapper<'a, ReceiverType, FnType, Sch, Out>>,
-    FnType: NoArgFunctor<'a, Output = Result<Out>>,
+    NestedSender: TypedSender<Scheduler = Sch::LocalScheduler, Value = Out>
+        + TypedSenderConnect<
+            'a,
+            ScopeImpl,
+            ReceiverWrapper<'a, ScopeImpl, ReceiverType, FnType, Sch, Out>,
+        >,
+    FnType: 'a + NoArgFunctor<'a, Output = Result<Out>>,
     Out: 'a + Tuple,
     Sch: Scheduler,
-    Sch::Sender:
-        TypedSenderConnect<'a, DoneReceiver<'a, ReceiverType, FnType, Sch::LocalScheduler, Out>>,
+    Sch::Sender: TypedSenderConnect<
+        'a,
+        ScopeImpl,
+        DoneReceiver<'a, ReceiverType, FnType, Sch::LocalScheduler, Out>,
+    >,
+    ScopeImpl: Clone,
 {
-    fn connect(self, receiver: ReceiverType) -> impl OperationState {
-        let receiver: ReceiverWrapper<ReceiverType, FnType, Sch, Out> = ReceiverWrapper {
+    fn connect<'scope>(
+        self,
+        scope: &ScopeImpl,
+        receiver: ReceiverType,
+    ) -> impl OperationState<'scope>
+    where
+        'a: 'scope,
+        ScopeImpl: 'scope,
+        ReceiverType: 'scope,
+    {
+        let receiver = ReceiverWrapper {
             nested: receiver,
             fn_impl: self.fn_impl,
             sch: self.sch,
             phantom: PhantomData,
+            scope: scope.clone(),
         };
-        self.nested.connect(receiver)
+        self.nested.connect(scope, receiver)
     }
 }
 
@@ -232,8 +252,8 @@ impl<'a, NestedSender, FnType, Sch, Out, BindSenderImpl> BitOr<BindSenderImpl>
     for UponDoneTS<'a, NestedSender, FnType, Sch, Out>
 where
     BindSenderImpl: BindSender<Self>,
-    NestedSender: TypedSender<'a, Scheduler = Sch::LocalScheduler, Value = Out>,
-    FnType: NoArgFunctor<'a, Output = Result<Out>>,
+    NestedSender: TypedSender<Scheduler = Sch::LocalScheduler, Value = Out>,
+    FnType: 'a + NoArgFunctor<'a, Output = Result<Out>>,
     Out: 'a + Tuple,
     Sch: Scheduler,
 {
@@ -244,35 +264,43 @@ where
     }
 }
 
-struct ReceiverWrapper<'a, NestedReceiver, FnType, Sch, Out>
+struct ReceiverWrapper<'a, ScopeImpl, NestedReceiver, FnType, Sch, Out>
 where
     NestedReceiver: ReceiverOf<Sch::LocalScheduler, Out>,
-    FnType: NoArgFunctor<'a, Output = Result<Out>>,
+    FnType: 'a + NoArgFunctor<'a, Output = Result<Out>>,
     Sch: Scheduler,
-    Sch::Sender:
-        TypedSenderConnect<'a, DoneReceiver<'a, NestedReceiver, FnType, Sch::LocalScheduler, Out>>,
+    Sch::Sender: TypedSenderConnect<
+        'a,
+        ScopeImpl,
+        DoneReceiver<'a, NestedReceiver, FnType, Sch::LocalScheduler, Out>,
+    >,
     Out: 'a + Tuple,
 {
     nested: NestedReceiver,
     fn_impl: FnType,
     sch: Sch,
     phantom: PhantomData<&'a fn() -> Out>,
+    scope: ScopeImpl,
 }
 
-impl<'a, NestedReceiver, FnType, Sch, Out> Receiver
-    for ReceiverWrapper<'a, NestedReceiver, FnType, Sch, Out>
+impl<'a, ScopeImpl, NestedReceiver, FnType, Sch, Out> Receiver
+    for ReceiverWrapper<'a, ScopeImpl, NestedReceiver, FnType, Sch, Out>
 where
     NestedReceiver: ReceiverOf<Sch::LocalScheduler, Out>,
-    FnType: NoArgFunctor<'a, Output = Result<Out>>,
+    FnType: 'a + NoArgFunctor<'a, Output = Result<Out>>,
     Sch: Scheduler,
-    Sch::Sender:
-        TypedSenderConnect<'a, DoneReceiver<'a, NestedReceiver, FnType, Sch::LocalScheduler, Out>>,
+    Sch::Sender: TypedSenderConnect<
+        'a,
+        ScopeImpl,
+        DoneReceiver<'a, NestedReceiver, FnType, Sch::LocalScheduler, Out>,
+    >,
     Out: 'a + Tuple,
 {
     fn set_done(self) {
         self.sch
             .schedule()
             .connect(
+                &self.scope,
                 DoneReceiver::<NestedReceiver, FnType, Sch::LocalScheduler, Out> {
                     nested: self.nested,
                     fn_impl: self.fn_impl,
@@ -287,14 +315,17 @@ where
     }
 }
 
-impl<'a, NestedReceiver, FnType, Sch, Out> ReceiverOf<Sch::LocalScheduler, Out>
-    for ReceiverWrapper<'a, NestedReceiver, FnType, Sch, Out>
+impl<'a, ScopeImpl, NestedReceiver, FnType, Sch, Out> ReceiverOf<Sch::LocalScheduler, Out>
+    for ReceiverWrapper<'a, ScopeImpl, NestedReceiver, FnType, Sch, Out>
 where
     NestedReceiver: ReceiverOf<Sch::LocalScheduler, Out>,
-    FnType: NoArgFunctor<'a, Output = Result<Out>>,
+    FnType: 'a + NoArgFunctor<'a, Output = Result<Out>>,
     Sch: Scheduler,
-    Sch::Sender:
-        TypedSenderConnect<'a, DoneReceiver<'a, NestedReceiver, FnType, Sch::LocalScheduler, Out>>,
+    Sch::Sender: TypedSenderConnect<
+        'a,
+        ScopeImpl,
+        DoneReceiver<'a, NestedReceiver, FnType, Sch::LocalScheduler, Out>,
+    >,
     Out: 'a + Tuple,
 {
     fn set_value(self, sch: Sch::LocalScheduler, v: Out) {
@@ -305,7 +336,7 @@ where
 struct DoneReceiver<'a, NestedReceiver, FnType, Sch, Out>
 where
     NestedReceiver: ReceiverOf<Sch, Out>,
-    FnType: NoArgFunctor<'a, Output = Result<Out>>,
+    FnType: 'a + NoArgFunctor<'a, Output = Result<Out>>,
     Sch: Scheduler,
     Out: 'a + Tuple,
 {
@@ -318,7 +349,7 @@ impl<'a, NestedReceiver, FnType, Sch, Out> Receiver
     for DoneReceiver<'a, NestedReceiver, FnType, Sch, Out>
 where
     NestedReceiver: ReceiverOf<Sch, Out>,
-    FnType: NoArgFunctor<'a, Output = Result<Out>>,
+    FnType: 'a + NoArgFunctor<'a, Output = Result<Out>>,
     Sch: Scheduler,
     Out: 'a + Tuple,
 {
@@ -335,7 +366,7 @@ impl<'a, NestedReceiver, FnType, Sch, Out> ReceiverOf<Sch, ()>
     for DoneReceiver<'a, NestedReceiver, FnType, Sch, Out>
 where
     NestedReceiver: ReceiverOf<Sch, Out>,
-    FnType: NoArgFunctor<'a, Output = Result<Out>>,
+    FnType: 'a + NoArgFunctor<'a, Output = Result<Out>>,
     Sch: Scheduler,
     Out: 'a + Tuple,
 {

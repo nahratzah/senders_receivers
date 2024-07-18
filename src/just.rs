@@ -1,8 +1,9 @@
-use crate::errors::{Error, Tuple};
+use crate::errors::Error;
 use crate::scheduler::{ImmediateScheduler, Scheduler, WithScheduler};
 use crate::traits::{
     BindSender, OperationState, Receiver, ReceiverOf, TypedSender, TypedSenderConnect,
 };
+use crate::tuple::Tuple;
 use std::marker::PhantomData;
 use std::ops::BitOr;
 
@@ -66,26 +67,39 @@ impl<'a, Sch: Scheduler, Tpl: 'a + Tuple> WithScheduler<Sch, Tpl> for Just<'a, S
     }
 }
 
-impl<'a, Sch: Scheduler, Tpl: 'a + Tuple> TypedSender<'a> for Just<'a, Sch, Tpl> {
+impl<'a, Sch: Scheduler, Tpl: 'a + Tuple> TypedSender for Just<'a, Sch, Tpl> {
     type Value = Tpl;
     type Scheduler = Sch::LocalScheduler;
 }
 
-impl<'a, ReceiverType, Sch, Tpl> TypedSenderConnect<'a, ReceiverType> for Just<'a, Sch, Tpl>
+impl<'a, ScopeImpl, ReceiverType, Sch, Tpl> TypedSenderConnect<'a, ScopeImpl, ReceiverType>
+    for Just<'a, Sch, Tpl>
 where
     Sch: Scheduler,
     Tpl: 'a + Tuple,
     ReceiverType: ReceiverOf<Sch::LocalScheduler, Tpl>,
-    Sch::Sender:
-        TypedSenderConnect<'a, ReceiverWrapper<'a, ReceiverType, Sch::LocalScheduler, Tpl>>,
+    Sch::Sender: TypedSenderConnect<
+        'a,
+        ScopeImpl,
+        ReceiverWrapper<'a, ReceiverType, Sch::LocalScheduler, Tpl>,
+    >,
 {
-    fn connect(self, receiver: ReceiverType) -> impl OperationState {
+    fn connect<'scope>(
+        self,
+        scope: &ScopeImpl,
+        receiver: ReceiverType,
+    ) -> impl OperationState<'scope>
+    where
+        'a: 'scope,
+        ScopeImpl: 'scope,
+        ReceiverType: 'scope,
+    {
         let receiver = ReceiverWrapper {
             phantom: PhantomData,
             receiver,
             values: self.values,
         };
-        self.sch.schedule().connect(receiver)
+        self.sch.schedule().connect(scope, receiver)
     }
 }
 

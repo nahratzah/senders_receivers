@@ -1,6 +1,8 @@
-use crate::errors::{Error, Tuple};
+use crate::errors::Error;
 use crate::scheduler::Scheduler;
-use crate::traits::{OperationState, Receiver, ReceiverOf, TypedSender, TypedSenderConnect};
+use crate::scope::{detached_scope, ScopeDataSendPtr, ScopeImpl};
+use crate::traits::{OperationState, Receiver, ReceiverOf, TypedSenderConnect};
+use crate::tuple::Tuple;
 
 /// Start an operation, but don't wait for its completion.
 ///
@@ -8,9 +10,11 @@ use crate::traits::{OperationState, Receiver, ReceiverOf, TypedSender, TypedSend
 /// Otherwise (value or done signal), the code will complete normally.
 pub fn start_detached<SenderImpl>(sender: SenderImpl)
 where
-    SenderImpl: TypedSender<'static> + TypedSenderConnect<'static, DiscardingReceiver>,
+    SenderImpl: TypedSenderConnect<'static, ScopeImpl<ScopeDataSendPtr>, DiscardingReceiver>,
 {
-    sender.connect(DiscardingReceiver).start();
+    detached_scope(move |scope: &ScopeImpl<ScopeDataSendPtr>| {
+        sender.connect(scope, DiscardingReceiver).start();
+    })
 }
 
 pub struct DiscardingReceiver;
@@ -38,7 +42,6 @@ mod test {
     use super::start_detached;
     use crate::errors::{new_error, ErrorForTesting, Result};
     use crate::just::Just;
-    use crate::let_value::LetValue;
     use crate::scheduler::{ImmediateScheduler, Scheduler};
     use crate::then::Then;
     use std::sync::mpsc;
@@ -61,12 +64,7 @@ mod test {
 
     #[test]
     fn handles_done() {
-        start_detached(
-            Just::from((String::from("dcba"),))
-                | LetValue::from(|sch: ImmediateScheduler, _| {
-                    sch.schedule_done::<(i32, i32, i32)>()
-                }),
-        );
+        start_detached(ImmediateScheduler::default().schedule_done::<(i32, i32, i32)>());
     }
 
     #[test]

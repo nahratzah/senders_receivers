@@ -1,8 +1,9 @@
-use crate::errors::{Error, Tuple};
+use crate::errors::Error;
 use crate::scheduler::{ImmediateScheduler, Scheduler, WithScheduler};
 use crate::traits::{
     BindSender, OperationState, Receiver, ReceiverOf, TypedSender, TypedSenderConnect,
 };
+use crate::tuple::Tuple;
 use std::marker::PhantomData;
 use std::ops::BitOr;
 
@@ -55,34 +56,42 @@ impl<Sch: Scheduler, Tpl: Tuple> WithScheduler<Sch, Error> for JustError<Sch, Tp
     }
 }
 
-impl<Sch: Scheduler, Tpl: Tuple> TypedSender<'_> for JustError<Sch, Tpl> {
+impl<Sch: Scheduler, Tpl: Tuple> TypedSender for JustError<Sch, Tpl> {
     type Value = Tpl;
     type Scheduler = Sch::LocalScheduler;
 }
 
-impl<ReceiverType, Sch, Tpl> TypedSenderConnect<'_, ReceiverType> for JustError<Sch, Tpl>
+impl<'a, ScopeImpl, ReceiverType, Sch, Tpl> TypedSenderConnect<'a, ScopeImpl, ReceiverType>
+    for JustError<Sch, Tpl>
 where
     Sch: Scheduler,
     Tpl: Tuple,
-    ReceiverType: ReceiverOf<Sch::LocalScheduler, Tpl>,
+    ReceiverType: ReceiverOf<Sch::LocalScheduler, Tpl> + 'a,
 {
-    fn connect(self, receiver: ReceiverType) -> impl OperationState {
+    fn connect<'scope>(self, _: &ScopeImpl, receiver: ReceiverType) -> impl OperationState<'scope>
+    where
+        'a: 'scope,
+        ScopeImpl: 'scope,
+        ReceiverType: 'scope,
+    {
         JustErrorOperationState {
             error: self.error,
             receiver,
+            phantom: PhantomData,
         }
     }
 }
 
-pub struct JustErrorOperationState<ReceiverImpl>
+pub struct JustErrorOperationState<'a, ReceiverImpl>
 where
     ReceiverImpl: Receiver,
 {
+    phantom: PhantomData<&'a i32>,
     error: Error,
     receiver: ReceiverImpl,
 }
 
-impl<ReceiverImpl> OperationState for JustErrorOperationState<ReceiverImpl>
+impl<'a, ReceiverImpl> OperationState<'a> for JustErrorOperationState<'a, ReceiverImpl>
 where
     ReceiverImpl: Receiver,
 {
