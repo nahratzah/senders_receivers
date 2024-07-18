@@ -29,6 +29,16 @@ use super::macros::tuple_impls;
 /// );
 /// ```
 ///
+/// The concatenation of zero tuples, is a empty tuple:
+/// ```
+/// use senders_receivers::tuple::TupleCat;
+///
+/// assert_eq!(
+///     (),
+///     ().cat(),
+/// )
+/// ```
+///
 /// Note: due to rust not having variadic-arguments,
 /// we implement this using a macro,
 /// and thus the implementation only exists for up-to-16 elements.
@@ -160,8 +170,14 @@ macro_rules! pairwise_implement_tuple_cat {
 tuple_impls_2!(pairwise_implement_tuple_cat);
 
 macro_rules! implement_unpaired_tuple_cat {
-    // 0-ary: we don't implement tuple-cat for 0-ary tuples.
-    () => {};
+    // 0-ary: concatenation of zero tuples yields a 0-ary tuple.
+    () => {
+        impl TupleCat for () {
+            type Output = ();
+            fn cat(self) -> Self::Output {
+            }
+        }
+    };
     // 1-ary: we only implement tuple-cat for 1-ary tuples, if it can be catenated with an empty tuple.
     ($v:ident : $T:ident) => {
         impl<$T> TupleCat for ($T,)
