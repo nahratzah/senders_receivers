@@ -8,7 +8,25 @@ use super::macros::tuple_impls;
 ///
 /// let x = (1, 2, 3);
 /// let y = (4, 5, 6);
-/// let x_and_y = (x, y).cat();
+/// assert_eq!(
+///     (1, 2, 3, 4, 5, 6),
+///     (x, y).cat(),
+/// );
+/// ```
+///
+/// You can also concatenate multiple tuples at once:
+/// ```
+/// use senders_receivers::tuple::TupleCat;
+///
+/// let a = (1, 2);
+/// let b = (3, 4);
+/// let c = (5,);
+/// let d = (6, 7);
+/// let e = (8,);
+/// assert_eq!(
+///     (1, 2, 3, 4, 5, 6, 7, 8),
+///     (a, b, c, d, e).cat(),
+/// );
 /// ```
 ///
 /// Note: due to rust not having variadic-arguments,
