@@ -10,31 +10,38 @@ use std::fmt;
 use std::io;
 use std::marker::PhantomData;
 use std::ops::BitOr;
+use std::ops::DerefMut;
 
 /// Implement the write trait for a [writeable](io::Write) type.
-pub trait Write<Sch, State>
+pub trait Write<Sch, SelfState, BufState>
 where
     Sch: Scheduler,
-    Self: io::Write,
-    State: 'static + Clone + fmt::Debug,
+    SelfState: 'static + Clone + fmt::Debug,
+    BufState: 'static + Clone + fmt::Debug,
+    Self: DerefMut,
+    Self::Target: 'static + io::Write,
 {
     /// Create a new sender-chain, which will write to this descriptor.
     ///
     /// ```
     /// use senders_receivers::io::{Write, WriteTS};
-    /// use senders_receivers::{SyncWait, ImmediateScheduler, Just, LetValue, Then, Scheduler, TypedSender, Result};
+    /// use senders_receivers::{SyncWait, ImmediateScheduler, Just, LetValue, Then, Scheduler, TypedSender, Result, new_error};
     /// use senders_receivers::tuple::*; // for distribute.
     /// use senders_receivers::refs;
     /// use std::fs::File;
     ///
-    /// fn do_the_thing<'a>(file: &'a mut File) {
+    /// fn create_file(filename: String, buf: String) {
     ///     let (wlen,) = (
-    ///             Just::from((file, String::from("abcd"),))
-    ///             | LetValue::from(|sch: ImmediateScheduler, v: refs::ScopedRefMut<(&'a mut File, String,), refs::NoSendState>| {
-    ///                 let (mut file, s) = DistributeRefTuple::distribute(v);
-    ///                 // XXX lifetimes.
-    ///                 sch.lazy().schedule_value(
-    ///                     file.write(sch.clone(), refs::ScopedRefMut::map_no_mut(s, |x| x.as_bytes())).sync_wait().unwrap().unwrap())
+    ///             Just::from((filename, buf))
+    ///             | Then::from(|(filename, buf)| {
+    ///                   match File::create(filename) {
+    ///                       Ok(file) => Ok((file, buf)),
+    ///                       Err(error) => Err(new_error(error)),
+    ///                   }
+    ///               })
+    ///             | LetValue::from(|sch: ImmediateScheduler, v: refs::ScopedRefMut<(File, String), refs::NoSendState>| {
+    ///                   let (file, buf) = DistributeRefTuple::distribute(v);
+    ///                   file.write(sch, refs::ScopedRefMut::map_no_mut(buf, |x| x.as_bytes()))
     ///               })
     ///             | Then::from(|(_, _, wlen)| (wlen,))
     ///         )
@@ -45,65 +52,70 @@ where
     /// }
     /// ```
     fn write(
-        &mut self,
+        self,
         sch: Sch,
-        buf: refs::ScopedRef<[u8], State>,
-    ) -> WriteTS<'_, Sch, Self, State>;
+        buf: refs::ScopedRef<[u8], BufState>,
+    ) -> WriteTS<Sch, Self::Target, SelfState, BufState>;
 }
 
-impl<Sch, T, State> Write<Sch, State> for T
+impl<Sch, T, SelfState, BufState> Write<Sch, SelfState, BufState>
+    for refs::ScopedRefMut<T, SelfState>
 where
     Sch: Scheduler,
-    T: io::Write + ?Sized,
-    State: 'static + Clone + fmt::Debug,
+    T: 'static + io::Write + ?Sized,
+    SelfState: 'static + Clone + fmt::Debug,
+    BufState: 'static + Clone + fmt::Debug,
 {
     fn write(
-        &mut self,
+        self,
         sch: Sch,
-        buf: refs::ScopedRef<[u8], State>,
-    ) -> WriteTS<'_, Sch, Self, State> {
+        buf: refs::ScopedRef<[u8], BufState>,
+    ) -> WriteTS<Sch, T, SelfState, BufState> {
         WriteTS { fd: self, buf, sch }
     }
 }
 
 /// Typed-sender returned by the [Write] trait.
-pub struct WriteTS<'a, Sch, Fd, State>
+pub struct WriteTS<Sch, Fd, SelfState, BufState>
 where
-    Fd: io::Write + ?Sized,
+    Fd: 'static + io::Write + ?Sized,
     Sch: Scheduler,
-    State: 'static + Clone + fmt::Debug,
+    SelfState: 'static + Clone + fmt::Debug,
+    BufState: 'static + Clone + fmt::Debug,
 {
-    fd: &'a mut Fd,
-    buf: refs::ScopedRef<[u8], State>,
+    fd: refs::ScopedRefMut<Fd, SelfState>,
+    buf: refs::ScopedRef<[u8], BufState>,
     sch: Sch,
 }
 
-impl<'a, Sch, Fd, State> TypedSender for WriteTS<'a, Sch, Fd, State>
+impl<Sch, Fd, SelfState, BufState> TypedSender for WriteTS<Sch, Fd, SelfState, BufState>
 where
-    Fd: io::Write + ?Sized,
+    Fd: 'static + io::Write + ?Sized,
     Sch: Scheduler,
-    State: 'static + Clone + fmt::Debug,
+    SelfState: 'static + Clone + fmt::Debug,
+    BufState: 'static + Clone + fmt::Debug,
 {
     type Scheduler = Sch::LocalScheduler;
     type Value = (usize,);
 }
 
-impl<'a, ScopeImpl, ReceiverType, Sch, Fd, State> TypedSenderConnect<'a, ScopeImpl, ReceiverType>
-    for WriteTS<'a, Sch, Fd, State>
+impl<'a, ScopeImpl, ReceiverType, Sch, Fd, SelfState, BufState>
+    TypedSenderConnect<'a, ScopeImpl, ReceiverType> for WriteTS<Sch, Fd, SelfState, BufState>
 where
-    Fd: io::Write + ?Sized,
+    Fd: 'static + io::Write + ?Sized,
     Sch: Scheduler + EnableDefaultIO,
     Sch::Sender: TypedSenderConnect<
         'a,
         ScopeImpl,
-        ReceiverWrapper<'a, ReceiverType, Sch::LocalScheduler, Fd, State>,
+        ReceiverWrapper<ReceiverType, Sch::LocalScheduler, Fd, SelfState, BufState>,
     >,
     ReceiverType: ReceiverOf<Sch::LocalScheduler, (usize,)>,
     ScopeImpl: ScopeWrap<
         Sch::LocalScheduler,
-        ReceiverWrapper<'a, ReceiverType, Sch::LocalScheduler, Fd, State>,
+        ReceiverWrapper<ReceiverType, Sch::LocalScheduler, Fd, SelfState, BufState>,
     >,
-    State: 'static + Clone + fmt::Debug,
+    SelfState: 'static + Clone + fmt::Debug,
+    BufState: 'static + Clone + fmt::Debug,
 {
     fn connect<'scope>(
         self,
@@ -127,13 +139,15 @@ where
     }
 }
 
-impl<'a, BindSenderImpl, Sch, Fd, State> BitOr<BindSenderImpl> for WriteTS<'a, Sch, Fd, State>
+impl<BindSenderImpl, Sch, Fd, SelfState, BufState> BitOr<BindSenderImpl>
+    for WriteTS<Sch, Fd, SelfState, BufState>
 where
     BindSenderImpl: BindSender<Self>,
     Sch: Scheduler,
     Sch::Sender: TypedSender<Value = ()>,
     Fd: io::Write + ?Sized,
-    State: 'static + Clone + fmt::Debug,
+    SelfState: 'static + Clone + fmt::Debug,
+    BufState: 'static + Clone + fmt::Debug,
 {
     type Output = BindSenderImpl::Output;
 
@@ -142,26 +156,28 @@ where
     }
 }
 
-struct ReceiverWrapper<'a, ReceiverType, Sch, Fd, State>
+struct ReceiverWrapper<ReceiverType, Sch, Fd, SelfState, BufState>
 where
     ReceiverType: ReceiverOf<Sch, (usize,)>,
     Sch: Scheduler,
     Fd: io::Write + ?Sized,
-    State: 'static + Clone + fmt::Debug,
+    SelfState: 'static + Clone + fmt::Debug,
+    BufState: 'static + Clone + fmt::Debug,
 {
     phantom: PhantomData<Sch>,
     nested: ReceiverType,
-    fd: &'a mut Fd,
-    buf: refs::ScopedRef<[u8], State>,
+    fd: refs::ScopedRefMut<Fd, SelfState>,
+    buf: refs::ScopedRef<[u8], BufState>,
 }
 
-impl<'a, ReceiverType, Sch, Fd, State> Receiver
-    for ReceiverWrapper<'a, ReceiverType, Sch, Fd, State>
+impl<ReceiverType, Sch, Fd, SelfState, BufState> Receiver
+    for ReceiverWrapper<ReceiverType, Sch, Fd, SelfState, BufState>
 where
     ReceiverType: ReceiverOf<Sch, (usize,)>,
     Sch: Scheduler,
     Fd: io::Write + ?Sized,
-    State: 'static + Clone + fmt::Debug,
+    SelfState: 'static + Clone + fmt::Debug,
+    BufState: 'static + Clone + fmt::Debug,
 {
     fn set_done(self) {
         self.nested.set_done();
@@ -172,16 +188,17 @@ where
     }
 }
 
-impl<'a, Sch, ReceiverType, Fd, State> ReceiverOf<Sch, ()>
-    for ReceiverWrapper<'a, ReceiverType, Sch, Fd, State>
+impl<Sch, ReceiverType, Fd, SelfState, BufState> ReceiverOf<Sch, ()>
+    for ReceiverWrapper<ReceiverType, Sch, Fd, SelfState, BufState>
 where
     ReceiverType: ReceiverOf<Sch, (usize,)>,
     Sch: Scheduler,
     Fd: io::Write + ?Sized,
-    State: 'static + Clone + fmt::Debug,
+    SelfState: 'static + Clone + fmt::Debug,
+    BufState: 'static + Clone + fmt::Debug,
 {
-    fn set_value(self, sch: Sch, _: ()) {
-        match self.fd.write(&self.buf) {
+    fn set_value(mut self, sch: Sch, _: ()) {
+        match (*self.fd).write(&self.buf) {
             Ok(len) => self.nested.set_value(sch, (len,)),
             Err(error) => self.nested.set_error(new_error(error)),
         };
