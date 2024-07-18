@@ -480,3 +480,109 @@ where
         self.rcv.set_value(sch, (*self.value, value).cat());
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::LetValue;
+    use crate::errors::{new_error, ErrorForTesting, Result};
+    use crate::just::Just;
+    use crate::just_error::JustError;
+    use crate::refs;
+    use crate::scheduler::Scheduler;
+    use crate::scheduler::{ImmediateScheduler, WithScheduler};
+    use crate::sync_wait::sync_wait;
+
+    #[test]
+    fn it_works() {
+        assert_eq!(
+            Some((6, 7, 8)),
+            sync_wait(
+                Just::from((6,))
+                    | LetValue::from(|_, x: refs::ScopedRefMut<(i32,), refs::NoSendState>| {
+                        assert_eq!(x.0, 6);
+                        Just::from((7, 8))
+                    })
+            )
+            .expect("should succeed")
+        )
+    }
+
+    #[test]
+    fn it_works_with_errors() {
+        assert_eq!(
+            Some((6, 7, 8)),
+            sync_wait(
+                Just::from((6,))
+                    | LetValue::from(|_, _: refs::ScopedRefMut<(i32,), refs::NoSendState>| Ok(
+                        Just::from((7, 8))
+                    ))
+            )
+            .expect("should succeed")
+        )
+    }
+
+    #[test]
+    fn errors_from_preceding_sender_are_propagated() {
+        match sync_wait(
+            JustError::<ImmediateScheduler, ()>::from(new_error(ErrorForTesting::from("error")))
+                | LetValue::from(
+                    |_,
+                     _: refs::ScopedRefMut<(), refs::NoSendState>|
+                     -> Just<ImmediateScheduler, (i32,)> {
+                        panic!("expect this function to not be invoked")
+                    },
+                ),
+        ) {
+            Ok(_) => panic!("expected an error"),
+            Err(e) => {
+                assert_eq!(
+                    ErrorForTesting::from("error"),
+                    *e.downcast_ref::<ErrorForTesting>().unwrap()
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn errors_from_functor_are_propagated() {
+        match sync_wait(
+            Just::from(())
+                | LetValue::from(
+                    |_,
+                     _: refs::ScopedRefMut<(), refs::NoSendState>|
+                     -> Result<Just<ImmediateScheduler, (i32,)>> {
+                        Err(new_error(ErrorForTesting::from("error")))
+                    },
+                ),
+        ) {
+            Ok(_) => panic!("expected an error"),
+            Err(e) => {
+                assert_eq!(
+                    ErrorForTesting::from("error"),
+                    *e.downcast_ref::<ErrorForTesting>().unwrap()
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn errors_from_nested_sender_are_propagated() {
+        // nested_sender refers to the sender returned by the functor.
+        match sync_wait(
+            Just::from(())
+                | LetValue::from(
+                    |sch: ImmediateScheduler, _: refs::ScopedRefMut<(), refs::NoSendState>| {
+                        sch.schedule_error::<()>(new_error(ErrorForTesting::from("error")))
+                    },
+                ),
+        ) {
+            Ok(_) => panic!("expected an error"),
+            Err(e) => {
+                assert_eq!(
+                    ErrorForTesting::from("error"),
+                    *e.downcast_ref::<ErrorForTesting>().unwrap()
+                );
+            }
+        }
+    }
+}
