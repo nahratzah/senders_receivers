@@ -20,6 +20,8 @@ use std::ops::{BitOr, DerefMut};
 /// A let-value sender is a sender, which, upon receiving a value, invokes a function.
 /// The function returns a new [TypedSender], which will be substitued in this place of the chain.
 ///
+/// # Function Call Arguments
+///
 /// Let-value takes a function which takes two arguments:
 /// - a [Scheduler], which can be used to continue on the same scheduler.
 /// - a [ScopedRefMut], which contains exclusive references to the value signal.
@@ -42,7 +44,14 @@ use std::ops::{BitOr, DerefMut};
 /// }
 /// ```
 ///
-/// Example:
+/// # Function Call Result
+///
+/// The called function should return a [TypedSender].
+/// The argument tuple that was passed as [ScopedRefMut], and the [value-signal](TypedSender::Value) from the returned [TypedSender], are concatenated into the output result.
+///
+/// The [TypedSender] can be returned directly, or it can be wrapped in a [Result].
+///
+/// # Examples
 /// ```
 /// use senders_receivers::{Just, LetValue, SyncWait};
 /// use senders_receivers::refs;
@@ -55,6 +64,11 @@ use std::ops::{BitOr, DerefMut};
 /// assert_eq!(
 ///     (String::from("world"), String::from("Hello world!")),
 ///     sender.sync_wait().unwrap().unwrap());
+/// ```
+///
+/// ```
+/// use senders_receivers::{Just, LetValue, SyncWait};
+/// use senders_receivers::refs;
 ///
 /// // If using a function that returns a Result:
 /// let sender = Just::from((String::from("world"),))
