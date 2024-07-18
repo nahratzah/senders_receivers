@@ -1,3 +1,5 @@
+use super::macros::tuple_impls;
+
 /// Implement tuple concatenation.
 ///
 /// This trait is implemented for any pair of tuples.
@@ -48,7 +50,7 @@ macro_rules! tuple_impls_2 {
     };
 }
 
-macro_rules! implement_tuple_cat {
+macro_rules! pairwise_implement_tuple_cat {
     // 0-ary and 0-ary
     ((), ()) => {
         impl TupleCat for ((), ()) {
@@ -137,4 +139,41 @@ macro_rules! implement_tuple_cat {
     };
 }
 
-tuple_impls_2!(implement_tuple_cat);
+tuple_impls_2!(pairwise_implement_tuple_cat);
+
+macro_rules! implement_unpaired_tuple_cat {
+    // 0-ary: we don't implement tuple-cat for 0-ary tuples.
+    () => {};
+    // 1-ary: we only implement tuple-cat for 1-ary tuples, if it can be catenated with an empty tuple.
+    ($v:ident : $T:ident) => {
+        impl<$T> TupleCat for ($T,)
+        where
+            ($T, ()): TupleCat,
+        {
+            type Output = <($T, ()) as TupleCat>::Output;
+            fn cat(self) -> Self::Output {
+                let ($v,) = self;
+                ($v, ()).cat()
+            }
+        }
+    };
+    // 2-ary: we skip, because pairwise_implement_tuple_cat has covered that already.
+    ($v:ident : $T:ident , $w:ident : $U:ident) => {};
+    // 3+-ary: we implement those in terms of pair-wise cat with recursion.
+    // Each step of the recursion acts on a tuple 1 smaller than the previous.
+    ($v:ident : $T:ident , $w:ident : $U:ident , $($tail:ident : $Tail:ident),+) => {
+        impl<$T, $U, $($Tail),+> TupleCat for ($T, $U, $($Tail),+)
+        where
+            ($T, $U): TupleCat,
+            (<($T, $U) as TupleCat>::Output, $($Tail),+): TupleCat,
+        {
+            type Output = <(<($T, $U) as TupleCat>::Output, $($Tail),+) as TupleCat>::Output;
+            fn cat(self) -> Self::Output {
+                let ($v, $w, $($tail),+) = self;
+                (($v, $w).cat(), $($tail),+).cat()
+            }
+        }
+    };
+}
+
+tuple_impls!(implement_unpaired_tuple_cat);
