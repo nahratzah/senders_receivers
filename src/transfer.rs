@@ -20,7 +20,7 @@ use std::ops::BitOr;
 /// let sender = Just::from((2, 3, 7))
 ///              | Transfer::new(pool)
 ///              | Then::from(|(x, y, z)| {
-///                  // This will run on `my_scheduler`.
+///                  // This will run on `pool`.
 ///                  (x * y * z,)
 ///              });
 /// // And via sync_wait_send, we acquire the value on our own thread.
