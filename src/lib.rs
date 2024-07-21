@@ -123,6 +123,8 @@ mod transfer;
 pub mod tuple;
 mod upon_done;
 mod upon_error;
+#[macro_use]
+mod when_all;
 
 pub use errors::{new_error, Error, Result};
 pub use just::Just;
@@ -139,3 +141,4 @@ pub use traits::{
 pub use transfer::Transfer;
 pub use upon_done::UponDone;
 pub use upon_error::UponError;
+pub use when_all::WhenAll;
