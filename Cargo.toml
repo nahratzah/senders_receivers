@@ -8,6 +8,7 @@ description = "Senders/Receivers implementation for Rust."
 repository = "https://github.com/nahratzah/senders_receivers"
 keywords = ["execution", "senders", "receivers"]
 categories = ["asynchronous", "concurrency"]
+readme = "README.md"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

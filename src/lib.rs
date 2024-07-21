@@ -1,12 +1,6 @@
 #![crate_name = "senders_receivers"]
 #![deny(missing_docs)]
 
-//! This is an implementation (for certain value of implementation) of C++ senders/receivers.
-//!
-//! # Note
-//! This code is very much a work-in-progress, and large parts are still missing.
-//! The API is also still in flux.
-//!
 //! # A Tiny Example
 //! ```
 //! use senders_receivers::*;
@@ -22,16 +16,6 @@
 //! - `|` (the pipe symbol): used to bind them together.
 //!
 //! None of the steps are run, until `sync_wait` is invoked.
-//!
-//! # Senders? Receivers?
-//! The main concept of this code comes from having both senders and receivers.
-//! A sender is a type that produces a value signal (or an error signal, or a done signal).
-//! A receiver is a type that accepts this signal.
-//!
-//! Senders are composable: they can be chained together, creating a new sender.
-//! This is done with the `|` (pipe) symbol.
-//!
-//! If you are using the library, you will not spot any receivers, unless you're implementing your own extensions.
 //!
 //! # Signals
 //! Each sender, produces either
@@ -55,62 +39,69 @@
 //! - [ImmediateScheduler] runs every task immediately. This is more-or-less the default scheduler.
 //! - [ThreadPool](threadpool::ThreadPool) runs tasks using a threadpool.
 //!
-//! # Comparison With C++
-//! An attempt is made to remain close the the usability of [its C++ counterpart](https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2021/p2300r1.html),
-//! but sacrifices had to be made.
+//! # Internals
+//! The system works by creating sender-chains, which consist of a sequence of senders.
 //!
-//! - The `Error` type is type-erased/dynamic.  
-//!   For a non-dynamic error type, we would require a variant-type with variadic type arguments.
-//! - The `Value` type is a tuple.  
-//!   For a non-tuple type, we would require variadic type arguments.
-//! - The `Value` is not a variant.  
-//!   For a variant-type, we would require a variant-type with variadic type arguments.
-//!   Furthermore, rust closures bind their type on first use, dispatching to overloads would be difficult.
-//! - Scheduler-based specializations are omitted.  
-//!   I think for this, we would require specializations.
-//!   (Although the [io::write](crate::io::Write) implementation does permit specialization, using an opt-in for a default implementation.)
-//! - Connect can no longer fail.  
-//!   In C++, the `connect` call can fail, and this will result in an error being propagated.
-//!   This meant that when the `connect` call inside a `let_value` step fails,
-//!   the error would have to propage via the receiver.
-//!   The same receiver would also be passed to the connect call, using move semantics.  
-//!   In rust, this will cause the borrow checker to flag this as bad, and I kinda like the borrow checker.
-//!   Instead I decided: if the `connect` fails, it'll have to create an operation state that'll propagate an error.
-//! - Operation-states don't nest themselves.  
-//!   Mostly, the constraint stems from rust being very picky about move semantics (and I approve).
-//!   And also, rust does not allow in-place construction (which is required for nested operation states; the C++ design requires in-place construction).
-//!   Instead we wrap subsequent operations into a receiver, during the connect call.
-//!   This has the small disadvantage we cannot do any preparations during the [OperationState::start] step.
-//! - [LetValue] arguments are passed by reference (similar to C++) but cannot be taken ownership of.  
-//!   Instead, the arguments are retained and combined with the values from the sender-chain returned by the LetValue function.
+//! ## Initial Element of the Sender-Chain
+//! The first element in a sender-chain is a [TypedSender], which produces a value of some kind.
+//! Usually, this will be a [Just] or a [Scheduler::schedule_value].
+//! The inital element produces a value, which is a tuple.
 //!
-//! Some sacrifices stem from me disagreeing with the C++ design:
-//! I liked the promise from the design, that scheduler changes are explicit only.
-//! But in practice, it was very hard to use, and my code, once async, always needed to grab the receiver-scheduler
-//! (because it was too common for the sender not to have a (known) scheduler).
+//! Example:
+//! ```
+//! use senders_receivers::Just;
 //!
-//! - The `done` and `error` channels no longer have an associated scheduler.  
-//!   There is no way to properly guarantee which scheduler an error is propagated upon.
-//! - The `value` channel now always has an associated scheduler.  
-//!   This allows for example a non-blocking write (ex: `aio_write`) to suspend execution,
-//!   and resume on the same scheduler code was running on earlier.
-//! - The receiver no longer has a scheduler.  
-//!   Since the value signal now has a scheduler, we no longer need one.
-//!   (Also, the C++ receivers have an optional scheduler, which makes coding against them really cumbersome.)
-//! - Schedulers have a LocalScheduler type.  
-//!   For most schedulers, that will be the scheduler itself.
-//!   This allows for schedulers to declare follow-up code to run on a different scheduler.
-//!   For example, [the embarrasingly-parallel scheduler](crate::embarrasingly_parallel::ThreadPool) schedules on any thread the first time,
-//!   and then propagates [a scheduler](crate::embarrasingly_parallel::ThreadLocalPool) that'll always use the same thread for subsequent scheduling.
-//! - Error/done recovery operations must complete with the same scheduler-type and value-type, as what would be sent during the value path.  
-//!   This is a consequence of us limiting things to a single type, and sending the scheduler along in the value-signal.
-//!   (Note that the error and done signals don't propagate a scheduler alongside; this would be impossible without making [LetValue] a lot more cumbersome to use.)
+//! let sender_chain = Just::from((1, 2, 3));
+//! ```
 //!
-//! The reason that `error` channels no longer have an associated scheduler,
-//! is because scheduler-transfers can fail, and this would break the invariant of an error-scheduler.
+//! To get the value produced by a sender-chain, you can use [SyncWait::sync_wait].
+//! (This function will block until the sender-chain complets.)
+//! ```
+//! use senders_receivers::{Just, SyncWait};
 //!
-//! Dropping the scheduler from `done` and `error` signals, means that scheduler switches will only happen on the happy path
-//! (and on recovery paths).
+//! let sender_chain = Just::from((1, 2, 3));
+//! let outcome = match sender_chain.sync_wait() {
+//!     Ok(Some(values)) => values,
+//!     Ok(None) => panic!("execution was canceled"),
+//!     Err(error) => panic!("execution failed: {:?}", error),
+//! };
+//! assert_eq!(
+//!     (1, 2, 3),
+//!     outcome);
+//! ```
+//!
+//! The [SyncWait::sync_wait] method returns a `Result<Option< value-type >>`, so we need two unwraps.
+//!
+//! ## Making the Sender-Chain do Actual Work
+//! The above sender-chain is not very useful.
+//! But we can make the sender-chain do some work for us.
+//! For example, we can use [Then] to run some computation.
+//! To attach a sender, we use the `|` (pipe) symbol.
+//! ```
+//! use senders_receivers::{Just, Then, SyncWait};
+//!
+//! let sender_chain = Just::from((1, 2, 3));
+//!
+//! // Declare we want to do a thing.
+//! let sender_chain = sender_chain
+//!                  | Then::from(|(x, y, z)| (x + y + z,));
+//!
+//! // The code in `Then` doesn't run until we call `sync_wait`.
+//! let outcome = match sender_chain.sync_wait() {
+//!     Ok(Some(values)) => values,
+//!     Ok(None) => panic!("execution was canceled"),
+//!     Err(error) => panic!("execution failed: {:?}", error),
+//! };
+//! assert_eq!(
+//!     (6,),
+//!     outcome);
+//! ```
+//!
+//! [Then] is a [Sender].
+//! That means it can be added to a sender-chain, and the addition produces a new sender-chain.
+//! Since attaching a sender to a sender-chain results in a new sender-chain, you can keep doing this, creating more complex chains.
+//!
+//! The operations on the sender-chain won't run, until the sender is started using [sync_wait](SyncWait::sync_wait()).
 
 pub mod embarrasingly_parallel;
 mod errors;
