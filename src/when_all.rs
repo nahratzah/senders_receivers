@@ -24,6 +24,7 @@ use std::sync::{Arc, Mutex};
 ///
 /// # Note
 /// The `when_all!` macro does not transfer scheduler, and therefore requires that all of its senders use the same scheduler type.
+/// If you need to combine multiple senders that use different schedulers, consider using [when_all_transfer!](crate::when_all_transfer).
 ///
 /// # Example
 /// ```
@@ -63,10 +64,24 @@ use std::sync::{Arc, Mutex};
 ///         Just::from((9,)),
 ///     ).sync_wait().unwrap().unwrap());
 /// ```
+///
+/// Also, when_all should totally work with a single type.
+/// ```
+/// use senders_receivers;
+/// use senders_receivers::{Just, SyncWait};
+///
+/// assert_eq!(
+///     (1, 2),
+///     senders_receivers::when_all!(
+///         Just::from((1, 2)),
+///     ).sync_wait().unwrap().unwrap());
+/// ```
 #[macro_export]
 macro_rules! when_all {
     ($typed_sender:expr $(,)?) => {
-        Transfer::new(scheduler).bind($typed_sender)
+	{
+            $typed_sender
+	}
     };
     ($typed_sender_0:expr, $typed_sender_1:expr $(,)?) => {{
         use senders_receivers;
