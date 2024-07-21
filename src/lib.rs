@@ -39,7 +39,7 @@
 //! - [ImmediateScheduler] runs every task immediately. This is more-or-less the default scheduler.
 //! - [ThreadPool](threadpool::ThreadPool) runs tasks using a threadpool.
 //!
-//! # Internals
+//! # How To Use This
 //! The system works by creating sender-chains, which consist of a sequence of senders.
 //!
 //! ## Initial Element of the Sender-Chain
@@ -102,6 +102,138 @@
 //! Since attaching a sender to a sender-chain results in a new sender-chain, you can keep doing this, creating more complex chains.
 //!
 //! The operations on the sender-chain won't run, until the sender is started using [sync_wait](SyncWait::sync_wait()).
+//!
+//! ## Composition
+//! Multiple sender-chains can be merged together into a single sender-chain.
+//! ```
+//! use senders_receivers::{when_all, Just, Then, SyncWait};
+//!
+//! // The same chain from the previous example.
+//! let sender_chain = Just::from((1, 2, 3))
+//!                  | Then::from(|(x, y, z)| (x + y + z,));
+//!
+//! // Some other sender-chain, that computes a different value.
+//! let another_sender_chain = Just::from((7, 8));
+//!
+//! let sender_chain = when_all!(
+//!     sender_chain,
+//!     another_sender_chain,
+//! );
+//!
+//! let outcome = match sender_chain.sync_wait() {
+//!     Ok(Some(values)) => values,
+//!     Ok(None) => panic!("execution was canceled"),
+//!     Err(error) => panic!("execution failed: {:?}", error),
+//! };
+//! assert_eq!(
+//!     (6, 7, 8),
+//!     outcome);
+//! ```
+//!
+//! ## Schedulers
+//! We can make the sender-chain run on a different scheduler.
+//! For example, a threadpool.
+//! [sync_wait_send](SyncWaitSend::sync_wait_send()) must be used, to allow completion across a thread boundary.
+//! ```
+//! use senders_receivers::{Scheduler, SyncWaitSend};
+//! use threadpool::ThreadPool;
+//!
+//! let pool = ThreadPool::with_name("senders-receivers example".into(), 2);
+//! let sender_chain = pool.schedule_value((1, 2, 3));
+//! let outcome = match sender_chain.sync_wait_send() {
+//!     Ok(Some(values)) => values,
+//!     Ok(None) => panic!("execution was canceled"),
+//!     Err(error) => panic!("execution failed: {:?}", error),
+//! };
+//! assert_eq!(
+//!     (1, 2, 3),
+//!     outcome);
+//! ```
+//!
+//! We can even use temporary references.
+//! ```
+//! use senders_receivers::{Then, Scheduler, SyncWaitSend};
+//! use threadpool::ThreadPool;
+//!
+//! let pool = ThreadPool::with_name("senders-receivers example".into(), 2);
+//!
+//! // We place the code in a scope, to show off that it handles lifetimes.
+//! let (outcome,) = {
+//!     let x = 6;
+//!     let y = 7;
+//!
+//!     let sender = pool.schedule()
+//!                | Then::from(|_| (x * y,));
+//!     sender.sync_wait_send().unwrap().unwrap()
+//! };
+//!
+//! assert_eq!(42, outcome);
+//! ```
+//!
+//! We can also swap to a different scheduler part-way through a calculation, using the [Transfer] sender.
+//! ```
+//! use senders_receivers::{Just, Then, Transfer, SyncWaitSend};
+//! use threadpool::ThreadPool;
+//!
+//! let pool = ThreadPool::with_name("senders-receivers example".into(), 2);
+//!
+//! let sender_chain = Just::default()
+//!                  | Then::from(|_| (String::from("I run on the local thread"),))
+//!                  | Transfer::new(pool)
+//!                  | Then::from(|(previous,)| (previous, String::from("I run on the threadpool")));
+//!
+//! let outcome = match sender_chain.sync_wait_send() {
+//!     Ok(Some(values)) => values,
+//!     Ok(None) => panic!("execution was canceled"),
+//!     Err(error) => panic!("execution failed: {:?}", error),
+//! };
+//! assert_eq!(
+//!     (String::from("I run on the local thread"), String::from("I run on the threadpool")),
+//!     outcome);
+//! ```
+//!
+//! ## Combining Threadpool and Composition
+//! We can combine the threadpool and composition, to run two or more tasks in parallel.
+//!
+//! This example will print out `first task`, `second task`, and `third task` in some unspecified order.
+//! They will run on the thread-pool, which will place them on one of its worker threads.
+//! ```
+//! use senders_receivers::{when_all, Scheduler, Then, SyncWaitSend};
+//! use threadpool::ThreadPool;
+//!
+//! let pool = ThreadPool::with_name("senders-receivers example".into(), 2);
+//!
+//! let first_sender_chain = pool.schedule_value(("first",))
+//!                        | Then::from(|(x,)| {
+//!                              println!("{} task", x);
+//!                              (x,)
+//!                          });
+//! let second_sender_chain = pool.schedule_value(("second",))
+//!                         | Then::from(|(x,)| {
+//!                               println!("{} task", x);
+//!                               (x,)
+//!                           });
+//! let third_sender_chain = pool.schedule_value(("third",))
+//!                        | Then::from(|(x,)| {
+//!                              println!("{} task", x);
+//!                              (x,)
+//!                          });
+//! // Declare we want all three tasks to run as part of our sender-chain.
+//! let sender_chain = when_all!(
+//!     first_sender_chain,
+//!     second_sender_chain,
+//!     third_sender_chain,
+//! );
+//!
+//! let outcome = match sender_chain.sync_wait_send() {
+//!     Ok(Some(values)) => values,
+//!     Ok(None) => panic!("execution was canceled"),
+//!     Err(error) => panic!("execution failed: {:?}", error),
+//! };
+//! assert_eq!(
+//!     ("first", "second", "third"),
+//!     outcome);
+//! ```
 
 pub mod embarrasingly_parallel;
 mod errors;
