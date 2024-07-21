@@ -462,7 +462,11 @@ where
 #[cfg(test)]
 mod tests {
     use super::WhenAll;
+    use crate::errors::{new_error, ErrorForTesting};
     use crate::just::Just;
+    use crate::just_done::JustDone;
+    use crate::just_error::JustError;
+    use crate::scheduler::ImmediateScheduler;
     use crate::scheduler::Scheduler;
     use crate::sync_wait::{SyncWait, SyncWaitSend};
     use threadpool::ThreadPool;
@@ -478,5 +482,60 @@ mod tests {
         let pool = ThreadPool::with_name("it_works_with_threadpool".into(), 2);
         let sender = WhenAll::new(pool.schedule_value((1, 2)), pool.schedule_value((3, 4)));
         assert_eq!((1, 2, 3, 4), sender.sync_wait_send().unwrap().unwrap());
+    }
+
+    #[test]
+    fn errors_are_propagated() {
+        match WhenAll::new(
+            JustError::<ImmediateScheduler, (i32, i32)>::from(new_error(ErrorForTesting::from(
+                "error",
+            ))),
+            Just::from((3, 4)),
+        )
+        .sync_wait()
+        {
+            Ok(_) => panic!("expected an error"),
+            Err(e) => {
+                assert_eq!(
+                    ErrorForTesting::from("error"),
+                    *e.downcast_ref::<ErrorForTesting>().unwrap()
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn done_is_propagated() {
+        match WhenAll::new(
+            JustDone::<ImmediateScheduler, (i32, i32)>::new(),
+            Just::from((3, 4)),
+        )
+        .sync_wait()
+        {
+            Ok(None) => {}
+            _ => {
+                panic!("expected cancelation");
+            }
+        }
+    }
+
+    #[test]
+    fn errors_are_propagated_even_when_done_signal_is_present() {
+        match WhenAll::new(
+            JustDone::<ImmediateScheduler, (i32, i32)>::new(),
+            JustError::<ImmediateScheduler, (i32, i32)>::from(new_error(ErrorForTesting::from(
+                "error",
+            ))),
+        )
+        .sync_wait()
+        {
+            Ok(_) => panic!("expected an error"),
+            Err(e) => {
+                assert_eq!(
+                    ErrorForTesting::from("error"),
+                    *e.downcast_ref::<ErrorForTesting>().unwrap()
+                );
+            }
+        }
     }
 }
