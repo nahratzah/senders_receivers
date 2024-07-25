@@ -257,6 +257,8 @@ mod upon_done;
 mod upon_error;
 #[macro_use]
 mod when_all;
+#[macro_use]
+mod when_all_transfer;
 
 pub use errors::{new_error, Error, Result};
 pub use just::Just;
@@ -274,3 +276,6 @@ pub use transfer::Transfer;
 pub use upon_done::UponDone;
 pub use upon_error::UponError;
 pub use when_all::WhenAll;
+pub use when_all_transfer::{
+    NoSchedulerSender, NoSchedulerSenderImpl, NoSchedulerSenderValue, PairwiseTS, SchedulerTS,
+};

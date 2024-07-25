@@ -99,6 +99,7 @@ macro_rules! when_all {
 /// This takes two senders, and completes with the concatenation of the values.
 ///
 /// Recommend you use [when_all!], and not use this.
+#[doc(hidden)]
 pub struct WhenAll<'a, Sch, X, Y>
 where
     Sch: Scheduler,
