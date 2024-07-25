@@ -24,7 +24,7 @@ use std::sync::{Arc, Mutex};
 ///
 /// # Note
 /// The `when_all!` macro does not transfer scheduler, and therefore requires that all of its senders use the same scheduler type.
-/// If you need to combine multiple senders that use different schedulers, consider using [when_all_transfer!](crate::when_all_transfer).
+/// If you need to combine multiple senders that use different schedulers, consider using [when_all_transfer!](crate::when_all_transfer!).
 ///
 /// # Example
 /// ```
@@ -99,7 +99,6 @@ macro_rules! when_all {
 /// This takes two senders, and completes with the concatenation of the values.
 ///
 /// Recommend you use [when_all!], and not use this.
-#[doc(hidden)]
 pub struct WhenAll<'a, Sch, X, Y>
 where
     Sch: Scheduler,

@@ -275,7 +275,9 @@ pub use traits::{
 pub use transfer::Transfer;
 pub use upon_done::UponDone;
 pub use upon_error::UponError;
+#[doc(hidden)]
 pub use when_all::WhenAll;
+#[doc(hidden)]
 pub use when_all_transfer::{
-    NoSchedulerSender, NoSchedulerSenderImpl, NoSchedulerSenderValue, PairwiseTS, SchedulerTS,
+    NoSchedulerSender, NoSchedulerSenderImpl, NoSchedulerSenderValue, PairwiseTS, SchedulerTS, NoSchedulerReceiver,
 };

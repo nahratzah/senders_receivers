@@ -69,7 +69,7 @@ use std::sync::{Arc, Mutex};
 ///     ).sync_wait_send().unwrap().unwrap());
 /// ```
 ///
-/// Unlike [when_all!](crate::when_all::when_all), the macro also works if you have no senders:
+/// Unlike [when_all!](crate::when_all!), the macro also works if you have no senders:
 /// ```
 /// use senders_receivers::{when_all_transfer, SyncWaitSend};
 /// use threadpool::ThreadPool;
@@ -94,10 +94,14 @@ macro_rules! when_all_transfer {
     }};
 }
 
-#[doc(hidden)]
+/// A [TypedSender] trait, except it lacks a [Scheduler](TypedSender::Scheduler) type.
+///
+/// It also implements the functions required by the [when_all_transfer!] macro.
 pub trait NoSchedulerSenderValue {
+    /// The value type that this sender will create.
     type Value: Tuple;
 
+    /// Attach a new [NoSchedulerSenderValue] to this one, creating a sender that'll yield the tuple-concatenation of the values of each.
     fn cat<TS>(self, ts: TS) -> PairwiseTS<Self, TS>
     where
         Self: Sized,
@@ -108,6 +112,7 @@ pub trait NoSchedulerSenderValue {
         PairwiseTS::new(self, ts)
     }
 
+    /// Attach the scheduler type.
     fn schedule<Sch>(self, sch: Sch) -> SchedulerTS<Sch, Self>
     where
         Self: Sized,
@@ -117,11 +122,12 @@ pub trait NoSchedulerSenderValue {
     }
 }
 
-#[doc(hidden)]
+/// A [TypedSenderConnect] trait, except it lacks a [Scheduler](TypedSender::Scheduler) type.
 pub trait NoSchedulerSender<'a, ScopeImpl, ReceiverType>: NoSchedulerSenderValue
 where
     ReceiverType: NoSchedulerReceiver<<Self as NoSchedulerSenderValue>::Value>,
 {
+    /// Connect a [NoSchedulerReceiver] to this sender.
     fn connect<'scope>(self, scope: &ScopeImpl, rcv: ReceiverType) -> impl OperationState<'scope>
     where
         'a: 'scope,
@@ -129,18 +135,22 @@ where
         ReceiverType: 'scope;
 }
 
-#[doc(hidden)]
+/// A receiver for [NoSchedulerSender].
+///
+/// It has a mutable-reference receiver, so it can be used in shared context.
 pub trait NoSchedulerReceiver<Value>
 where
     Value: Tuple,
 {
+    /// Complete this receiver with a value-signal.
     fn set_value(&mut self, value: Value);
+    /// Complete this receiver with an error-signal.
     fn set_error(&mut self, error: Error);
+    /// Complete this receiver with a done-signal.
     fn set_done(&mut self);
 }
 
 /// Take a regular scheduler, and turn it into a [NoSchedulerSender].
-#[doc(hidden)]
 pub struct NoSchedulerSenderImpl<TS>
 where
     TS: TypedSender,
@@ -231,7 +241,6 @@ where
 }
 
 /// [NoSchedulerSender] that combines two of them into one.
-#[doc(hidden)]
 pub struct PairwiseTS<X, Y>
 where
     X: NoSchedulerSenderValue,
@@ -514,7 +523,7 @@ where
     }
 }
 
-#[doc(hidden)]
+/// A [TypedSender] that'll attach a [Scheduler] to the value of the contained [NoSchedulerSender].
 pub struct SchedulerTS<Sch, Sender>
 where
     Sch: Scheduler,
