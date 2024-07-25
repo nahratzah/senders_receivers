@@ -118,7 +118,8 @@ where
         ReceiverType: 'scope;
 }
 
-trait NoSchedulerReceiver<Value>
+#[doc(hidden)]
+pub trait NoSchedulerReceiver<Value>
 where
     Value: Tuple,
 {
@@ -615,12 +616,6 @@ where
     }
 }
 
-struct NoopOperationState;
-
-impl OperationState<'_> for NoopOperationState {
-    fn start(self) {}
-}
-
 struct WhenAllOperationState<'scope, X, Y>
 where
     X: OperationState<'scope>,
@@ -653,5 +648,90 @@ where
     fn start(self) {
         self.x.start();
         self.y.start();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::NoSchedulerSenderImpl;
+    use super::NoSchedulerSenderValue;
+    use crate::errors::{new_error, ErrorForTesting};
+    use crate::just::Just;
+    use crate::just_done::JustDone;
+    use crate::just_error::JustError;
+    use crate::scheduler::ImmediateScheduler;
+    use crate::sync_wait::{SyncWait, SyncWaitSend};
+    use threadpool::ThreadPool;
+
+    #[test]
+    fn it_works() {
+        let sender = NoSchedulerSenderImpl::from(Just::from((1, 2)))
+            .cat(NoSchedulerSenderImpl::from(Just::from((3, 4))))
+            .schedule(ImmediateScheduler::default());
+        assert_eq!((1, 2, 3, 4), sender.sync_wait().unwrap().unwrap());
+    }
+
+    #[test]
+    fn it_works_with_threadpool() {
+        let pool = ThreadPool::with_name("it_works_with_threadpool".into(), 2);
+        let sender = NoSchedulerSenderImpl::from(Just::from((1, 2)))
+            .cat(NoSchedulerSenderImpl::from(Just::from((3, 4))))
+            .schedule(pool);
+        assert_eq!((1, 2, 3, 4), sender.sync_wait_send().unwrap().unwrap());
+    }
+
+    #[test]
+    fn errors_are_propagated() {
+        match NoSchedulerSenderImpl::from(JustError::<ImmediateScheduler, (i32, i32)>::from(
+            new_error(ErrorForTesting::from("error")),
+        ))
+        .cat(NoSchedulerSenderImpl::from(Just::from((3, 4))))
+        .schedule(ImmediateScheduler::default())
+        .sync_wait()
+        {
+            Ok(_) => panic!("expected an error"),
+            Err(e) => {
+                assert_eq!(
+                    ErrorForTesting::from("error"),
+                    *e.downcast_ref::<ErrorForTesting>().unwrap()
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn done_is_propagated() {
+        match NoSchedulerSenderImpl::from(JustDone::<ImmediateScheduler, (i32, i32)>::new())
+            .cat(NoSchedulerSenderImpl::from(Just::from((3, 4))))
+            .schedule(ImmediateScheduler::default())
+            .sync_wait()
+        {
+            Ok(None) => {}
+            _ => {
+                panic!("expected cancelation");
+            }
+        }
+    }
+
+    #[test]
+    fn errors_are_propagated_even_when_done_signal_is_present() {
+        match NoSchedulerSenderImpl::from(JustDone::<ImmediateScheduler, (i32, i32)>::new())
+            .cat(NoSchedulerSenderImpl::from(JustError::<
+                ImmediateScheduler,
+                (i32, i32),
+            >::from(new_error(
+                ErrorForTesting::from("error"),
+            ))))
+            .schedule(ImmediateScheduler::default())
+            .sync_wait()
+        {
+            Ok(_) => panic!("expected an error"),
+            Err(e) => {
+                assert_eq!(
+                    ErrorForTesting::from("error"),
+                    *e.downcast_ref::<ErrorForTesting>().unwrap()
+                );
+            }
+        }
     }
 }
