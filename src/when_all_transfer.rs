@@ -68,6 +68,17 @@ use std::sync::{Arc, Mutex};
 ///         Just::from((9,)),
 ///     ).sync_wait_send().unwrap().unwrap());
 /// ```
+///
+/// Unlike [when_all!](crate::when_all::when_all), the macro also works if you have no senders:
+/// ```
+/// use senders_receivers::{when_all_transfer, SyncWaitSend};
+/// use threadpool::ThreadPool;
+///
+/// let pool = threadpool::ThreadPool::with_name("example".into(), 1);
+/// assert_eq!(
+///     (),
+///     when_all_transfer!(pool).sync_wait_send().unwrap().unwrap());
+/// ```
 #[macro_export]
 macro_rules! when_all_transfer {
     ($scheduler:expr $(,)?) => {{
