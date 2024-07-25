@@ -139,7 +139,7 @@ dependencies = [
 
 [[package]]
 name = "senders_receivers"
-version = "0.0.3"
+version = "0.0.4"
 dependencies = [
  "mio",
  "mio-aio",
