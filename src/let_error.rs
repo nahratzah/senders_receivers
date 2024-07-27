@@ -186,7 +186,7 @@ where
     scope: ScopeImpl,
 }
 
-impl<'scope, 'a, ScopeImpl, ReceiverType, FnType, Out> Receiver
+impl<'a, ScopeImpl, ReceiverType, FnType, Out> Receiver
     for ReceiverWrapper<'a, ScopeImpl, ReceiverType, FnType, Out>
 where
     ReceiverType: ReceiverOf<Out::Scheduler, Out::Value>,
