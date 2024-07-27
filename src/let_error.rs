@@ -1,6 +1,5 @@
 use crate::errors::{Error, Result};
 use crate::functor::{Closure, Functor, NoErrFunctor};
-use crate::scope::Scope;
 use crate::traits::{
     BindSender, OperationState, Receiver, ReceiverOf, Sender, TypedSender, TypedSenderConnect,
 };
@@ -27,8 +26,8 @@ use std::ops::BitOr;
 /// ```
 pub struct LetError<'a, FnType, Out>
 where
-    FnType: Functor<'a, Error, Output = Result<Out>>,
-    Out: TypedSender<'a>,
+    FnType: 'a + Functor<'a, Error, Output = Result<Out>>,
+    Out: TypedSender,
 {
     fn_impl: FnType,
     phantom: PhantomData<&'a fn() -> Out>,
@@ -36,8 +35,8 @@ where
 
 impl<'a, FnType, Out> From<FnType> for LetError<'a, FnType, Out>
 where
-    FnType: Functor<'a, Error, Output = Result<Out>>,
-    Out: TypedSender<'a>,
+    FnType: 'a + Functor<'a, Error, Output = Result<Out>>,
+    Out: TypedSender,
 {
     fn from(fn_impl: FnType) -> Self {
         LetError {
@@ -52,7 +51,7 @@ type ClosureLetError<'a, FnType, Out> = LetError<'a, Closure<'a, FnType, Result<
 impl<'a, FnType, Out> From<FnType> for ClosureLetError<'a, FnType, Out>
 where
     FnType: 'a + FnOnce(Error) -> Result<Out>,
-    Out: TypedSender<'a>,
+    Out: TypedSender,
 {
     fn from(fn_impl: FnType) -> Self {
         Self::from(Closure::new(fn_impl))
@@ -63,8 +62,8 @@ type NoErrLetError<'a, FnType, Out> = LetError<'a, NoErrFunctor<'a, FnType, Out,
 
 impl<'a, FnType, Out> From<FnType> for NoErrLetError<'a, FnType, Out>
 where
-    FnType: Functor<'a, Error, Output = Out>,
-    Out: TypedSender<'a>,
+    FnType: 'a + Functor<'a, Error, Output = Out>,
+    Out: TypedSender,
 {
     fn from(fn_impl: FnType) -> Self {
         Self::from(NoErrFunctor::new(fn_impl))
@@ -77,7 +76,7 @@ type NoErrClosureLetError<'a, FnType, Out> =
 impl<'a, FnType, Out> From<FnType> for NoErrClosureLetError<'a, FnType, Out>
 where
     FnType: 'a + FnOnce(Error) -> Out,
-    Out: TypedSender<'a>,
+    Out: TypedSender,
 {
     fn from(fn_impl: FnType) -> Self {
         Self::from(Closure::new(fn_impl))
@@ -86,16 +85,16 @@ where
 
 impl<'a, FnType, Out> Sender for LetError<'a, FnType, Out>
 where
-    FnType: Functor<'a, Error, Output = Result<Out>>,
-    Out: TypedSender<'a>,
+    FnType: 'a + Functor<'a, Error, Output = Result<Out>>,
+    Out: TypedSender,
 {
 }
 
 impl<'a, FnType, Out, NestedSender> BindSender<NestedSender> for LetError<'a, FnType, Out>
 where
-    NestedSender: TypedSender<'a, Scheduler = Out::Scheduler, Value = Out::Value>,
-    FnType: Functor<'a, Error, Output = Result<Out>>,
-    Out: TypedSender<'a>,
+    NestedSender: TypedSender<Scheduler = Out::Scheduler, Value = Out::Value>,
+    FnType: 'a + Functor<'a, Error, Output = Result<Out>>,
+    Out: TypedSender,
 {
     type Output = LetErrorSender<'a, NestedSender, FnType, Out>;
 
@@ -110,44 +109,46 @@ where
 
 pub struct LetErrorSender<'a, NestedSender, FnType, Out>
 where
-    NestedSender: TypedSender<'a, Scheduler = Out::Scheduler, Value = Out::Value>,
-    FnType: Functor<'a, Error, Output = Result<Out>>,
-    Out: TypedSender<'a>,
+    NestedSender: TypedSender<Scheduler = Out::Scheduler, Value = Out::Value>,
+    FnType: 'a + Functor<'a, Error, Output = Result<Out>>,
+    Out: TypedSender,
 {
     nested: NestedSender,
     fn_impl: FnType,
     phantom: PhantomData<&'a fn() -> Out>,
 }
 
-impl<'a, FnType, Out, NestedSender> TypedSender<'a>
-    for LetErrorSender<'a, NestedSender, FnType, Out>
+impl<'a, FnType, Out, NestedSender> TypedSender for LetErrorSender<'a, NestedSender, FnType, Out>
 where
-    NestedSender: TypedSender<'a, Scheduler = Out::Scheduler, Value = Out::Value>,
-    FnType: Functor<'a, Error, Output = Result<Out>>,
-    Out: TypedSender<'a>,
+    NestedSender: TypedSender<Scheduler = Out::Scheduler, Value = Out::Value>,
+    FnType: 'a + Functor<'a, Error, Output = Result<Out>>,
+    Out: TypedSender,
 {
     type Value = Out::Value;
     type Scheduler = Out::Scheduler;
 }
 
-impl<'scope, 'a, ScopeImpl, ReceiverType, FnType, Out, NestedSender>
-    TypedSenderConnect<'scope, 'a, ScopeImpl, ReceiverType>
+impl<'a, ScopeImpl, ReceiverType, FnType, Out, NestedSender>
+    TypedSenderConnect<'a, ScopeImpl, ReceiverType>
     for LetErrorSender<'a, NestedSender, FnType, Out>
 where
-    'a: 'scope,
-    NestedSender: TypedSender<'a, Scheduler = Out::Scheduler, Value = Out::Value>
-        + TypedSenderConnect<
-            'scope,
-            'a,
-            ScopeImpl,
-            ReceiverWrapper<'scope, 'a, ScopeImpl, ReceiverType, FnType, Out>,
-        >,
-    FnType: 'scope + Functor<'a, Error, Output = Result<Out>>,
-    Out: TypedSender<'a> + TypedSenderConnect<'scope, 'a, ScopeImpl, ReceiverType>,
-    ReceiverType: 'scope + ReceiverOf<Out::Scheduler, Out::Value>,
-    ScopeImpl: 'scope + Scope<'scope, 'a>,
+    NestedSender: TypedSender<Scheduler = Out::Scheduler, Value = Out::Value>
+        + TypedSenderConnect<'a, ScopeImpl, ReceiverWrapper<'a, ScopeImpl, ReceiverType, FnType, Out>>,
+    FnType: 'a + Functor<'a, Error, Output = Result<Out>>,
+    Out: TypedSender + TypedSenderConnect<'a, ScopeImpl, ReceiverType>,
+    ReceiverType: ReceiverOf<Out::Scheduler, Out::Value>,
+    ScopeImpl: Clone,
 {
-    fn connect(self, scope: &ScopeImpl, receiver: ReceiverType) -> impl OperationState<'scope> {
+    fn connect<'scope>(
+        self,
+        scope: &ScopeImpl,
+        receiver: ReceiverType,
+    ) -> impl OperationState<'scope>
+    where
+        'a: 'scope,
+        ScopeImpl: 'scope,
+        ReceiverType: 'scope,
+    {
         let receiver = ReceiverWrapper {
             receiver,
             fn_impl: self.fn_impl,
@@ -162,9 +163,9 @@ impl<'a, BindSenderImpl, NestedSender, FnType, Out> BitOr<BindSenderImpl>
     for LetErrorSender<'a, NestedSender, FnType, Out>
 where
     BindSenderImpl: BindSender<Self>,
-    NestedSender: TypedSender<'a, Scheduler = Out::Scheduler, Value = Out::Value>,
+    NestedSender: TypedSender<Scheduler = Out::Scheduler, Value = Out::Value>,
     FnType: Functor<'a, Error, Output = Result<Out>>,
-    Out: TypedSender<'a>,
+    Out: TypedSender,
 {
     type Output = BindSenderImpl::Output;
 
@@ -173,28 +174,24 @@ where
     }
 }
 
-struct ReceiverWrapper<'scope, 'a, ScopeImpl, ReceiverType, FnType, Out>
+struct ReceiverWrapper<'a, ScopeImpl, ReceiverType, FnType, Out>
 where
-    'a: 'scope,
-    ReceiverType: 'scope + ReceiverOf<Out::Scheduler, Out::Value>,
-    FnType: 'scope + Functor<'a, Error, Output = Result<Out>>,
-    Out: TypedSender<'a>,
-    ScopeImpl: Scope<'scope, 'a>,
+    ReceiverType: ReceiverOf<Out::Scheduler, Out::Value>,
+    FnType: Functor<'a, Error, Output = Result<Out>>,
+    Out: TypedSenderConnect<'a, ScopeImpl, ReceiverType>,
 {
     receiver: ReceiverType,
     fn_impl: FnType,
-    phantom: PhantomData<(&'a fn() -> Out, &'scope ())>,
+    phantom: PhantomData<&'a fn() -> Out>,
     scope: ScopeImpl,
 }
 
 impl<'scope, 'a, ScopeImpl, ReceiverType, FnType, Out> Receiver
-    for ReceiverWrapper<'scope, 'a, ScopeImpl, ReceiverType, FnType, Out>
+    for ReceiverWrapper<'a, ScopeImpl, ReceiverType, FnType, Out>
 where
-    'a: 'scope,
-    ReceiverType: 'scope + ReceiverOf<Out::Scheduler, Out::Value>,
-    FnType: 'scope + Functor<'a, Error, Output = Result<Out>>,
-    Out: TypedSender<'a> + TypedSenderConnect<'scope, 'a, ScopeImpl, ReceiverType>,
-    ScopeImpl: Scope<'scope, 'a>,
+    ReceiverType: ReceiverOf<Out::Scheduler, Out::Value>,
+    FnType: Functor<'a, Error, Output = Result<Out>>,
+    Out: TypedSenderConnect<'a, ScopeImpl, ReceiverType>,
 {
     fn set_done(self) {
         self.receiver.set_done();
@@ -208,14 +205,12 @@ where
     }
 }
 
-impl<'scope, 'a, ScopeImpl, ReceiverType, FnType, Out> ReceiverOf<Out::Scheduler, Out::Value>
-    for ReceiverWrapper<'scope, 'a, ScopeImpl, ReceiverType, FnType, Out>
+impl<'a, ScopeImpl, ReceiverType, FnType, Out> ReceiverOf<Out::Scheduler, Out::Value>
+    for ReceiverWrapper<'a, ScopeImpl, ReceiverType, FnType, Out>
 where
-    'a: 'scope,
-    ReceiverType: 'scope + ReceiverOf<Out::Scheduler, Out::Value>,
-    FnType: 'scope + Functor<'a, Error, Output = Result<Out>>,
-    Out: TypedSender<'a> + TypedSenderConnect<'scope, 'a, ScopeImpl, ReceiverType>,
-    ScopeImpl: Scope<'scope, 'a>,
+    ReceiverType: ReceiverOf<Out::Scheduler, Out::Value>,
+    FnType: Functor<'a, Error, Output = Result<Out>>,
+    Out: TypedSenderConnect<'a, ScopeImpl, ReceiverType>,
 {
     fn set_value(self, sch: Out::Scheduler, value: Out::Value) {
         self.receiver.set_value(sch, value);
