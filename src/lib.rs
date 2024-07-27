@@ -259,12 +259,14 @@ mod upon_error;
 mod when_all;
 #[macro_use]
 mod when_all_transfer;
+mod let_done;
 mod let_error;
 
 pub use errors::{new_error, Error, Result};
 pub use just::Just;
 pub use just_done::JustDone;
 pub use just_error::JustError;
+pub use let_done::LetDone;
 pub use let_error::LetError;
 pub use let_value::LetValue;
 pub use scheduler::{ImmediateScheduler, Scheduler, WithScheduler};
