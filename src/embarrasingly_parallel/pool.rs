@@ -6,7 +6,7 @@ use crate::let_value::LetValue;
 use crate::refs;
 use crate::scheduler::{ImmediateScheduler, Scheduler};
 use crate::scope::ScopeWrapSend;
-use crate::start_detached::start_detached;
+use crate::start_detached::StartDetached;
 use crate::traits::{BindSender, OperationState, ReceiverOf, TypedSender, TypedSenderConnect};
 use rand::Rng;
 use std::io;
@@ -102,15 +102,14 @@ impl ThreadPool {
     where
         F: FnOnce(ThreadLocalPool) + Send + 'static,
     {
-        start_detached(
-            self.schedule()
-                | LetValue::from(
-                    move |sch: ThreadLocalPool, _: refs::ScopedRefMut<(), refs::NoSendState>| {
-                        f(sch);
-                        JustDone::<ImmediateScheduler, ()>::default()
-                    },
-                ),
-        );
+        (self.schedule()
+            | LetValue::from(
+                move |sch: ThreadLocalPool, _: refs::ScopedRefMut<(), refs::NoSendState>| {
+                    f(sch);
+                    JustDone::<ImmediateScheduler, ()>::default()
+                },
+            ))
+        .start_detached();
     }
 
     /// Run a task on each of the worker threads.
@@ -120,13 +119,14 @@ impl ThreadPool {
     {
         for i in &self.state.lock().unwrap().threads {
             let f = f.clone();
-            start_detached(
-                i.0.schedule()
-                    | LetValue::from(move |sch: ThreadLocalPool, _: refs::ScopedRefMut<(), refs::NoSendState>| {
+            (i.0.schedule()
+                | LetValue::from(
+                    move |sch: ThreadLocalPool, _: refs::ScopedRefMut<(), refs::NoSendState>| {
                         f(sch);
                         JustDone::<ImmediateScheduler, ()>::default()
-                    }),
-            );
+                    },
+                ))
+            .start_detached();
         }
     }
 

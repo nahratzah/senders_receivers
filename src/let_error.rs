@@ -14,7 +14,7 @@ use std::ops::BitOr;
 ///
 /// Example:
 /// ```
-/// use senders_receivers::{ImmediateScheduler, LetError, Scheduler, Then, new_error, sync_wait};
+/// use senders_receivers::{ImmediateScheduler, LetError, Scheduler, Then, new_error, SyncWait};
 /// use std::io;
 ///
 /// let sender = ImmediateScheduler::default().schedule_error::<(String,)>(new_error(io::Error::new(io::ErrorKind::Other, "oh no!")))
@@ -22,7 +22,7 @@ use std::ops::BitOr;
 ///                  ImmediateScheduler::default().schedule_value((String::from("hello"), String::from("world")))
 ///                  | Then::from(|(greeting, who)| (format!("{}, {}!", greeting, who),))
 ///              });
-/// println!("{}", sync_wait(sender).unwrap().unwrap().0);
+/// println!("{}", sender.sync_wait().unwrap().unwrap().0);
 /// ```
 pub struct LetError<'a, FnType, Out>
 where
@@ -223,23 +223,22 @@ mod tests {
     use crate::errors::{new_error, Error, ErrorForTesting};
     use crate::just::Just;
     use crate::scheduler::{ImmediateScheduler, Scheduler};
-    use crate::sync_wait::sync_wait;
+    use crate::sync_wait::SyncWait;
 
     #[test]
     fn it_works() {
         assert_eq!(
             Some((String::from("yay"),)),
-            sync_wait(
-                ImmediateScheduler::default().schedule_error::<(String,)>(new_error(
-                    ErrorForTesting::from("this error will be consumed")
-                )) | LetError::from(|error: Error| {
-                    assert_eq!(
-                        ErrorForTesting::from("this error will be consumed"),
-                        *error.downcast_ref::<ErrorForTesting>().unwrap()
-                    );
-                    ImmediateScheduler::default().schedule_value((String::from("yay"),))
-                })
-            )
+            (ImmediateScheduler::default().schedule_error::<(String,)>(new_error(
+                ErrorForTesting::from("this error will be consumed")
+            )) | LetError::from(|error: Error| {
+                assert_eq!(
+                    ErrorForTesting::from("this error will be consumed"),
+                    *error.downcast_ref::<ErrorForTesting>().unwrap()
+                );
+                ImmediateScheduler::default().schedule_value((String::from("yay"),))
+            }))
+            .sync_wait()
             .expect("should succeed")
         );
     }
@@ -248,20 +247,19 @@ mod tests {
     fn it_works_with_errors() {
         assert_eq!(
             ErrorForTesting::from("this error will be returned"),
-            *sync_wait(
-                ImmediateScheduler::default().schedule_error::<(String,)>(new_error(
-                    ErrorForTesting::from("this error will be consumed")
-                )) | LetError::from(|error: Error| {
-                    match error.downcast_ref::<ErrorForTesting>() {
-                        Some(_) => Err(new_error(ErrorForTesting::from(
-                            "this error will be returned",
-                        ))),
-                        None => Ok(
-                            ImmediateScheduler::default().schedule_value((String::from("nay"),))
-                        ),
+            *(ImmediateScheduler::default().schedule_error::<(String,)>(new_error(
+                ErrorForTesting::from("this error will be consumed")
+            )) | LetError::from(|error: Error| {
+                match error.downcast_ref::<ErrorForTesting>() {
+                    Some(_) => Err(new_error(ErrorForTesting::from(
+                        "this error will be returned",
+                    ))),
+                    None => {
+                        Ok(ImmediateScheduler::default().schedule_value((String::from("nay"),)))
                     }
-                })
-            )
+                }
+            }))
+            .sync_wait()
             .expect_err("should return an error")
             .downcast_ref::<ErrorForTesting>()
             .unwrap()
@@ -272,12 +270,11 @@ mod tests {
     fn it_cascades_done() {
         assert_eq!(
             None,
-            sync_wait(
-                ImmediateScheduler::default().schedule_done::<(String,)>()
-                    | LetError::from(|_: Error| -> Just<ImmediateScheduler, (String,)> {
-                        panic!("should not be called!");
-                    })
-            )
+            (ImmediateScheduler::default().schedule_done::<(String,)>()
+                | LetError::from(|_: Error| -> Just<ImmediateScheduler, (String,)> {
+                    panic!("should not be called!");
+                }))
+            .sync_wait()
             .expect("should succeed")
         );
     }
@@ -286,12 +283,11 @@ mod tests {
     fn it_cascades_value() {
         assert_eq!(
             Some((String::from("yay"),)),
-            sync_wait(
-                ImmediateScheduler::default().schedule_value((String::from("yay"),))
-                    | LetError::from(|_: Error| -> Just<ImmediateScheduler, (String,)> {
-                        panic!("should not be called!");
-                    })
-            )
+            (ImmediateScheduler::default().schedule_value((String::from("yay"),))
+                | LetError::from(|_: Error| -> Just<ImmediateScheduler, (String,)> {
+                    panic!("should not be called!");
+                }))
+            .sync_wait()
             .expect("should succeed")
         );
     }

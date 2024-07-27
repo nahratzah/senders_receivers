@@ -17,7 +17,7 @@ use threadpool::ThreadPool;
 /// But a scheduler can be used directly (which is what [Transfer](crate::Transfer) does under the hood).
 /// Unfortunately, I can't make the `|` operator work for [Scheduler::Sender], so we must use the [`BindSender::bind`] function instead.
 /// ```
-/// use senders_receivers::{BindSender, Scheduler, Then, sync_wait_send};
+/// use senders_receivers::{BindSender, Scheduler, Then, SyncWaitSend};
 /// use threadpool::ThreadPool;
 ///
 /// let pool = ThreadPool::with_name("example".into(), 1);
@@ -32,7 +32,7 @@ use threadpool::ThreadPool;
 ///              });
 /// assert_eq!(
 ///     5050,
-///     sync_wait_send(sender).unwrap().unwrap().0);
+///     sender.sync_wait_send().unwrap().unwrap().0);
 /// ```
 pub trait Scheduler: Eq + Clone + 'static {
     /// Mark if the scheduler may block the caller, when started.
@@ -71,19 +71,19 @@ pub trait Scheduler: Eq + Clone + 'static {
     ///
     /// Use these in [LetValue](crate::let_value::LetValue) when you're not switching scheduler:
     /// ```
-    /// use senders_receivers::{Scheduler, LetValue, start_detached};
+    /// use senders_receivers::{Scheduler, LetValue, StartDetached};
     /// use senders_receivers::refs;
     /// use threadpool::ThreadPool;
     ///
     /// let pool = ThreadPool::with_name("example".into(), 1);
-    /// start_detached(
+    /// (
     ///     pool.schedule()
     ///     | LetValue::from(|sch: ThreadPool, _: refs::ScopedRefMut<(), refs::NoSendState>| {
     ///         // Since we are already running in sch, we don't want a reschedule to happen.
     ///         // By using lazy, we basically tell the code that we're already running on that scheduler,
     ///         // and rescheduling isn't needed.
     ///         sch.lazy().schedule_value((1, 2, 3))
-    ///     }));
+    ///     })).start_detached();
     /// ```
     fn lazy(&self) -> LazyScheduler<Self>
     where

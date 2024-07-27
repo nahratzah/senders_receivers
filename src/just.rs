@@ -12,24 +12,24 @@ use std::ops::BitOr;
 /// Typically, this is the starting point of a sender chain.
 ///
 /// ```
-/// use senders_receivers::{Just, sync_wait};
+/// use senders_receivers::{Just, SyncWait};
 ///
 /// let sender = Just::from((1, 2, 3));  // Create a typed sender returning a tuple of three values.
 /// assert_eq!(
 ///     (1, 2, 3),
-///     sync_wait(sender).unwrap().unwrap());
+///     sender.sync_wait().unwrap().unwrap());
 /// ```
 ///
 /// If you want to start values on a specific scheduler, use [Just::with_scheduler]:
 /// ```
-/// use senders_receivers::{Just, WithScheduler, sync_wait_send};
+/// use senders_receivers::{Just, WithScheduler, SyncWaitSend};
 /// use threadpool::ThreadPool;
 ///
 /// let pool = ThreadPool::with_name("example".into(), 1);
 /// let sender = Just::with_scheduler(pool, (1, 2, 3));
 /// assert_eq!(
 ///     (1, 2, 3),
-///     sync_wait_send(sender).unwrap().unwrap());
+///     sender.sync_wait_send().unwrap().unwrap());
 /// ```
 pub struct Just<'a, Sch: Scheduler, Tpl: 'a + Tuple> {
     phantom: PhantomData<fn() -> &'a Tpl>,
@@ -156,13 +156,15 @@ where
 #[cfg(test)]
 mod tests {
     use super::Just;
-    use crate::sync_wait::sync_wait;
+    use crate::sync_wait::SyncWait;
 
     #[test]
     fn it_works() {
         assert_eq!(
             Some((4, 5, 6)),
-            sync_wait(Just::from((4, 5, 6))).expect("just() should not fail")
+            Just::from((4, 5, 6))
+                .sync_wait()
+                .expect("just() should not fail")
         )
     }
 }

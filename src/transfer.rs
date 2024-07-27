@@ -13,7 +13,7 @@ use std::ops::BitOr;
 ///
 /// Example:
 /// ```
-/// use senders_receivers::{Just, Scheduler, Transfer, Then, sync_wait_send};
+/// use senders_receivers::{Just, Scheduler, Transfer, Then, SyncWaitSend};
 /// use threadpool::ThreadPool;
 ///
 /// let pool = ThreadPool::with_name("example".into(), 1);
@@ -27,7 +27,7 @@ use std::ops::BitOr;
 /// // Note that we must use sync_wait_send, because ThreadPool will cross a thread boundary.
 /// assert_eq!(
 ///     (42,),
-///     sync_wait_send(sender).unwrap().unwrap());
+///     sender.sync_wait_send().unwrap().unwrap());
 /// ```
 pub struct Transfer<'a, Sch>
 where

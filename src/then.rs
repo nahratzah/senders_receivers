@@ -13,21 +13,21 @@ use std::ops::BitOr;
 ///
 /// To create a Then [Sender] from a [function/closure](FnOnce), use:
 /// ```
-/// use senders_receivers::{Error, Just, Then, sync_wait};
+/// use senders_receivers::{Error, Just, Then, SyncWait};
 ///
 /// // If using a function that returns a tuple:
 /// let myFn = |(x, y, z): (i32, i32, i32)| (x + y + z,);
 /// let sender = Just::from((1, 2, 3)) | Then::from(myFn);
 /// assert_eq!(
 ///     (6,),
-///     sync_wait(sender).unwrap().unwrap());
+///     sender.sync_wait().unwrap().unwrap());
 ///
 /// // If using a function that returns a Result:
 /// let myFn = |(x,)| -> Result<(i32,), Error> { Ok((x,)) };
 /// let sender = Just::from((17,)) | Then::from(myFn);  // if function returns a result
 /// assert_eq!(
 ///     (17,),
-///     sync_wait(sender).unwrap().unwrap());
+///     sender.sync_wait().unwrap().unwrap());
 /// ```
 ///
 /// You probably don't want the non `_fn` versions of those functions:
@@ -263,13 +263,14 @@ mod tests {
     use crate::just::Just;
     use crate::just_error::JustError;
     use crate::scheduler::ImmediateScheduler;
-    use crate::sync_wait::sync_wait;
+    use crate::sync_wait::SyncWait;
 
     #[test]
     fn it_works() {
         assert_eq!(
             Some((6, 7, 8)),
-            sync_wait(Just::from((4, 5, 6)) | Then::from(|(x, y, z)| (x + 2, y + 2, z + 2)))
+            (Just::from((4, 5, 6)) | Then::from(|(x, y, z)| (x + 2, y + 2, z + 2)))
+                .sync_wait()
                 .expect("should succeed")
         )
     }
@@ -278,19 +279,18 @@ mod tests {
     fn it_works_with_errors() {
         assert_eq!(
             Some((6, 7, 8)),
-            sync_wait(Just::from((4, 5, 6)) | Then::from(|(x, y, z)| Ok((x + 2, y + 2, z + 2))))
+            (Just::from((4, 5, 6)) | Then::from(|(x, y, z)| Ok((x + 2, y + 2, z + 2))))
+                .sync_wait()
                 .expect("should succeed")
         )
     }
 
     #[test]
     fn errors_from_preceding_sender_are_propagated() {
-        match sync_wait(
-            JustError::<ImmediateScheduler, ()>::from(new_error(ErrorForTesting::from("error")))
-                | Then::from(|()| -> (i32, i32) {
-                    panic!("expect this function to not be invoked")
-                }),
-        ) {
+        match (JustError::<ImmediateScheduler, ()>::from(new_error(ErrorForTesting::from("error")))
+            | Then::from(|()| -> (i32, i32) { panic!("expect this function to not be invoked") }))
+        .sync_wait()
+        {
             Ok(_) => panic!("expected an error"),
             Err(e) => {
                 assert_eq!(
@@ -303,10 +303,10 @@ mod tests {
 
     #[test]
     fn errors_from_functor_are_propagated() {
-        match sync_wait(
-            Just::from(())
-                | Then::from(|()| -> Result<()> { Err(Box::new(ErrorForTesting::from("error"))) }),
-        ) {
+        match (Just::from(())
+            | Then::from(|()| -> Result<()> { Err(Box::new(ErrorForTesting::from("error"))) }))
+        .sync_wait()
+        {
             Ok(_) => panic!("expected an error"),
             Err(e) => {
                 assert_eq!(

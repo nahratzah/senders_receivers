@@ -7,7 +7,7 @@
 //!
 //! let sender = Just::from((1, 2, 3, 4))
 //!            | Then::from(|(a, b, c, d)| (a * b * c * d,));
-//! println!("outcome: {}", sync_wait(sender).expect("no error").expect("no cancelation").0);
+//! println!("outcome: {}", sender.sync_wait().expect("no error").expect("no cancelation").0);
 //! ```
 //!
 //! What this does:
@@ -270,8 +270,8 @@ pub use let_done::LetDone;
 pub use let_error::LetError;
 pub use let_value::LetValue;
 pub use scheduler::{ImmediateScheduler, Scheduler, WithScheduler};
-pub use start_detached::start_detached;
-pub use sync_wait::{sync_wait, sync_wait_send, SyncWait, SyncWaitSend};
+pub use start_detached::StartDetached;
+pub use sync_wait::{SyncWait, SyncWaitSend};
 pub use then::Then;
 pub use traits::{
     BindSender, OperationState, Receiver, ReceiverOf, Sender, TypedSender, TypedSenderConnect,

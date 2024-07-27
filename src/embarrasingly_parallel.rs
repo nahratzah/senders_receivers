@@ -6,7 +6,7 @@
 //!
 //! ```
 //! use senders_receivers::embarrasingly_parallel::{ThreadPool, ThreadLocalPool};
-//! use senders_receivers::{new_error, start_detached, Scheduler, Then};
+//! use senders_receivers::{new_error, StartDetached, Scheduler, Then};
 //! use std::net::{TcpListener, TcpStream};
 //! use std::io::Write;
 //!
@@ -17,12 +17,13 @@
 //! for stream in listener.incoming() {
 //!     match stream {
 //!         Ok(stream) => {
-//!             start_detached(
+//!             (
 //!                 pool.schedule_value((stream,))
 //!                 | Then::from(
 //!                     |(mut stream,): (TcpStream,)| {
 //!                         stream.write_all(b"hello world\n").map_err(new_error)
-//!                     }))
+//!                     })
+//!             ).start_detached()
 //!         },
 //!         Err(_) => break,
 //!     }
@@ -35,7 +36,7 @@
 //!
 //! ```
 //! use senders_receivers::embarrasingly_parallel::Worker;
-//! use senders_receivers::{start_detached, Scheduler, Then};
+//! use senders_receivers::{StartDetached, Scheduler, Then};
 //! use std::thread;
 //!
 //! fn print_number((i,): (i32,)) {
@@ -44,7 +45,7 @@
 //!
 //! let (pool, worker) = Worker::new().unwrap();
 //! for i in 0..10 {
-//!     start_detached(pool.schedule_value((i,)) | Then::from(print_number));
+//!     (pool.schedule_value((i,)) | Then::from(print_number)).start_detached();
 //! }
 //! drop(pool); // Without this, the worker.run() function will never complete.
 //!
@@ -67,7 +68,7 @@ mod tests {
     use super::ThreadPool;
     use crate::errors::new_error;
     use crate::scheduler::Scheduler;
-    use crate::start_detached::start_detached;
+    use crate::start_detached::StartDetached;
     use crate::then::Then;
     use std::sync::mpsc;
     use std::thread;
@@ -82,10 +83,9 @@ mod tests {
 
         {
             let tx = tx.clone();
-            start_detached(
-                pool.schedule_value((String::from("warmup"),))
-                    | Then::from(move |(s,): (String,)| tx.send(s).map_err(new_error)),
-            );
+            (pool.schedule_value((String::from("warmup"),))
+                | Then::from(move |(s,): (String,)| tx.send(s).map_err(new_error)))
+            .start_detached();
         }
         // We want the first value to have been processed.
         // Due to threads being unpredictable, we don't actually know if the thread was woken up.
@@ -95,10 +95,9 @@ mod tests {
 
         {
             let tx = tx.clone();
-            start_detached(
-                pool.schedule_value((String::from("first"),))
-                    | Then::from(move |(s,): (String,)| tx.send(s).map_err(new_error)),
-            );
+            (pool.schedule_value((String::from("first"),))
+                | Then::from(move |(s,): (String,)| tx.send(s).map_err(new_error)))
+            .start_detached();
         }
         // While we technically still can't be certain the thread is asleep, it is likely.
         // So this will mean a real wakeup has been processed. The 'first' wakeup.
@@ -107,10 +106,9 @@ mod tests {
 
         {
             let tx = tx.clone();
-            start_detached(
-                pool.schedule_value((String::from("second"),))
-                    | Then::from(move |(s,): (String,)| tx.send(s).map_err(new_error)),
-            );
+            (pool.schedule_value((String::from("second"),))
+                | Then::from(move |(s,): (String,)| tx.send(s).map_err(new_error)))
+            .start_detached();
         }
         // While we technically still can't be certain the thread is asleep, it is likely.
         // So this will mean a real wakeup has been processed. The 'second' wakeup.

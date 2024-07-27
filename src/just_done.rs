@@ -10,12 +10,12 @@ use std::ops::BitOr;
 ///
 /// Example:
 /// ```
-/// use senders_receivers::{ImmediateScheduler, JustDone, sync_wait};
+/// use senders_receivers::{ImmediateScheduler, JustDone, SyncWait};
 ///
 /// fn example() {
 ///     // The `::<(i32, i32)>` turbo-fish is to declare the value-type of the created sender.
 ///     let sender = JustDone::<ImmediateScheduler, (i32, i32)>::new();
-///     match sync_wait(sender) {
+///     match sender.sync_wait() {
 ///         Ok(Some(_)) => panic!("there won't be a value"),
 ///         Ok(None) => println!("completed with done signal"),  // This is returned.
 ///         Err(e) => panic!("error: {:?}", e),
@@ -101,13 +101,15 @@ where
 mod tests {
     use super::JustDone;
     use crate::scheduler::ImmediateScheduler;
-    use crate::sync_wait::sync_wait;
+    use crate::sync_wait::SyncWait;
 
     #[test]
     fn it_works() {
         assert_eq!(
             None,
-            sync_wait(JustDone::<ImmediateScheduler, ()>::default()).unwrap()
+            JustDone::<ImmediateScheduler, ()>::default()
+                .sync_wait()
+                .unwrap()
         )
     }
 }

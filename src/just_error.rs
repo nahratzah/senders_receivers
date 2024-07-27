@@ -11,12 +11,12 @@ use std::ops::BitOr;
 ///
 /// Example:
 /// ```
-/// use senders_receivers::{ImmediateScheduler, JustError, new_error, sync_wait};
+/// use senders_receivers::{ImmediateScheduler, JustError, new_error, SyncWait};
 ///
 /// fn example(someError: impl std::error::Error + Send + 'static) {
 ///     // The `::<(i32, i32)>` turbo-fish is to declare the value-type of the created sender.
 ///     let sender = JustError::<ImmediateScheduler, (i32, i32)>::from(new_error(someError));
-///     match sync_wait(sender) {
+///     match sender.sync_wait() {
 ///         Ok(_) => panic!("there won't be a value"),
 ///         Err(e) => println!("{:?}", e),  // `someError` ends up in `e`
 ///     };
@@ -116,13 +116,13 @@ mod tests {
     use super::JustError;
     use crate::errors::{new_error, ErrorForTesting};
     use crate::scheduler::ImmediateScheduler;
-    use crate::sync_wait::sync_wait;
+    use crate::sync_wait::SyncWait;
 
     #[test]
     fn it_works() {
-        match sync_wait(JustError::<ImmediateScheduler, ()>::from(new_error(
-            ErrorForTesting::from("error"),
-        ))) {
+        match (JustError::<ImmediateScheduler, ()>::from(new_error(ErrorForTesting::from("error"))))
+            .sync_wait()
+        {
             Ok(_) => panic!("expected an error"),
             Err(e) => {
                 //assert_eq!(TypeId::of::<ErrorForTesting>(), (&*e).type_id());

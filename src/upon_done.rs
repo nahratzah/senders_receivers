@@ -20,18 +20,18 @@ use std::ops::BitOr;
 /// The [UponDone::from] implementations use [ImmediateScheduler] as their scheduler.
 /// Example:
 /// ```
-/// use senders_receivers::{ImmediateScheduler, JustDone, UponDone, sync_wait};
+/// use senders_receivers::{ImmediateScheduler, JustDone, UponDone, SyncWait};
 ///
 /// let sender = JustDone::<ImmediateScheduler, (String,)>::default()
 ///              | UponDone::from(|| (String::from("result"),));
 /// assert_eq!(
 ///     (String::from("result"),),
-///     sync_wait(sender).unwrap().unwrap())
+///     sender.sync_wait().unwrap().unwrap())
 /// ```
 ///
 /// If a specific scheduler is required, the [UponDone::with_scheduler] constructor is the one to use:
 /// ```
-/// use senders_receivers::{ImmediateScheduler, JustDone, UponDone, Transfer, WithScheduler, sync_wait_send};
+/// use senders_receivers::{ImmediateScheduler, JustDone, UponDone, Transfer, WithScheduler, SyncWaitSend};
 /// use threadpool::ThreadPool;
 ///
 /// let pool = ThreadPool::with_name("example".into(), 1);
@@ -40,7 +40,7 @@ use std::ops::BitOr;
 ///              | UponDone::with_scheduler(pool.clone(), || (String::from("result"),));
 /// assert_eq!(
 ///     (String::from("result"),),
-///     sync_wait_send(sender).unwrap().unwrap())
+///     sender.sync_wait_send().unwrap().unwrap())
 /// ```
 pub struct UponDone<'a, FnType, Sch, Out>
 where
