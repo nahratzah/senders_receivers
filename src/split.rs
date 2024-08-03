@@ -5,6 +5,7 @@ use crate::scheduler::Scheduler;
 use crate::scope::detached_scope;
 use crate::scope::ScopeImpl;
 use crate::scope::{ScopeDataSendPtr, ScopeWrap, ScopeWrapSend};
+use crate::traits::BindSender;
 use crate::traits::OperationState;
 use crate::traits::Receiver;
 use crate::traits::ReceiverOf;
@@ -15,9 +16,10 @@ use std::cell::RefCell;
 use std::error;
 use std::fmt;
 use std::marker::PhantomData;
+use std::ops::BitOr;
 use std::rc::Rc;
 use std::sync::Arc;
-use std::sync::{Mutex, RwLock};
+use std::sync::Mutex;
 
 /// Split allows a single sender-chain to attach multiple times.
 ///
@@ -31,7 +33,7 @@ where
     >,
     TS::Value: 'a + Clone,
 {
-    opstate: OpStateWrapper<'a, TS::Output<'a>>,
+    opstate: Rc<OpStateWrapper<'a, TS::Output<'a>>>,
     state: Rc<RefCell<CompletionWithCallbacks<TS::Scheduler, TS::Value>>>,
 }
 
@@ -46,14 +48,31 @@ where
 {
     fn from(sender: TS) -> Self {
         let state = Rc::new(RefCell::new(CompletionWithCallbacks::default()));
-        let opstate = OpStateWrapper::from({
+        let opstate = Rc::new(OpStateWrapper::from({
             let state = state.clone();
             detached_scope(move |scope: &ScopeImpl<ScopeDataSendPtr>| {
                 sender.connect(scope, CompletionReceiver::new(state))
             })
-        });
+        }));
 
         Self { opstate, state }
+    }
+}
+
+impl<'a, TS> Clone for Split<'a, TS>
+where
+    TS: TypedSenderConnect<
+        'a,
+        ScopeImpl<ScopeDataSendPtr>,
+        CompletionReceiver<<TS as TypedSender>::Scheduler, <TS as TypedSender>::Value>,
+    >,
+    TS::Value: 'a + Clone,
+{
+    fn clone(&self) -> Self {
+        Self {
+            opstate: self.opstate.clone(),
+            state: self.state.clone(),
+        }
     }
 }
 
@@ -109,12 +128,12 @@ where
         ScopeImpl<ScopeDataSendPtr>,
         CompletionReceiverSend<<TS as TypedSender>::Scheduler, <TS as TypedSender>::Value>,
     >,
-    TS::Scheduler: Send + Sync,
+    TS::Scheduler: Send,
     TS::Value: 'a + Clone + Send,
     TS::Output<'a>: Send,
 {
-    opstate: OpStateWrapperSend<'a, TS::Output<'a>>,
-    state: Arc<RwLock<CompletionWithCallbacksSend<TS::Scheduler, TS::Value>>>,
+    opstate: Arc<OpStateWrapperSend<'a, TS::Output<'a>>>,
+    state: Arc<Mutex<CompletionWithCallbacksSend<TS::Scheduler, TS::Value>>>,
 }
 
 impl<'a, TS> From<TS> for SplitSend<'a, TS>
@@ -124,20 +143,39 @@ where
         ScopeImpl<ScopeDataSendPtr>,
         CompletionReceiverSend<<TS as TypedSender>::Scheduler, <TS as TypedSender>::Value>,
     >,
-    TS::Scheduler: Send + Sync,
+    TS::Scheduler: Send,
     TS::Value: 'a + Clone + Send,
     TS::Output<'a>: Send,
 {
     fn from(sender: TS) -> Self {
-        let state = Arc::new(RwLock::new(CompletionWithCallbacksSend::default()));
-        let opstate = OpStateWrapperSend::from({
+        let state = Arc::new(Mutex::new(CompletionWithCallbacksSend::default()));
+        let opstate = Arc::new(OpStateWrapperSend::from({
             let state = state.clone();
             detached_scope(move |scope: &ScopeImpl<ScopeDataSendPtr>| {
                 sender.connect(scope, CompletionReceiverSend::new(state))
             })
-        });
+        }));
 
         Self { opstate, state }
+    }
+}
+
+impl<'a, TS> Clone for SplitSend<'a, TS>
+where
+    TS: TypedSenderConnect<
+        'a,
+        ScopeImpl<ScopeDataSendPtr>,
+        CompletionReceiverSend<<TS as TypedSender>::Scheduler, <TS as TypedSender>::Value>,
+    >,
+    TS::Scheduler: Send,
+    TS::Value: 'a + Clone + Send,
+    TS::Output<'a>: Send,
+{
+    fn clone(&self) -> Self {
+        Self {
+            opstate: self.opstate.clone(),
+            state: self.state.clone(),
+        }
     }
 }
 
@@ -148,8 +186,8 @@ where
         ScopeImpl<ScopeDataSendPtr>,
         CompletionReceiverSend<<TS as TypedSender>::Scheduler, <TS as TypedSender>::Value>,
     >,
-    TS::Scheduler: Send + Sync,
-    TS::Value: Clone + Send + Sync,
+    TS::Scheduler: Send,
+    TS::Value: Clone + Send,
     TS::Output<'a>: Send,
 {
     type Scheduler = TS::Scheduler;
@@ -163,16 +201,15 @@ where
         ScopeImpl<ScopeDataSendPtr>,
         CompletionReceiverSend<<TS as TypedSender>::Scheduler, <TS as TypedSender>::Value>,
     >,
-    TS::Scheduler: Send + Sync,
-    TS::Value: 'a + Clone + Send + Sync,
+    TS::Scheduler: Send,
+    TS::Value: 'a + Clone + Send,
     for<'scope> TS::Output<'scope>: Send,
     <TS::Scheduler as Scheduler>::Sender:
         for<'b> TypedSenderConnect<'b, Scope, WrapValue<TS::Value, Rcv>>,
     Scope: Clone
         + ScopeWrapSend<ImmediateScheduler, ReceiverWrapperSend<TS::Scheduler, TS::Value, Rcv>>
-        + Send
-        + Sync,
-    Scope::WrapSendOutput: Sync,
+        + Send,
+    Scope::WrapSendOutput: Send,
     Rcv: ReceiverOf<TS::Scheduler, TS::Value> + Send,
 {
     type Output<'scope> = SplitOpStateSend<'scope, 'a, TS::Scheduler, TS::Value, TS::Output<'a>, Scope, Rcv>
@@ -255,7 +292,7 @@ where
     Value: Tuple + Clone + Send,
 {
     completion: Completion<Sch, Value>,
-    receivers: Vec<Box<dyn Send + Sync + FnOnce()>>,
+    receivers: Vec<Box<dyn Send + FnOnce()>>,
 }
 
 impl<Sch, Value> CompletionWithCallbacksSend<Sch, Value>
@@ -263,7 +300,7 @@ where
     Sch: Scheduler<LocalScheduler = Sch> + Send,
     Value: Tuple + Clone + Send,
 {
-    fn assign_value(&mut self, sch: Sch, value: Value) -> Vec<Box<dyn Send + Sync + FnOnce()>> {
+    fn assign_value(&mut self, sch: Sch, value: Value) -> Vec<Box<dyn Send + FnOnce()>> {
         match self.completion {
             Completion::Pending => {}
             _ => panic!("expected to be in the running state"),
@@ -273,7 +310,7 @@ where
         self.receivers.split_off(0)
     }
 
-    fn assign_error(&mut self, error: Error) -> Vec<Box<dyn Send + Sync + FnOnce()>> {
+    fn assign_error(&mut self, error: Error) -> Vec<Box<dyn Send + FnOnce()>> {
         match self.completion {
             Completion::Pending => {}
             _ => panic!("expected to be in the running state"),
@@ -283,7 +320,7 @@ where
         self.receivers.split_off(0)
     }
 
-    fn assign_done(&mut self) -> Vec<Box<dyn Send + Sync + FnOnce()>> {
+    fn assign_done(&mut self) -> Vec<Box<dyn Send + FnOnce()>> {
         match self.completion {
             Completion::Pending => {}
             _ => panic!("expected to be in the running state"),
@@ -371,36 +408,36 @@ where
 
 pub struct CompletionReceiverSend<Sch, Value>
 where
-    Sch: Scheduler<LocalScheduler = Sch> + Send + Sync,
+    Sch: Scheduler<LocalScheduler = Sch> + Send,
     Value: Tuple + Clone + Send,
 {
-    state: Arc<RwLock<CompletionWithCallbacksSend<Sch, Value>>>,
+    state: Arc<Mutex<CompletionWithCallbacksSend<Sch, Value>>>,
 }
 
 impl<Sch, Value> CompletionReceiverSend<Sch, Value>
 where
-    Sch: Scheduler<LocalScheduler = Sch> + Send + Sync,
+    Sch: Scheduler<LocalScheduler = Sch> + Send,
     Value: Tuple + Clone + Send,
 {
-    fn new(state: Arc<RwLock<CompletionWithCallbacksSend<Sch, Value>>>) -> Self {
+    fn new(state: Arc<Mutex<CompletionWithCallbacksSend<Sch, Value>>>) -> Self {
         Self { state }
     }
 }
 
 impl<Sch, Value> Receiver for CompletionReceiverSend<Sch, Value>
 where
-    Sch: Scheduler<LocalScheduler = Sch> + Send + Sync,
+    Sch: Scheduler<LocalScheduler = Sch> + Send,
     Value: Tuple + Clone + Send,
 {
     fn set_error(self, error: Error) {
-        let mut ops = self.state.write().unwrap().assign_error(error);
+        let mut ops = self.state.lock().unwrap().assign_error(error);
         for i in ops.drain(0..) {
             i();
         }
     }
 
     fn set_done(self) {
-        let mut ops = self.state.write().unwrap().assign_done();
+        let mut ops = self.state.lock().unwrap().assign_done();
         for i in ops.drain(0..) {
             i();
         }
@@ -409,11 +446,11 @@ where
 
 impl<Sch, Value> ReceiverOf<Sch, Value> for CompletionReceiverSend<Sch, Value>
 where
-    Sch: Scheduler<LocalScheduler = Sch> + Send + Sync,
+    Sch: Scheduler<LocalScheduler = Sch> + Send,
     Value: Tuple + Clone + Send,
 {
     fn set_value(self, sch: Sch, value: Value) {
-        let mut ops = self.state.write().unwrap().assign_value(sch, value);
+        let mut ops = self.state.lock().unwrap().assign_value(sch, value);
         for i in ops.drain(0..) {
             i();
         }
@@ -521,7 +558,7 @@ where
     OpState: OperationState<'a>,
 {
     phantom: PhantomData<&'scope ()>,
-    opstate: OpStateWrapper<'a, OpState>,
+    opstate: Rc<OpStateWrapper<'a, OpState>>,
     state: Rc<RefCell<CompletionWithCallbacks<Sch, Value>>>,
     scope: Scope,
     rcv: Rcv,
@@ -538,7 +575,7 @@ where
     OpState: OperationState<'a>,
 {
     fn new(
-        opstate: OpStateWrapper<'a, OpState>,
+        opstate: Rc<OpStateWrapper<'a, OpState>>,
         state: Rc<RefCell<CompletionWithCallbacks<Sch, Value>>>,
         scope: Scope,
         rcv: Rcv,
@@ -594,20 +631,17 @@ where
 
 pub struct SplitOpStateSend<'scope, 'a, Sch, Value, OpState, Scope, Rcv>
 where
-    Sch: Scheduler<LocalScheduler = Sch> + Send + Sync,
-    Value: 'scope + Clone + Tuple + Send + Sync,
+    Sch: Scheduler<LocalScheduler = Sch> + Send,
+    Value: 'scope + Clone + Tuple + Send,
     Sch::Sender: for<'b> TypedSenderConnect<'b, Scope, WrapValue<Value, Rcv>>,
-    Scope: 'scope
-        + ScopeWrapSend<ImmediateScheduler, ReceiverWrapperSend<Sch, Value, Rcv>>
-        + Send
-        + Sync,
-    Scope::WrapSendOutput: Sync,
+    Scope: 'scope + ScopeWrapSend<ImmediateScheduler, ReceiverWrapperSend<Sch, Value, Rcv>> + Send,
+    Scope::WrapSendOutput: Send,
     Rcv: 'scope + ReceiverOf<Sch, Value> + Send,
     OpState: OperationState<'a> + Send,
 {
     phantom: PhantomData<&'scope ()>,
-    opstate: OpStateWrapperSend<'a, OpState>,
-    state: Arc<RwLock<CompletionWithCallbacksSend<Sch, Value>>>,
+    opstate: Arc<OpStateWrapperSend<'a, OpState>>,
+    state: Arc<Mutex<CompletionWithCallbacksSend<Sch, Value>>>,
     scope: Scope,
     rcv: Rcv,
 }
@@ -615,20 +649,17 @@ where
 impl<'scope, 'a, Sch, Value, OpState, Scope, Rcv>
     SplitOpStateSend<'scope, 'a, Sch, Value, OpState, Scope, Rcv>
 where
-    Sch: Scheduler<LocalScheduler = Sch> + Send + Sync,
-    Value: 'scope + Clone + Tuple + Send + Sync,
+    Sch: Scheduler<LocalScheduler = Sch> + Send,
+    Value: 'scope + Clone + Tuple + Send,
     Sch::Sender: for<'b> TypedSenderConnect<'b, Scope, WrapValue<Value, Rcv>>,
-    Scope: 'scope
-        + ScopeWrapSend<ImmediateScheduler, ReceiverWrapperSend<Sch, Value, Rcv>>
-        + Send
-        + Sync,
-    Scope::WrapSendOutput: Sync,
+    Scope: 'scope + ScopeWrapSend<ImmediateScheduler, ReceiverWrapperSend<Sch, Value, Rcv>> + Send,
+    Scope::WrapSendOutput: Send,
     Rcv: 'scope + ReceiverOf<Sch, Value> + Send,
     OpState: OperationState<'a> + Send,
 {
     fn new(
-        opstate: OpStateWrapperSend<'a, OpState>,
-        state: Arc<RwLock<CompletionWithCallbacksSend<Sch, Value>>>,
+        opstate: Arc<OpStateWrapperSend<'a, OpState>>,
+        state: Arc<Mutex<CompletionWithCallbacksSend<Sch, Value>>>,
         scope: Scope,
         rcv: Rcv,
     ) -> Self {
@@ -645,14 +676,11 @@ where
 impl<'scope, 'a, Sch, Value, OpState, Scope, Rcv> OperationState<'scope>
     for SplitOpStateSend<'scope, 'a, Sch, Value, OpState, Scope, Rcv>
 where
-    Sch: Scheduler<LocalScheduler = Sch> + Send + Sync,
-    Value: 'scope + Clone + Tuple + Send + Sync,
+    Sch: Scheduler<LocalScheduler = Sch> + Send,
+    Value: 'scope + Clone + Tuple + Send,
     Sch::Sender: for<'b> TypedSenderConnect<'b, Scope, WrapValue<Value, Rcv>>,
-    Scope: 'scope
-        + ScopeWrapSend<ImmediateScheduler, ReceiverWrapperSend<Sch, Value, Rcv>>
-        + Send
-        + Sync,
-    Scope::WrapSendOutput: Sync,
+    Scope: 'scope + ScopeWrapSend<ImmediateScheduler, ReceiverWrapperSend<Sch, Value, Rcv>> + Send,
+    Scope::WrapSendOutput: Send,
     Rcv: 'scope + ReceiverOf<Sch, Value> + Send,
     OpState: OperationState<'a> + Send,
 {
@@ -660,7 +688,7 @@ where
         // Start optimistic, with a read-lock, under the assumption that the split-sender has already completed.
         // Without extra knowledge, it's hard to make any sensible remarks about the odds.
         // But the hope is that the nested sender-chain is completed slightly-more-often than not.
-        let state = self.state.read().unwrap();
+        let state = self.state.lock().unwrap();
         match &state.completion {
             Completion::Value(sch, value) => sch
                 .schedule()
@@ -678,7 +706,7 @@ where
                 //
                 // Note that this means we have to recheck the completion-state, because in between the locks
                 // another thread might've installed a completion-signal.
-                let mut state = self.state.write().unwrap();
+                let mut state = self.state.lock().unwrap();
                 match &state.completion {
                     Completion::Value(sch, value) => sch
                         .schedule()
@@ -847,29 +875,29 @@ where
 /// Ensures the receiver is scheduled using the same scheduler.
 pub struct ReceiverWrapperSend<Sch, Value, NestedReceiver>
 where
-    Sch: Scheduler<LocalScheduler = Sch> + Send + Sync,
-    Value: Tuple + Clone + Send + Sync,
+    Sch: Scheduler<LocalScheduler = Sch> + Send,
+    Value: Tuple + Clone + Send,
     NestedReceiver: ReceiverOf<Sch, Value> + Send,
 {
-    state: Arc<RwLock<CompletionWithCallbacksSend<Sch, Value>>>,
+    state: Arc<Mutex<CompletionWithCallbacksSend<Sch, Value>>>,
     nested: NestedReceiver,
 }
 
 impl<Sch, Value, NestedReceiver> ReceiverWrapperSend<Sch, Value, NestedReceiver>
 where
-    Sch: Scheduler<LocalScheduler = Sch> + Send + Sync,
-    Value: Tuple + Clone + Send + Sync,
+    Sch: Scheduler<LocalScheduler = Sch> + Send,
+    Value: Tuple + Clone + Send,
     NestedReceiver: ReceiverOf<Sch, Value> + Send,
 {
     fn new(
-        state: Arc<RwLock<CompletionWithCallbacksSend<Sch, Value>>>,
+        state: Arc<Mutex<CompletionWithCallbacksSend<Sch, Value>>>,
         nested: NestedReceiver,
     ) -> Self {
         Self { state, nested }
     }
 
     fn invoke(self) {
-        match &self.state.read().unwrap().completion {
+        match &self.state.lock().unwrap().completion {
             Completion::Value(sch, value) => self.nested.set_value(sch.clone(), value.clone()), // This is fine: we run on the same scheduler.
             Completion::Error(error) => self.nested.set_error(new_error(error.clone())),
             Completion::Done => self.nested.set_done(),
@@ -879,10 +907,9 @@ where
         }
     }
 
-    fn into_fn<Scope>(self, scope: &Scope) -> Box<dyn Send + Sync + FnOnce()>
+    fn into_fn<Scope>(self, scope: &Scope) -> Box<dyn Send + FnOnce()>
     where
-        Scope: ScopeWrapSend<ImmediateScheduler, Self> + Sync,
-        Scope::WrapSendOutput: Sync,
+        Scope: ScopeWrapSend<ImmediateScheduler, Self>,
     {
         let r = scope.wrap_send(self);
         Box::new(move || r.set_value(ImmediateScheduler::default(), ()))
@@ -891,8 +918,8 @@ where
 
 impl<Sch, Value, NestedReceiver> Receiver for ReceiverWrapperSend<Sch, Value, NestedReceiver>
 where
-    Sch: Scheduler<LocalScheduler = Sch> + Send + Sync,
-    Value: Tuple + Clone + Send + Sync,
+    Sch: Scheduler<LocalScheduler = Sch> + Send,
+    Value: Tuple + Clone + Send,
     NestedReceiver: ReceiverOf<Sch, Value> + Send,
 {
     fn set_error(self, error: Error) {
@@ -908,11 +935,300 @@ impl<AnySch, Sch, Value, NestedReceiver> ReceiverOf<AnySch, ()>
     for ReceiverWrapperSend<Sch, Value, NestedReceiver>
 where
     AnySch: Scheduler<LocalScheduler = AnySch>,
-    Sch: Scheduler<LocalScheduler = Sch> + Send + Sync,
-    Value: Tuple + Clone + Send + Sync,
+    Sch: Scheduler<LocalScheduler = Sch> + Send,
+    Value: Tuple + Clone + Send,
     NestedReceiver: ReceiverOf<Sch, Value> + Send,
 {
     fn set_value(self, _: AnySch, _: ()) {
         self.invoke();
+    }
+}
+
+impl<'a, TS, BindSenderImpl> BitOr<BindSenderImpl> for Split<'a, TS>
+where
+    TS: TypedSenderConnect<
+        'a,
+        ScopeImpl<ScopeDataSendPtr>,
+        CompletionReceiver<<TS as TypedSender>::Scheduler, <TS as TypedSender>::Value>,
+    >,
+    TS::Value: 'a + Clone,
+    BindSenderImpl: BindSender<Self>,
+{
+    type Output = BindSenderImpl::Output;
+
+    fn bitor(self, rhs: BindSenderImpl) -> Self::Output {
+        rhs.bind(self)
+    }
+}
+
+impl<'a, TS, BindSenderImpl> BitOr<BindSenderImpl> for SplitSend<'a, TS>
+where
+    TS: TypedSenderConnect<
+        'a,
+        ScopeImpl<ScopeDataSendPtr>,
+        CompletionReceiverSend<<TS as TypedSender>::Scheduler, <TS as TypedSender>::Value>,
+    >,
+    TS::Scheduler: Send,
+    TS::Value: 'a + Clone + Send,
+    TS::Output<'a>: Send,
+    BindSenderImpl: BindSender<Self>,
+{
+    type Output = BindSenderImpl::Output;
+
+    fn bitor(self, rhs: BindSenderImpl) -> Self::Output {
+        rhs.bind(self)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Split, SplitSend};
+    use crate::errors::{new_error, ErrorForTesting, Result};
+    use crate::just::Just;
+    use crate::let_value::LetValue;
+    use crate::refs;
+    use crate::scheduler::ImmediateScheduler;
+    use crate::scheduler::Scheduler;
+    use crate::sync_wait::{SyncWait, SyncWaitSend};
+    use crate::then::Then;
+    use std::sync::{Arc, Mutex};
+
+    #[test]
+    fn it_works() {
+        let invocations = Mutex::new(0_i32);
+        let sender = Split::from(
+            Just::from(())
+                | Then::from(|_| {
+                    let mut guarded_invocations = invocations.lock().unwrap();
+                    assert_eq!(0, *guarded_invocations);
+                    *guarded_invocations += 1;
+                    (*guarded_invocations,)
+                }),
+        );
+        assert_eq!(0, *invocations.lock().unwrap(), "Split mustn't run yet.");
+
+        let s1 = sender.clone() | Then::from(|(invocations,)| (invocations, invocations));
+        let s2 = sender | Then::from(|(invocations,)| (invocations, invocations));
+
+        assert_eq!(
+            (1, 1),
+            s1.sync_wait().expect("no error").expect("a value"),
+            "it returns the value"
+        );
+        assert_eq!(
+            1,
+            *invocations.lock().unwrap(),
+            "Split ran its sender-chain once."
+        );
+
+        assert_eq!(
+            (1, 1),
+            s2.sync_wait()
+                .expect("no error")
+                .expect("produces the same value a second time"),
+            "it returns the same value as second time"
+        );
+        assert_eq!(
+            1,
+            *invocations.lock().unwrap(),
+            "Split didn't run its sender-chain a second time."
+        );
+    }
+
+    #[test]
+    fn it_propagates_errors() {
+        let invocations = Mutex::new(0_i32);
+        let sender = Split::from(
+            Just::default()
+                | Then::from(|_| -> Result<(i32,)> {
+                    let mut guarded_invocations = invocations.lock().unwrap();
+                    assert_eq!(0, *guarded_invocations);
+                    *guarded_invocations += 1;
+                    Err(new_error(ErrorForTesting::from("bla bla chocoladevla")))
+                }),
+        );
+        assert_eq!(0, *invocations.lock().unwrap(), "Split mustn't run yet.");
+
+        let s1 = sender.clone() | Then::from(|(invocations,)| (invocations, invocations));
+        let s2 = sender | Then::from(|(invocations,)| (invocations, invocations));
+
+        s1.sync_wait().expect_err("an error should be yielded");
+        assert_eq!(
+            1,
+            *invocations.lock().unwrap(),
+            "Split ran its sender-chain once."
+        );
+
+        s2.sync_wait()
+            .expect_err("an error should be yielded the second time");
+        assert_eq!(
+            1,
+            *invocations.lock().unwrap(),
+            "Split didn't run its sender-chain a second time."
+        );
+    }
+
+    #[test]
+    fn it_propagates_done() {
+        let invocations = Mutex::new(0_i32);
+        let sender = Split::from(
+            Just::default()
+                | LetValue::from(|sch: ImmediateScheduler, _| {
+                    let mut guarded_invocations = invocations.lock().unwrap();
+                    assert_eq!(0, *guarded_invocations);
+                    *guarded_invocations += 1;
+                    sch.schedule_done::<(i32,)>()
+                }),
+        );
+        assert_eq!(0, *invocations.lock().unwrap(), "Split mustn't run yet.");
+
+        let s1 = sender.clone() | Then::from(|(invocations,)| (invocations, invocations));
+        let s2 = sender | Then::from(|(invocations,)| (invocations, invocations));
+
+        assert_eq!(
+            None,
+            s1.sync_wait().expect("no error"),
+            "expect done signal"
+        );
+        assert_eq!(
+            1,
+            *invocations.lock().unwrap(),
+            "Split ran its sender-chain once."
+        );
+
+        assert_eq!(
+            None,
+            s2.sync_wait().expect("no error"),
+            "expect done signal the second time"
+        );
+        assert_eq!(
+            1,
+            *invocations.lock().unwrap(),
+            "Split didn't run its sender-chain a second time."
+        );
+    }
+
+    #[test]
+    fn it_works_send() {
+        let invocations = Arc::new(Mutex::new(0_i32)); // XXX shouldn't require Arc here, but somehow it does?
+        let sender = SplitSend::from(
+            Just::from(())
+                | Then::from({
+                    let invocations = invocations.clone();
+                    move |_| {
+                        let mut guarded_invocations = invocations.lock().unwrap();
+                        assert_eq!(0, *guarded_invocations);
+                        *guarded_invocations += 1;
+                        (*guarded_invocations,)
+                    }
+                }),
+        );
+        assert_eq!(0, *invocations.lock().unwrap(), "Split mustn't run yet.");
+
+        let s1 = sender.clone() | Then::from(|(invocations,)| (invocations, invocations));
+        let s2 = sender | Then::from(|(invocations,)| (invocations, invocations));
+
+        assert_eq!(
+            (1, 1),
+            s1.sync_wait_send().expect("no error").expect("a value"),
+            "it returns the value"
+        );
+        assert_eq!(
+            1,
+            *invocations.lock().unwrap(),
+            "Split ran its sender-chain once."
+        );
+
+        assert_eq!(
+            (1, 1),
+            s2.sync_wait_send()
+                .expect("no error")
+                .expect("produces the same value a second time"),
+            "it returns the same value as second time"
+        );
+        assert_eq!(
+            1,
+            *invocations.lock().unwrap(),
+            "Split didn't run its sender-chain a second time."
+        );
+    }
+
+    #[test]
+    fn it_propagates_errors_send() {
+        let invocations = Arc::new(Mutex::new(0_i32)); // XXX shouldn't require Arc here, but somehow it does?
+        let sender = SplitSend::from(
+            Just::default()
+                | Then::from({
+                    let invocations = invocations.clone();
+                    move |_| -> Result<(i32,)> {
+                        let mut guarded_invocations = invocations.lock().unwrap();
+                        assert_eq!(0, *guarded_invocations);
+                        *guarded_invocations += 1;
+                        Err(new_error(ErrorForTesting::from("bla bla chocoladevla")))
+                    }
+                }),
+        );
+        assert_eq!(0, *invocations.lock().unwrap(), "Split mustn't run yet.");
+
+        let s1 = sender.clone() | Then::from(|(invocations,)| (invocations, invocations));
+        let s2 = sender | Then::from(|(invocations,)| (invocations, invocations));
+
+        s1.sync_wait_send().expect_err("an error should be yielded");
+        assert_eq!(
+            1,
+            *invocations.lock().unwrap(),
+            "Split ran its sender-chain once."
+        );
+
+        s2.sync_wait_send()
+            .expect_err("an error should be yielded the second time");
+        assert_eq!(
+            1,
+            *invocations.lock().unwrap(),
+            "Split didn't run its sender-chain a second time."
+        );
+    }
+
+    #[test]
+    fn it_propagates_done_send() {
+        let invocations = Arc::new(Mutex::new(0_i32)); // XXX shouldn't require Arc here, but somehow it does?
+        let sender = SplitSend::from(
+            Just::default()
+                | LetValue::from({
+                    let invocations = invocations.clone();
+                    move |sch: ImmediateScheduler, _: refs::ScopedRefMut<(), refs::SendState>| {
+                        let mut guarded_invocations = invocations.lock().unwrap();
+                        assert_eq!(0, *guarded_invocations);
+                        *guarded_invocations += 1;
+                        sch.schedule_done::<(i32,)>()
+                    }
+                }),
+        );
+        assert_eq!(0, *invocations.lock().unwrap(), "Split mustn't run yet.");
+
+        let s1 = sender.clone() | Then::from(|(invocations,)| (invocations, invocations));
+        let s2 = sender | Then::from(|(invocations,)| (invocations, invocations));
+
+        assert_eq!(
+            None,
+            s1.sync_wait_send().expect("no error"),
+            "expect done signal"
+        );
+        assert_eq!(
+            1,
+            *invocations.lock().unwrap(),
+            "Split ran its sender-chain once."
+        );
+
+        assert_eq!(
+            None,
+            s2.sync_wait_send().expect("no error"),
+            "expect done signal the second time"
+        );
+        assert_eq!(
+            1,
+            *invocations.lock().unwrap(),
+            "Split didn't run its sender-chain a second time."
+        );
     }
 }
