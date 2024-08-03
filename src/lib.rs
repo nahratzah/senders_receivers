@@ -261,6 +261,7 @@ mod when_all;
 mod when_all_transfer;
 mod let_done;
 mod let_error;
+mod split;
 
 pub use errors::{new_error, Error, Result};
 pub use just::Just;
@@ -270,6 +271,7 @@ pub use let_done::LetDone;
 pub use let_error::LetError;
 pub use let_value::LetValue;
 pub use scheduler::{ImmediateScheduler, Scheduler, WithScheduler};
+pub use split::Split;
 pub use start_detached::StartDetached;
 pub use sync_wait::{SyncWait, SyncWaitSend};
 pub use then::Then;

@@ -13,7 +13,7 @@ use std::ops::BitOr;
 /// ```
 /// use senders_receivers::{ImmediateScheduler, JustError, new_error, SyncWait};
 ///
-/// fn example(someError: impl std::error::Error + Send + 'static) {
+/// fn example(someError: impl std::error::Error + Send + Sync + 'static) {
 ///     // The `::<(i32, i32)>` turbo-fish is to declare the value-type of the created sender.
 ///     let sender = JustError::<ImmediateScheduler, (i32, i32)>::from(new_error(someError));
 ///     match sender.sync_wait() {
@@ -68,7 +68,13 @@ where
     Tpl: Tuple,
     ReceiverType: ReceiverOf<Sch::LocalScheduler, Tpl> + 'a,
 {
-    fn connect<'scope>(self, _: &ScopeImpl, receiver: ReceiverType) -> impl OperationState<'scope>
+    type Output<'scope> = JustErrorOperationState<'scope, ReceiverType>
+    where
+        'a: 'scope,
+        ScopeImpl: 'scope,
+        ReceiverType: 'scope;
+
+    fn connect<'scope>(self, _: &ScopeImpl, receiver: ReceiverType) -> Self::Output<'scope>
     where
         'a: 'scope,
         ScopeImpl: 'scope,

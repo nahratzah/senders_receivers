@@ -56,7 +56,13 @@ where
     Tpl: Tuple,
     ReceiverType: ReceiverOf<Sch::LocalScheduler, Tpl>,
 {
-    fn connect<'scope>(self, _: &ScopeImpl, receiver: ReceiverType) -> impl OperationState<'scope>
+    type Output<'scope> = JustDoneOperationState<'scope, ReceiverType>
+    where
+        'a: 'scope,
+        ScopeImpl: 'scope,
+        ReceiverType: 'scope ;
+
+    fn connect<'scope>(self, _: &ScopeImpl, receiver: ReceiverType) -> Self::Output<'scope>
     where
         'a: 'scope,
         ScopeImpl: 'scope,

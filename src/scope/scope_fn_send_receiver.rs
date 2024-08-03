@@ -9,7 +9,7 @@ use std::marker::PhantomData;
 /// This receiver allows for `Send`.
 pub struct ScopeFnSendReceiver<Sch, F>
 where
-    Sch: Scheduler,
+    Sch: Scheduler<LocalScheduler = Sch>,
     F: FnOnce(ScopeFnArgument<Sch>) + Send,
 {
     phantom: PhantomData<fn(Sch)>,
@@ -18,7 +18,7 @@ where
 
 impl<Sch, F> ScopeFnSendReceiver<Sch, F>
 where
-    Sch: Scheduler,
+    Sch: Scheduler<LocalScheduler = Sch>,
     F: FnOnce(ScopeFnArgument<Sch>) + Send,
 {
     pub(crate) fn new(f: F) -> Self {
@@ -31,7 +31,7 @@ where
 
 impl<Sch, F> Receiver for ScopeFnSendReceiver<Sch, F>
 where
-    Sch: Scheduler,
+    Sch: Scheduler<LocalScheduler = Sch>,
     F: FnOnce(ScopeFnArgument<Sch>) + Send,
 {
     fn set_error(self, error: Error) {
@@ -45,7 +45,7 @@ where
 
 impl<Sch, F> ReceiverOf<Sch, ()> for ScopeFnSendReceiver<Sch, F>
 where
-    Sch: Scheduler,
+    Sch: Scheduler<LocalScheduler = Sch>,
     F: FnOnce(ScopeFnArgument<Sch>) + Send,
 {
     fn set_value(self, sch: Sch, _: ()) {

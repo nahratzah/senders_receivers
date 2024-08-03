@@ -82,7 +82,7 @@ use std::ops::{BitOr, DerefMut};
 pub struct LetValue<'a, FnType, Out, Sch, Value, State>
 where
     FnType: 'a + BiFunctor<'a, Sch, Value, State, Output = Result<Out>>,
-    Sch: Scheduler,
+    Sch: Scheduler<LocalScheduler = Sch>,
     Value: 'a + Tuple,
     Out: TypedSender,
     Out::Value: 'a,
@@ -98,7 +98,7 @@ impl<'a, FnType, Out, Sch, Value, State> From<FnType>
     for LetValue<'a, FnType, Out, Sch, Value, State>
 where
     FnType: 'a + BiFunctor<'a, Sch, Value, State, Output = Result<Out>>,
-    Sch: Scheduler,
+    Sch: Scheduler<LocalScheduler = Sch>,
     Value: 'a + Tuple,
     Out: TypedSender,
     Out::Value: 'a,
@@ -121,7 +121,7 @@ impl<'a, FnType, Out, Sch, Value, State> From<FnType>
     for ClosureLetValue<'a, FnType, Out, Sch, Value, State>
 where
     FnType: 'a + FnOnce(Sch, ScopedRefMut<Value, State>) -> Result<Out>,
-    Sch: Scheduler,
+    Sch: Scheduler<LocalScheduler = Sch>,
     Value: 'a + Tuple,
     Out: TypedSender,
     Out::Value: 'a,
@@ -141,7 +141,7 @@ impl<'a, FnType, Out, Sch, Value, State> From<FnType>
     for NoErrLetValue<'a, FnType, Out, Sch, Value, State>
 where
     FnType: BiFunctor<'a, Sch, Value, State, Output = Out>,
-    Sch: Scheduler,
+    Sch: Scheduler<LocalScheduler = Sch>,
     Value: 'a + Tuple,
     Out: TypedSender,
     Out::Value: 'a,
@@ -161,7 +161,7 @@ impl<'a, FnType, Out, Sch, Value, State> From<FnType>
     for NoErrClosureLetValue<'a, FnType, Out, Sch, Value, State>
 where
     FnType: 'a + FnOnce(Sch, ScopedRefMut<Value, State>) -> Out,
-    Sch: Scheduler,
+    Sch: Scheduler<LocalScheduler = Sch>,
     Value: 'a + Tuple,
     Out: TypedSender,
     Out::Value: 'a,
@@ -177,7 +177,7 @@ where
 impl<'a, FnType, Out, Sch, Value, State> Sender for LetValue<'a, FnType, Out, Sch, Value, State>
 where
     FnType: 'a + BiFunctor<'a, Sch, Value, State, Output = Result<Out>>,
-    Sch: Scheduler,
+    Sch: Scheduler<LocalScheduler = Sch>,
     Value: 'a + Tuple,
     Out: TypedSender,
     Out::Value: 'a,
@@ -192,7 +192,7 @@ impl<'a, NestedSender, FnType, Out, Sch, Value, State> BindSender<NestedSender>
 where
     NestedSender: TypedSender<Scheduler = Sch, Value = Value>,
     FnType: 'a + BiFunctor<'a, Sch, Value, State, Output = Result<Out>>,
-    Sch: Scheduler,
+    Sch: Scheduler<LocalScheduler = Sch>,
     Value: 'a + Tuple,
     Out: TypedSender,
     Out::Value: 'a,
@@ -215,7 +215,7 @@ pub struct LetValueTS<'a, NestedSender, FnType, Out, Sch, Value, State>
 where
     NestedSender: TypedSender<Scheduler = Sch, Value = Value>,
     FnType: 'a + BiFunctor<'a, Sch, Value, State, Output = Result<Out>>,
-    Sch: Scheduler,
+    Sch: Scheduler<LocalScheduler = Sch>,
     Value: 'a + Tuple,
     Out: TypedSender,
     Out::Value: 'a,
@@ -234,7 +234,7 @@ where
     BindSenderImpl: BindSender<Self>,
     NestedSender: TypedSender<Scheduler = Sch, Value = Value>,
     FnType: 'a + BiFunctor<'a, Sch, Value, State, Output = Result<Out>>,
-    Sch: Scheduler,
+    Sch: Scheduler<LocalScheduler = Sch>,
     Value: 'a + Tuple,
     Out: TypedSender,
     Out::Value: 'a,
@@ -254,7 +254,7 @@ impl<'a, NestedSender, FnType, Out, Sch, Value, State> TypedSender
 where
     NestedSender: TypedSender<Scheduler = Sch, Value = Value>,
     FnType: 'a + BiFunctor<'a, Sch, Value, State, Output = Result<Out>>,
-    Sch: Scheduler,
+    Sch: Scheduler<LocalScheduler = Sch>,
     Value: 'a + Tuple,
     Out: TypedSender,
     Out::Value: 'a,
@@ -277,7 +277,7 @@ where
             LetValueReceiver<'a, ScopeImpl, ReceiverImpl, FnType, Out, Sch, Value, State>,
         >,
     FnType: 'a + BiFunctor<'a, Sch, Value, State, Output = Result<Out>>,
-    Sch: Scheduler,
+    Sch: Scheduler<LocalScheduler = Sch>,
     Value: 'a + Tuple,
     Out: 'a // XXX 'a is wrong here!
         + TypedSender
@@ -303,11 +303,13 @@ where
     State: 'static + Clone + Debug,
     ScopedRefMut<Value, ScopeImpl::NewScopeData>: SRInto<ScopedRefMut<Value, State>>,
 {
-    fn connect<'scope>(
-        self,
-        scope: &ScopeImpl,
-        receiver: ReceiverImpl,
-    ) -> impl OperationState<'scope>
+    type Output<'scope> = NestedSender::Output<'scope>
+    where
+        'a: 'scope,
+        ScopeImpl: 'scope,
+        ReceiverImpl: 'scope ;
+
+    fn connect<'scope>(self, scope: &ScopeImpl, receiver: ReceiverImpl) -> Self::Output<'scope>
     where
         'a: 'scope,
         ScopeImpl: 'scope,
@@ -323,7 +325,7 @@ where
     }
 }
 
-struct LetValueReceiver<'a, ScopeImpl, NestedReceiver, FnType, Out, Sch, Value, State>
+pub struct LetValueReceiver<'a, ScopeImpl, NestedReceiver, FnType, Out, Sch, Value, State>
 where
     ScopeImpl: ScopeNest<
         <Out as TypedSender>::Scheduler,
@@ -340,7 +342,7 @@ where
         <(Value, <Out as TypedSender>::Value) as TupleCat>::Output,
     >,
     FnType: 'a + BiFunctor<'a, Sch, Value, State, Output = Result<Out>>,
-    Sch: Scheduler,
+    Sch: Scheduler<LocalScheduler = Sch>,
     Value: 'a + Tuple,
     Out: TypedSender
         + TypedSenderConnect<
@@ -374,7 +376,7 @@ where
     >,
     NestedReceiver: ReceiverOf<Out::Scheduler, <(Value, Out::Value) as TupleCat>::Output>,
     FnType: 'a + BiFunctor<'a, Sch, Value, State, Output = Result<Out>>,
-    Sch: Scheduler,
+    Sch: Scheduler<LocalScheduler = Sch>,
     Value: 'a + Tuple,
     Out: TypedSender
         + TypedSenderConnect<
@@ -412,7 +414,7 @@ where
     NestedReceiver:
         ReceiverOf<Out::Scheduler, <(Value, <Out as TypedSender>::Value) as TupleCat>::Output>,
     FnType: 'a + BiFunctor<'a, Sch, Value, State, Output = Result<Out>>,
-    Sch: Scheduler,
+    Sch: Scheduler<LocalScheduler = Sch>,
     Value: 'a + Tuple,
     Out: TypedSender
         + TypedSenderConnect<
@@ -448,9 +450,9 @@ where
     }
 }
 
-struct LocalReceiverWithValue<Sch, Value, OutValue, Rcv>
+pub struct LocalReceiverWithValue<Sch, Value, OutValue, Rcv>
 where
-    Sch: Scheduler,
+    Sch: Scheduler<LocalScheduler = Sch>,
     Value: Tuple,
     OutValue: Tuple,
     (Value, OutValue): TupleCat,
@@ -464,7 +466,7 @@ where
 
 impl<Sch, Value, OutValue, Rcv> LocalReceiverWithValue<Sch, Value, OutValue, Rcv>
 where
-    Sch: Scheduler,
+    Sch: Scheduler<LocalScheduler = Sch>,
     Value: Tuple,
     OutValue: Tuple,
     (Value, OutValue): TupleCat,
@@ -486,7 +488,7 @@ where
 
 impl<Sch, Value, OutValue, Rcv> Receiver for LocalReceiverWithValue<Sch, Value, OutValue, Rcv>
 where
-    Sch: Scheduler,
+    Sch: Scheduler<LocalScheduler = Sch>,
     Value: Tuple,
     OutValue: Tuple,
     (Value, OutValue): TupleCat,
@@ -505,7 +507,7 @@ where
 impl<Sch, Value, OutValue, Rcv> ReceiverOf<Sch, OutValue>
     for LocalReceiverWithValue<Sch, Value, OutValue, Rcv>
 where
-    Sch: Scheduler,
+    Sch: Scheduler<LocalScheduler = Sch>,
     Value: Tuple,
     OutValue: Tuple,
     (Value, OutValue): TupleCat,

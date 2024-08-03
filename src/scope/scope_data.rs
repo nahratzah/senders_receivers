@@ -21,13 +21,13 @@ type SendNotifyFn = dyn Send + Sync + FnOnce(&dyn ScopeDataState);
 pub trait ScopeData: Clone + fmt::Debug {
     type NewScopeType<Sch, Values, ReceiverType>: ScopeData
     where
-        Sch: Scheduler,
+        Sch: Scheduler<LocalScheduler = Sch>,
         Values: Tuple,
         ReceiverType: ReceiverOf<Sch, Values>;
 
     type NewReceiver<Sch, Values, ReceiverType>: ReceiverOf<Sch, Values>
     where
-        Sch: Scheduler,
+        Sch: Scheduler<LocalScheduler = Sch>,
         Values: Tuple,
         ReceiverType: ReceiverOf<Sch, Values>;
 
@@ -43,7 +43,7 @@ pub trait ScopeData: Clone + fmt::Debug {
         ScopedRefMut<ReceiverType, Self::NewScopeType<Sch, Values, ReceiverType>>,
     )
     where
-        Sch: Scheduler,
+        Sch: Scheduler<LocalScheduler = Sch>,
         Values: Tuple,
         ReceiverType: ReceiverOf<Sch, Values>;
 
@@ -209,9 +209,9 @@ impl ScopeDataSendPtr {
 
 impl ScopeData for ScopeDataSendPtr {
     type NewScopeType<NestedSch, NestedValues, NestedRcv> = receiver::ScopeDataSendPtr<Self, NestedSch, NestedValues, NestedRcv>
-    where NestedSch:Scheduler, NestedValues:Tuple, NestedRcv: ReceiverOf<NestedSch, NestedValues>;
+    where NestedSch:Scheduler<LocalScheduler=NestedSch>, NestedValues:Tuple, NestedRcv: ReceiverOf<NestedSch, NestedValues>;
     type NewReceiver<NestedSch, NestedValues, NestedRcv> = receiver::InnerScopeSendReceiver<Self, NestedSch, NestedValues, NestedRcv>
-    where NestedSch:Scheduler, NestedValues:Tuple, NestedRcv: ReceiverOf<NestedSch, NestedValues>;
+    where NestedSch:Scheduler<LocalScheduler=NestedSch>, NestedValues:Tuple, NestedRcv: ReceiverOf<NestedSch, NestedValues>;
 
     fn new_scope<NestedSch, NestedValues, NestedRcv>(
         &self,
@@ -222,7 +222,7 @@ impl ScopeData for ScopeDataSendPtr {
         ScopedRefMut<NestedRcv, Self::NewScopeType<NestedSch, NestedValues, NestedRcv>>,
     )
     where
-        NestedSch: Scheduler,
+        NestedSch: Scheduler<LocalScheduler = NestedSch>,
         NestedValues: Tuple,
         NestedRcv: ReceiverOf<NestedSch, NestedValues>,
     {
@@ -288,9 +288,9 @@ impl ScopeDataPtr {
 
 impl ScopeData for ScopeDataPtr {
     type NewScopeType<NestedSch, NestedValues, NestedRcv> = receiver::ScopeDataNoSendPtr<Self, NestedSch, NestedValues, NestedRcv>
-    where NestedSch:Scheduler, NestedValues:Tuple, NestedRcv: ReceiverOf<NestedSch, NestedValues>;
+    where NestedSch:Scheduler<LocalScheduler=NestedSch>, NestedValues:Tuple, NestedRcv: ReceiverOf<NestedSch, NestedValues>;
     type NewReceiver<NestedSch, NestedValues, NestedRcv> = receiver::InnerScopeReceiver<Self, NestedSch, NestedValues, NestedRcv>
-    where NestedSch:Scheduler, NestedValues:Tuple, NestedRcv: ReceiverOf<NestedSch, NestedValues>;
+    where NestedSch:Scheduler<LocalScheduler=NestedSch>, NestedValues:Tuple, NestedRcv: ReceiverOf<NestedSch, NestedValues>;
 
     fn new_scope<NestedSch, NestedValues, NestedRcv>(
         &self,
@@ -301,7 +301,7 @@ impl ScopeData for ScopeDataPtr {
         ScopedRefMut<NestedRcv, Self::NewScopeType<NestedSch, NestedValues, NestedRcv>>,
     )
     where
-        NestedSch: Scheduler,
+        NestedSch: Scheduler<LocalScheduler = NestedSch>,
         NestedValues: Tuple,
         NestedRcv: ReceiverOf<NestedSch, NestedValues>,
     {

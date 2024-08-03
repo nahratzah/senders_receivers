@@ -12,7 +12,7 @@ type PhantomUnsend = PhantomData<*const ()>;
 /// This receiver is explicitly marked as `!Send` and `!Sync`.
 pub struct ScopeFnReceiver<Sch, F>
 where
-    Sch: Scheduler,
+    Sch: Scheduler<LocalScheduler = Sch>,
     F: FnOnce(ScopeFnArgument<Sch>),
 {
     phantom: PhantomData<fn(Sch)>,
@@ -22,7 +22,7 @@ where
 
 impl<Sch, F> ScopeFnReceiver<Sch, F>
 where
-    Sch: Scheduler,
+    Sch: Scheduler<LocalScheduler = Sch>,
     F: FnOnce(ScopeFnArgument<Sch>),
 {
     pub(crate) fn new(f: F) -> Self {
@@ -36,7 +36,7 @@ where
 
 impl<Sch, F> Receiver for ScopeFnReceiver<Sch, F>
 where
-    Sch: Scheduler,
+    Sch: Scheduler<LocalScheduler = Sch>,
     F: FnOnce(ScopeFnArgument<Sch>),
 {
     fn set_error(self, error: Error) {
@@ -50,7 +50,7 @@ where
 
 impl<Sch, F> ReceiverOf<Sch, ()> for ScopeFnReceiver<Sch, F>
 where
-    Sch: Scheduler,
+    Sch: Scheduler<LocalScheduler = Sch>,
     F: FnOnce(ScopeFnArgument<Sch>),
 {
     fn set_value(self, sch: Sch, _: ()) {

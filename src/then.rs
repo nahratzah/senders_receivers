@@ -1,9 +1,7 @@
 use crate::errors::{Error, Result};
 use crate::functor::{Closure, Functor, NoErrFunctor};
 use crate::scheduler::Scheduler;
-use crate::traits::{
-    BindSender, OperationState, Receiver, ReceiverOf, Sender, TypedSender, TypedSenderConnect,
-};
+use crate::traits::{BindSender, Receiver, ReceiverOf, Sender, TypedSender, TypedSenderConnect};
 use crate::tuple::Tuple;
 use std::marker::PhantomData;
 use std::ops::BitOr;
@@ -188,11 +186,13 @@ where
     FnType: 'a + Functor<'a, NestedSender::Value, Output = Result<Out>>,
     Out: 'a + Tuple,
 {
-    fn connect<'scope>(
-        self,
-        scope: &ScopeImpl,
-        receiver: ReceiverImpl,
-    ) -> impl OperationState<'scope>
+    type Output<'scope> = NestedSender::Output<'scope>
+    where
+        'a: 'scope,
+        ScopeImpl: 'scope,
+        ReceiverImpl: 'scope;
+
+    fn connect<'scope>(self, scope: &ScopeImpl, receiver: ReceiverImpl) -> Self::Output<'scope>
     where
         'a: 'scope,
         ScopeImpl: 'scope,
@@ -208,11 +208,11 @@ where
     }
 }
 
-struct ThenWrappedReceiver<'a, ReceiverImpl, FnType, Sch, Out, ArgTuple>
+pub struct ThenWrappedReceiver<'a, ReceiverImpl, FnType, Sch, Out, ArgTuple>
 where
     ReceiverImpl: ReceiverOf<Sch, Out>,
     FnType: 'a + Functor<'a, ArgTuple, Output = Result<Out>>,
-    Sch: Scheduler,
+    Sch: Scheduler<LocalScheduler = Sch>,
     ArgTuple: Tuple,
     Out: 'a + Tuple,
 {
@@ -226,7 +226,7 @@ impl<'a, ReceiverImpl, FnType, Sch, ArgTuple, Out> Receiver
 where
     ReceiverImpl: ReceiverOf<Sch, Out>,
     FnType: 'a + Functor<'a, ArgTuple, Output = Result<Out>>,
-    Sch: Scheduler,
+    Sch: Scheduler<LocalScheduler = Sch>,
     ArgTuple: Tuple,
     Out: 'a + Tuple,
 {
@@ -244,7 +244,7 @@ impl<'a, ReceiverImpl, FnType, Sch, ArgTuple, Out> ReceiverOf<Sch, ArgTuple>
 where
     ReceiverImpl: ReceiverOf<Sch, Out>,
     FnType: 'a + Functor<'a, ArgTuple, Output = Result<Out>>,
-    Sch: Scheduler,
+    Sch: Scheduler<LocalScheduler = Sch>,
     ArgTuple: Tuple,
     Out: 'a + Tuple,
 {

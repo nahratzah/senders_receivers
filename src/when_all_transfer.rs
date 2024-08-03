@@ -127,8 +127,15 @@ pub trait NoSchedulerSender<'a, ScopeImpl, ReceiverType>: NoSchedulerSenderValue
 where
     ReceiverType: NoSchedulerReceiver<<Self as NoSchedulerSenderValue>::Value>,
 {
+    /// The [OperationState] returned by [NoSchedulerSender::connect()].
+    type Output<'scope>: 'scope + OperationState<'scope>
+    where
+        'a: 'scope,
+        ScopeImpl: 'scope,
+        ReceiverType: 'scope;
+
     /// Connect a [NoSchedulerReceiver] to this sender.
-    fn connect<'scope>(self, scope: &ScopeImpl, rcv: ReceiverType) -> impl OperationState<'scope>
+    fn connect<'scope>(self, scope: &ScopeImpl, rcv: ReceiverType) -> Self::Output<'scope>
     where
         'a: 'scope,
         ScopeImpl: 'scope,
@@ -182,7 +189,9 @@ where
         + TypedSenderConnect<'a, ScopeImpl, Wrap<ReceiverType, <TS as TypedSender>::Value>>,
     <TS as TypedSender>::Value: 'a,
 {
-    fn connect<'scope>(self, scope: &ScopeImpl, rcv: ReceiverType) -> impl OperationState<'scope>
+    type Output<'scope> = TS::Output<'scope> where 'a:'scope,ScopeImpl:'scope,ReceiverType:'scope;
+
+    fn connect<'scope>(self, scope: &ScopeImpl, rcv: ReceiverType) -> Self::Output<'scope>
     where
         'a: 'scope,
         ScopeImpl: 'scope,
@@ -193,7 +202,7 @@ where
 }
 
 /// Wrap a [NoSchedulerReceiver] into a regular [Receiver].
-struct Wrap<Rcv, Value>
+pub struct Wrap<Rcv, Value>
 where
     Rcv: NoSchedulerReceiver<Value>,
     Value: Tuple,
@@ -231,7 +240,7 @@ where
 
 impl<Rcv, Sch, Value> ReceiverOf<Sch, Value> for Wrap<Rcv, Value>
 where
-    Sch: Scheduler,
+    Sch: Scheduler<LocalScheduler = Sch>,
     Rcv: NoSchedulerReceiver<Value>,
     Value: Tuple,
 {
@@ -303,7 +312,17 @@ where
     X::Value: 'a,
     Y::Value: 'a,
 {
-    fn connect<'scope>(self, scope: &ScopeImpl, rcv: ReceiverType) -> impl OperationState<'scope>
+    type Output<'scope> = WhenAllOperationState<
+        'scope,
+	X::Output<'scope>,
+	Y::Output<'scope>,
+    >
+    where
+        'a: 'scope,
+        ScopeImpl: 'scope,
+        ReceiverType: 'scope;
+
+    fn connect<'scope>(self, scope: &ScopeImpl, rcv: ReceiverType) -> Self::Output<'scope>
     where
         'a: 'scope,
         ScopeImpl: 'scope,
@@ -389,7 +408,7 @@ where
     }
 }
 
-struct XSplitReceiver<Rcv, XValue, YValue>
+pub struct XSplitReceiver<Rcv, XValue, YValue>
 where
     XValue: Tuple,
     YValue: Tuple,
@@ -456,7 +475,7 @@ where
     }
 }
 
-struct YSplitReceiver<Rcv, XValue, YValue>
+pub struct YSplitReceiver<Rcv, XValue, YValue>
 where
     XValue: Tuple,
     YValue: Tuple,
@@ -548,7 +567,7 @@ where
     Sch: Scheduler,
     Sender: NoSchedulerSenderValue,
 {
-    type Scheduler = Sch;
+    type Scheduler = Sch::LocalScheduler;
     type Value = Sender::Value;
 }
 
@@ -556,17 +575,30 @@ impl<'a, ScopeImpl, Rcv, Sch, Sender> TypedSenderConnect<'a, ScopeImpl, Rcv>
     for SchedulerTS<Sch, Sender>
 where
     Sch: Scheduler,
-    Sender: NoSchedulerSenderValue + NoSchedulerSender<'a, ScopeImpl, SchedulerReceiver<Sch, Rcv>>,
-    Rcv: ReceiverOf<Sch, Sender::Value>,
+    Sch::Sender: for<'b> TypedSenderConnect<
+        'b,
+        ScopeImpl,
+        WrapValue<<Sender as NoSchedulerSenderValue>::Value, Rcv>,
+    >,
+    Sender: NoSchedulerSenderValue
+        + NoSchedulerSender<'a, ScopeImpl, SchedulerReceiver<ScopeImpl, Sch, Rcv>>,
+    ScopeImpl: Clone,
+    Rcv: ReceiverOf<Sch::LocalScheduler, Sender::Value>,
 {
-    fn connect<'scope>(self, scope: &ScopeImpl, rcv: Rcv) -> impl OperationState<'scope>
+    type Output<'scope> = Sender::Output<'scope>
+    where
+        'a: 'scope,
+        ScopeImpl: 'scope,
+        Rcv: 'scope;
+
+    fn connect<'scope>(self, scope: &ScopeImpl, rcv: Rcv) -> Self::Output<'scope>
     where
         'a: 'scope,
         ScopeImpl: 'scope,
         Rcv: 'scope,
     {
-        self.sender
-            .connect(scope, SchedulerReceiver::new(self.sch, rcv))
+        let rcv = SchedulerReceiver::new(scope.clone(), self.sch, rcv);
+        self.sender.connect(scope, rcv)
     }
 }
 
@@ -583,60 +615,110 @@ where
     }
 }
 
-struct SchedulerReceiver<Sch, Rcv>
+pub struct SchedulerReceiver<Scope, Sch, Rcv>
 where
     Sch: Scheduler,
     Rcv: Receiver,
 {
-    sch: Option<Sch>,
+    scope: Scope,
+    sch: Sch,
     rcv: Option<Rcv>,
 }
 
-impl<Sch, Rcv> SchedulerReceiver<Sch, Rcv>
+impl<Scope, Sch, Rcv> SchedulerReceiver<Scope, Sch, Rcv>
 where
     Sch: Scheduler,
     Rcv: Receiver,
 {
-    fn new(sch: Sch, rcv: Rcv) -> Self {
+    fn new(scope: Scope, sch: Sch, rcv: Rcv) -> Self {
         Self {
-            sch: Some(sch),
+            scope,
+            sch,
             rcv: Some(rcv),
         }
     }
 }
 
-impl<Sch, Value, Rcv> NoSchedulerReceiver<Value> for SchedulerReceiver<Sch, Rcv>
+impl<Scope, Sch, Value, Rcv> NoSchedulerReceiver<Value> for SchedulerReceiver<Scope, Sch, Rcv>
 where
     Sch: Scheduler,
+    Sch::Sender: for<'a> TypedSenderConnect<'a, Scope, WrapValue<Value, Rcv>>,
     Value: Tuple,
-    Rcv: Receiver + ReceiverOf<Sch, Value>,
+    Rcv: Receiver + ReceiverOf<Sch::LocalScheduler, Value>,
 {
     fn set_error(&mut self, error: Error) {
         self.rcv
             .take()
             .expect("receiver has not yet completed")
-            .set_error(error)
+            .set_error(error);
     }
 
     fn set_done(&mut self) {
         self.rcv
             .take()
             .expect("receiver has not yet completed")
-            .set_done()
+            .set_done();
     }
 
     fn set_value(&mut self, value: Value) {
-        self.rcv
-            .take()
-            .expect("receiver has not yet completed")
-            .set_value(
-                self.sch.take().expect("scheduler has not been consumed"),
-                value,
+        self.sch
+            .schedule()
+            .connect(
+                &self.scope,
+                WrapValue::new(
+                    value,
+                    self.rcv.take().expect("receiver has not yet completed"),
+                ),
             )
+            .start();
     }
 }
 
-struct WhenAllOperationState<'scope, X, Y>
+struct WrapValue<Value, Rcv>
+where
+    Value: Tuple,
+    Rcv: Receiver,
+{
+    value: Value,
+    rcv: Rcv,
+}
+
+impl<Value, Rcv> WrapValue<Value, Rcv>
+where
+    Value: Tuple,
+    Rcv: Receiver,
+{
+    fn new(value: Value, rcv: Rcv) -> Self {
+        Self { value, rcv }
+    }
+}
+
+impl<Value, Rcv> Receiver for WrapValue<Value, Rcv>
+where
+    Value: Tuple,
+    Rcv: Receiver,
+{
+    fn set_error(self, error: Error) {
+        self.rcv.set_error(error);
+    }
+
+    fn set_done(self) {
+        self.rcv.set_done();
+    }
+}
+
+impl<Sch, Value, Rcv> ReceiverOf<Sch, ()> for WrapValue<Value, Rcv>
+where
+    Sch: Scheduler<LocalScheduler = Sch>,
+    Value: Tuple,
+    Rcv: ReceiverOf<Sch, Value>,
+{
+    fn set_value(self, sch: Sch, _: ()) {
+        self.rcv.set_value(sch, self.value);
+    }
+}
+
+pub struct WhenAllOperationState<'scope, X, Y>
 where
     X: OperationState<'scope>,
     Y: OperationState<'scope>,

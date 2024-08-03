@@ -3,9 +3,7 @@ use crate::io::default::EnableDefaultIO;
 use crate::refs;
 use crate::scheduler::Scheduler;
 use crate::scope::ScopeWrap;
-use crate::traits::{
-    BindSender, OperationState, Receiver, ReceiverOf, TypedSender, TypedSenderConnect,
-};
+use crate::traits::{BindSender, Receiver, ReceiverOf, TypedSender, TypedSenderConnect};
 use std::fmt;
 use std::io;
 use std::marker::PhantomData;
@@ -160,11 +158,20 @@ where
     SelfState: 'static + Clone + fmt::Debug,
     BufState: 'static + Clone + fmt::Debug,
 {
-    fn connect<'scope>(
-        self,
-        scope: &ScopeImpl,
-        receiver: ReceiverType,
-    ) -> impl OperationState<'scope>
+    type Output<'scope> = <<Sch as Scheduler>::Sender
+	    as
+	    TypedSenderConnect<
+                'a,
+                ScopeImpl,
+                ReceiverWrapper<ReceiverType, Sch::LocalScheduler, Fd, SelfState, BufState>,
+            >
+	>::Output<'scope>
+    where
+        'a: 'scope,
+        ScopeImpl: 'scope,
+        ReceiverType: 'scope ;
+
+    fn connect<'scope>(self, scope: &ScopeImpl, receiver: ReceiverType) -> Self::Output<'scope>
     where
         'a: 'scope,
         ScopeImpl: 'scope,
@@ -199,10 +206,10 @@ where
     }
 }
 
-struct ReceiverWrapper<ReceiverType, Sch, Fd, SelfState, BufState>
+pub struct ReceiverWrapper<ReceiverType, Sch, Fd, SelfState, BufState>
 where
     ReceiverType: ReceiverOf<Sch, (usize,)>,
-    Sch: Scheduler,
+    Sch: Scheduler<LocalScheduler = Sch>,
     Fd: io::Write + ?Sized,
     SelfState: 'static + Clone + fmt::Debug,
     BufState: 'static + Clone + fmt::Debug,
@@ -217,7 +224,7 @@ impl<ReceiverType, Sch, Fd, SelfState, BufState> Receiver
     for ReceiverWrapper<ReceiverType, Sch, Fd, SelfState, BufState>
 where
     ReceiverType: ReceiverOf<Sch, (usize,)>,
-    Sch: Scheduler,
+    Sch: Scheduler<LocalScheduler = Sch>,
     Fd: io::Write + ?Sized,
     SelfState: 'static + Clone + fmt::Debug,
     BufState: 'static + Clone + fmt::Debug,
@@ -235,7 +242,7 @@ impl<Sch, ReceiverType, Fd, SelfState, BufState> ReceiverOf<Sch, ()>
     for ReceiverWrapper<ReceiverType, Sch, Fd, SelfState, BufState>
 where
     ReceiverType: ReceiverOf<Sch, (usize,)>,
-    Sch: Scheduler,
+    Sch: Scheduler<LocalScheduler = Sch>,
     Fd: io::Write + ?Sized,
     SelfState: 'static + Clone + fmt::Debug,
     BufState: 'static + Clone + fmt::Debug,
@@ -290,11 +297,21 @@ where
     SelfState: 'static + Clone + fmt::Debug,
     BufState: 'static + Clone + fmt::Debug,
 {
-    fn connect<'scope>(
-        self,
-        scope: &ScopeImpl,
-        receiver: ReceiverType,
-    ) -> impl OperationState<'scope>
+    type Output<'scope> = <<Sch as Scheduler>::Sender
+	as
+	TypedSenderConnect<
+            'a,
+            ScopeImpl,
+            AllReceiverWrapper<ReceiverType, Sch::LocalScheduler, Fd, SelfState, BufState>,
+        >
+    >::Output<'scope>
+    where
+        'a: 'scope,
+        ScopeImpl: 'scope,
+        ReceiverType: 'scope
+    ;
+
+    fn connect<'scope>(self, scope: &ScopeImpl, receiver: ReceiverType) -> Self::Output<'scope>
     where
         'a: 'scope,
         ScopeImpl: 'scope,
@@ -329,10 +346,10 @@ where
     }
 }
 
-struct AllReceiverWrapper<ReceiverType, Sch, Fd, SelfState, BufState>
+pub struct AllReceiverWrapper<ReceiverType, Sch, Fd, SelfState, BufState>
 where
     ReceiverType: ReceiverOf<Sch, ()>,
-    Sch: Scheduler,
+    Sch: Scheduler<LocalScheduler = Sch>,
     Fd: io::Write + ?Sized,
     SelfState: 'static + Clone + fmt::Debug,
     BufState: 'static + Clone + fmt::Debug,
@@ -347,7 +364,7 @@ impl<ReceiverType, Sch, Fd, SelfState, BufState> Receiver
     for AllReceiverWrapper<ReceiverType, Sch, Fd, SelfState, BufState>
 where
     ReceiverType: ReceiverOf<Sch, ()>,
-    Sch: Scheduler,
+    Sch: Scheduler<LocalScheduler = Sch>,
     Fd: io::Write + ?Sized,
     SelfState: 'static + Clone + fmt::Debug,
     BufState: 'static + Clone + fmt::Debug,
@@ -365,7 +382,7 @@ impl<Sch, ReceiverType, Fd, SelfState, BufState> ReceiverOf<Sch, ()>
     for AllReceiverWrapper<ReceiverType, Sch, Fd, SelfState, BufState>
 where
     ReceiverType: ReceiverOf<Sch, ()>,
-    Sch: Scheduler,
+    Sch: Scheduler<LocalScheduler = Sch>,
     Fd: io::Write + ?Sized,
     SelfState: 'static + Clone + fmt::Debug,
     BufState: 'static + Clone + fmt::Debug,

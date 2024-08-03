@@ -44,7 +44,7 @@ pub trait Scheduler: Eq + Clone + 'static {
     ///
     /// But if for example an embarrisingly-parallel scheduler is used,
     /// the LocalScheduler would represent the scheduler bound to the thread that was selected.
-    type LocalScheduler: Scheduler;
+    type LocalScheduler: Scheduler<LocalScheduler = Self::LocalScheduler>;
 
     /// The [TypedSender] returned by the scheduler.
     type Sender: for<'a> TypedSender<Scheduler = Self::LocalScheduler, Value = ()>;
@@ -126,7 +126,9 @@ where
     >,
     ScopeImpl: ScopeWrap<<ImmediateSender as TypedSender>::Scheduler, ReceiverType>,
 {
-    fn connect<'scope>(self, _: &ScopeImpl, receiver: ReceiverType) -> impl OperationState<'scope>
+    type Output<'scope> = ImmediateOperationState<'scope, ReceiverType> where 'a:'scope,ScopeImpl:'scope,ReceiverType:'scope;
+
+    fn connect<'scope>(self, _: &ScopeImpl, receiver: ReceiverType) -> Self::Output<'scope>
     where
         'a: 'scope,
         ScopeImpl: 'scope,
@@ -150,7 +152,7 @@ where
     }
 }
 
-struct ImmediateOperationState<'scope, ReceiverType>
+pub struct ImmediateOperationState<'scope, ReceiverType>
 where
     ReceiverType: ReceiverOf<ImmediateScheduler, ()> + 'scope,
 {
@@ -198,11 +200,9 @@ where
         >,
     ScopeImpl: ScopeWrapSend<<ThreadPoolSender as TypedSender>::Scheduler, ReceiverType>,
 {
-    fn connect<'scope>(
-        self,
-        scope: &ScopeImpl,
-        receiver: ReceiverType,
-    ) -> impl OperationState<'scope>
+    type Output<'scope> = ThreadPoolOperationState<'scope, ScopeImpl::WrapSendOutput> where 'a:'scope, ScopeImpl:'scope,ReceiverType:'scope;
+
+    fn connect<'scope>(self, scope: &ScopeImpl, receiver: ReceiverType) -> Self::Output<'scope>
     where
         'a: 'scope,
         ScopeImpl: 'scope,
@@ -227,7 +227,7 @@ where
     }
 }
 
-struct ThreadPoolOperationState<'a, Receiver>
+pub struct ThreadPoolOperationState<'a, Receiver>
 where
     Receiver: ReceiverOf<ThreadPool, ()> + Send + 'static,
 {
@@ -310,7 +310,9 @@ where
     Sch: Scheduler<LocalScheduler = Sch>,
     ScopeImpl: ScopeWrap<Sch, ReceiverType>,
 {
-    fn connect<'scope>(self, _: &ScopeImpl, receiver: ReceiverType) -> impl OperationState<'scope>
+    type Output<'scope> = LazySchedulerOperationState<'scope, Sch,ReceiverType> where 'a:'scope,ScopeImpl:'scope,ReceiverType:'scope;
+
+    fn connect<'scope>(self, _: &ScopeImpl, receiver: ReceiverType) -> Self::Output<'scope>
     where
         'a: 'scope,
         ScopeImpl: 'scope,
@@ -324,7 +326,7 @@ where
     }
 }
 
-struct LazySchedulerOperationState<'scope, Sch, ReceiverType>
+pub struct LazySchedulerOperationState<'scope, Sch, ReceiverType>
 where
     ReceiverType: ReceiverOf<Sch, ()> + 'scope,
     Sch: Scheduler<LocalScheduler = Sch>,

@@ -109,7 +109,13 @@ where
         >,
     ScopeImpl: Clone,
 {
-    fn connect<'scope>(self, scope: &ScopeImpl, nested: ReceiverType) -> impl OperationState<'scope>
+    type Output<'scope> = NestedSender::Output<'scope>
+    where
+        'a: 'scope,
+        ScopeImpl: 'scope,
+        ReceiverType: 'scope;
+
+    fn connect<'scope>(self, scope: &ScopeImpl, nested: ReceiverType) -> Self::Output<'scope>
     where
         'a: 'scope,
         ScopeImpl: 'scope,
@@ -139,7 +145,7 @@ where
     }
 }
 
-struct ReceiverWrapper<'a, ScopeImpl, NestedReceiver, Sch, Value>
+pub struct ReceiverWrapper<'a, ScopeImpl, NestedReceiver, Sch, Value>
 where
     NestedReceiver: ReceiverOf<Sch::LocalScheduler, Value>,
     Sch: Scheduler,
@@ -173,7 +179,7 @@ impl<'a, ScopeImpl, PreviousScheduler, NestedReceiver, Sch, Value>
 where
     NestedReceiver: ReceiverOf<Sch::LocalScheduler, Value>,
     Sch: Scheduler,
-    PreviousScheduler: Scheduler,
+    PreviousScheduler: Scheduler<LocalScheduler = PreviousScheduler>,
     Value: Tuple,
     Sch::Sender: TypedSenderConnect<
         'a,
@@ -199,7 +205,7 @@ where
 struct ContinuingReceiverWrapper<NestedReceiver, Sch, Value>
 where
     NestedReceiver: ReceiverOf<Sch, Value>,
-    Sch: Scheduler,
+    Sch: Scheduler<LocalScheduler = Sch>,
     Value: Tuple,
 {
     nested: NestedReceiver,
@@ -210,7 +216,7 @@ where
 impl<NestedReceiver, Sch, Value> Receiver for ContinuingReceiverWrapper<NestedReceiver, Sch, Value>
 where
     NestedReceiver: ReceiverOf<Sch, Value>,
-    Sch: Scheduler,
+    Sch: Scheduler<LocalScheduler = Sch>,
     Value: Tuple,
 {
     fn set_done(self) {
@@ -225,7 +231,7 @@ impl<NestedReceiver, Sch, Value> ReceiverOf<Sch, ()>
     for ContinuingReceiverWrapper<NestedReceiver, Sch, Value>
 where
     NestedReceiver: ReceiverOf<Sch, Value>,
-    Sch: Scheduler,
+    Sch: Scheduler<LocalScheduler = Sch>,
     Value: Tuple,
 {
     fn set_value(self, sch: Sch, _: ()) {

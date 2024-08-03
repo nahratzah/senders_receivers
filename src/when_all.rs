@@ -101,7 +101,7 @@ macro_rules! when_all {
 /// Recommend you use [when_all!], and not use this.
 pub struct WhenAll<'a, Sch, X, Y>
 where
-    Sch: Scheduler,
+    Sch: Scheduler<LocalScheduler = Sch>,
     X: TypedSender<Scheduler = Sch>,
     Y: TypedSender<Scheduler = Sch>,
     (X::Value, Y::Value): TupleCat,
@@ -114,7 +114,7 @@ where
 
 impl<'a, Sch, X, Y> WhenAll<'a, Sch, X, Y>
 where
-    Sch: Scheduler,
+    Sch: Scheduler<LocalScheduler = Sch>,
     X: TypedSender<Scheduler = Sch>,
     Y: TypedSender<Scheduler = Sch>,
     (X::Value, Y::Value): TupleCat,
@@ -132,7 +132,7 @@ where
 
 impl<'a, Sch, X, Y> TypedSender for WhenAll<'a, Sch, X, Y>
 where
-    Sch: Scheduler,
+    Sch: Scheduler<LocalScheduler = Sch>,
     X: TypedSender<Scheduler = Sch>,
     Y: TypedSender<Scheduler = Sch>,
     (X::Value, Y::Value): TupleCat,
@@ -145,7 +145,7 @@ where
 impl<'a, BindSenderImpl, Sch, X, Y> BitOr<BindSenderImpl> for WhenAll<'a, Sch, X, Y>
 where
     BindSenderImpl: BindSender<Self>,
-    Sch: Scheduler,
+    Sch: Scheduler<LocalScheduler = Sch>,
     X: TypedSender<Scheduler = Sch>,
     Y: TypedSender<Scheduler = Sch>,
     (X::Value, Y::Value): TupleCat,
@@ -161,7 +161,7 @@ where
 impl<'a, ScopeImpl, ReceiverType, Sch, X, Y> TypedSenderConnect<'a, ScopeImpl, ReceiverType>
     for WhenAll<'a, Sch, X, Y>
 where
-    Sch: Scheduler,
+    Sch: Scheduler<LocalScheduler = Sch>,
     X: TypedSender<Scheduler = Sch>
         + TypedSenderConnect<
             'a,
@@ -181,11 +181,17 @@ where
     ScopeImpl: Clone,
     ReceiverType: ReceiverOf<Sch, <(X::Value, Y::Value) as TupleCat>::Output>,
 {
-    fn connect<'scope>(
-        self,
-        scope: &ScopeImpl,
-        receiver: ReceiverType,
-    ) -> impl OperationState<'scope>
+    type Output<'scope> = WhenAllOperationState<
+        'scope,
+        X::Output<'scope>,
+        Y::Output<'scope>,
+    >
+    where
+        'a: 'scope,
+        ScopeImpl: 'scope,
+        ReceiverType: 'scope;
+
+    fn connect<'scope>(self, scope: &ScopeImpl, receiver: ReceiverType) -> Self::Output<'scope>
     where
         'a: 'scope,
         ScopeImpl: 'scope,
@@ -250,7 +256,7 @@ where
 
     fn maybe_complete<Sch>(&mut self, sch: Sch)
     where
-        Sch: Scheduler,
+        Sch: Scheduler<LocalScheduler = Sch>,
         NestedReceiver: ReceiverOf<Sch, <(XValue, YValue) as TupleCat>::Output>,
     {
         self.pending -= 1;
@@ -306,7 +312,7 @@ where
 
     fn assign_x<Sch>(&mut self, sch: Sch, x: XValue)
     where
-        Sch: Scheduler,
+        Sch: Scheduler<LocalScheduler = Sch>,
         NestedReceiver: ReceiverOf<Sch, <(XValue, YValue) as TupleCat>::Output>,
     {
         self.invariant();
@@ -320,7 +326,7 @@ where
 
     fn assign_y<Sch>(&mut self, sch: Sch, y: YValue)
     where
-        Sch: Scheduler,
+        Sch: Scheduler<LocalScheduler = Sch>,
         NestedReceiver: ReceiverOf<Sch, <(XValue, YValue) as TupleCat>::Output>,
     {
         self.invariant();
@@ -333,7 +339,7 @@ where
     }
 }
 
-struct XReceiver<NestedReceiver, XValue, YValue>
+pub struct XReceiver<NestedReceiver, XValue, YValue>
 where
     (XValue, YValue): TupleCat,
     <(XValue, YValue) as TupleCat>::Output: Tuple,
@@ -371,7 +377,7 @@ where
 impl<NestedReceiver, Sch, XValue, YValue> ReceiverOf<Sch, XValue>
     for XReceiver<NestedReceiver, XValue, YValue>
 where
-    Sch: Scheduler,
+    Sch: Scheduler<LocalScheduler = Sch>,
     XValue: Tuple,
     YValue: Tuple,
     (XValue, YValue): TupleCat,
@@ -383,7 +389,7 @@ where
     }
 }
 
-struct YReceiver<NestedReceiver, XValue, YValue>
+pub struct YReceiver<NestedReceiver, XValue, YValue>
 where
     XValue: Tuple,
     YValue: Tuple,
@@ -427,7 +433,7 @@ where
 impl<NestedReceiver, Sch, XValue, YValue> ReceiverOf<Sch, YValue>
     for YReceiver<NestedReceiver, XValue, YValue>
 where
-    Sch: Scheduler,
+    Sch: Scheduler<LocalScheduler = Sch>,
     XValue: Tuple,
     YValue: Tuple,
     (XValue, YValue): TupleCat,
@@ -439,7 +445,7 @@ where
     }
 }
 
-struct WhenAllOperationState<'scope, X, Y>
+pub struct WhenAllOperationState<'scope, X, Y>
 where
     X: OperationState<'scope>,
     Y: OperationState<'scope>,

@@ -6,7 +6,7 @@ use crate::scheduler::Scheduler;
 /// I would've preferred to use an [ReceiverOf](crate::traits::ReceiverOf) interface, but couldn't figure out how to make that work.
 pub enum ScopeFnArgument<Sch>
 where
-    Sch: Scheduler,
+    Sch: Scheduler<LocalScheduler = Sch>,
 {
     Value(Sch),
     Error(Error),

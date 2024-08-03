@@ -13,7 +13,7 @@ type NestedReceiver<Sch> = ScopeFnReceiver<Sch, Box<dyn FnOnce(ScopeFnArgument<S
 /// The wrapped receiver lifetime is valid as long as this type exists.
 pub struct ScopedReceiver<Sch>
 where
-    Sch: Scheduler,
+    Sch: Scheduler<LocalScheduler = Sch>,
 {
     phantom: PhantomData<fn(Sch)>,
     nested: Option<NestedReceiver<Sch>>,
@@ -21,7 +21,7 @@ where
 
 impl<Sch> ScopedReceiver<Sch>
 where
-    Sch: Scheduler,
+    Sch: Scheduler<LocalScheduler = Sch>,
 {
     pub(super) fn new(nested: NestedReceiver<Sch>) -> Self {
         ScopedReceiver {
@@ -42,7 +42,7 @@ where
 
 impl<Sch> Receiver for ScopedReceiver<Sch>
 where
-    Sch: Scheduler,
+    Sch: Scheduler<LocalScheduler = Sch>,
 {
     fn set_done(self) {
         self.invoke(move |r| r.set_done())
@@ -55,7 +55,7 @@ where
 
 impl<Sch> ReceiverOf<Sch, ()> for ScopedReceiver<Sch>
 where
-    Sch: Scheduler,
+    Sch: Scheduler<LocalScheduler = Sch>,
 {
     fn set_value(self, scheduler: Sch, _: ()) {
         self.invoke(move |r| r.set_value(scheduler, ()))

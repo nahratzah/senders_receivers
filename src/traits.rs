@@ -14,7 +14,11 @@ pub trait Receiver {
 /// Declare that this is a receiver that can accept a specific `Values` type.
 ///
 /// The value will be received, while running on the [Scheduler].
-pub trait ReceiverOf<Sch: Scheduler, Values: Tuple>: Receiver {
+pub trait ReceiverOf<Sch, Values>: Receiver
+where
+    Sch: Scheduler<LocalScheduler = Sch>,
+    Values: Tuple,
+{
     /// Accept a `value` signal.
     fn set_value(self, scheduler: Sch, values: Values);
 }
@@ -40,7 +44,7 @@ pub trait TypedSender {
     /// The type of the value signal.
     type Value: Tuple;
     /// The scheduler for this sender.
-    type Scheduler: Scheduler;
+    type Scheduler: Scheduler<LocalScheduler = Self::Scheduler>;
 }
 
 /// Trait for implementing `connect` functionality.
@@ -52,13 +56,16 @@ pub trait TypedSenderConnect<'a, ScopeImpl, ReceiverType>: TypedSender
 where
     ReceiverType: ReceiverOf<Self::Scheduler, Self::Value>,
 {
+    /// The [OperationState] returned by [TypedSenderConnect::connect()].
+    type Output<'scope>: 'scope + OperationState<'scope>
+    where
+        'a: 'scope,
+        ScopeImpl: 'scope,
+        ReceiverType: 'scope;
+
     /// Attach a receiver.
     /// Will produce an operation state, that, once started, will invoke the receiver exactly once.
-    fn connect<'scope>(
-        self,
-        scope: &ScopeImpl,
-        receiver: ReceiverType,
-    ) -> impl OperationState<'scope>
+    fn connect<'scope>(self, scope: &ScopeImpl, receiver: ReceiverType) -> Self::Output<'scope>
     where
         'a: 'scope,
         ScopeImpl: 'scope,

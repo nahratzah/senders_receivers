@@ -139,11 +139,13 @@ where
     ReceiverType: ReceiverOf<Out::Scheduler, Out::Value>,
     ScopeImpl: Clone,
 {
-    fn connect<'scope>(
-        self,
-        scope: &ScopeImpl,
-        receiver: ReceiverType,
-    ) -> impl OperationState<'scope>
+    type Output<'scope> = NestedSender::Output<'scope>
+    where
+        'a: 'scope,
+        ScopeImpl: 'scope,
+        ReceiverType: 'scope;
+
+    fn connect<'scope>(self, scope: &ScopeImpl, receiver: ReceiverType) -> Self::Output<'scope>
     where
         'a: 'scope,
         ScopeImpl: 'scope,
@@ -174,7 +176,7 @@ where
     }
 }
 
-struct ReceiverWrapper<'a, ScopeImpl, ReceiverType, FnType, Out>
+pub struct ReceiverWrapper<'a, ScopeImpl, ReceiverType, FnType, Out>
 where
     ReceiverType: ReceiverOf<Out::Scheduler, Out::Value>,
     FnType: Functor<'a, Error, Output = Result<Out>>,

@@ -95,11 +95,13 @@ where
     ReceiverType: ReceiverOf<ThreadLocalPool, ()>,
     ScopeImpl: ScopeWrap<ThreadLocalPool, ReceiverType>,
 {
-    fn connect<'scope>(
-        self,
-        scope: &ScopeImpl,
-        receiver: ReceiverType,
-    ) -> impl OperationState<'scope>
+    type Output<'scope> = ThreadLocalPoolOperationState<'scope, ScopeImpl::WrapOutput>
+    where
+        'a: 'scope,
+        ScopeImpl: 'scope,
+        ReceiverType: 'scope;
+
+    fn connect<'scope>(self, scope: &ScopeImpl, receiver: ReceiverType) -> Self::Output<'scope>
     where
         'a: 'scope,
         ScopeImpl: 'scope,
@@ -124,7 +126,7 @@ where
     }
 }
 
-struct ThreadLocalPoolOperationState<'scope, ReceiverType>
+pub struct ThreadLocalPoolOperationState<'scope, ReceiverType>
 where
     ReceiverType: ReceiverOf<ThreadLocalPool, ()> + 'static,
 {

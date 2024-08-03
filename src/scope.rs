@@ -102,36 +102,46 @@ where
 
 pub trait ScopeWrap<Sch, ReceiverType>: Clone + fmt::Debug
 where
-    Sch: Scheduler,
+    Sch: Scheduler<LocalScheduler = Sch>,
     ReceiverType: ReceiverOf<Sch, ()>,
 {
+    /// Returned receiver type.
+    ///
+    /// This receiver will have static lifetime (enforced by this state).
+    type WrapOutput: 'static + ReceiverOf<Sch, ()>;
+
     /// Wrap a function inside a scoped function.
     ///
     /// As long as the scoped-function remains in existence,
     /// the scope will remain alive.
     ///
     /// The returned receiver cannot [Send].
-    fn wrap(&self, rcv: ReceiverType) -> impl 'static + ReceiverOf<Sch, ()>;
+    fn wrap(&self, rcv: ReceiverType) -> Self::WrapOutput;
 }
 
 pub trait ScopeWrapSend<Sch, ReceiverType>:
     Clone + fmt::Debug + ScopeWrap<Sch, ReceiverType>
 where
-    Sch: Scheduler,
+    Sch: Scheduler<LocalScheduler = Sch>,
     ReceiverType: Send + ReceiverOf<Sch, ()>,
 {
+    /// Returned receiver type.
+    ///
+    /// This receiver will have static lifetime (enforced by this state) and implements [Send].
+    type WrapSendOutput: 'static + ReceiverOf<Sch, ()> + Send;
+
     /// Wrap a function inside a scoped function.
     ///
     /// As long as the scoped-function remains in existence,
     /// the scope will remain alive.
     ///
     /// The returned receiver can [Send].
-    fn wrap_send(&self, rcv: ReceiverType) -> impl 'static + ReceiverOf<Sch, ()> + Send;
+    fn wrap_send(&self, rcv: ReceiverType) -> Self::WrapSendOutput;
 }
 
 pub trait ScopeNest<Sch, Values, ReceiverType>: Clone + fmt::Debug
 where
-    Sch: Scheduler,
+    Sch: Scheduler<LocalScheduler = Sch>,
     Values: Tuple,
     ReceiverType: ReceiverOf<Sch, Values>,
 {
@@ -169,11 +179,13 @@ where
 
 impl<Sch, ReceiverType, State> ScopeWrap<Sch, ReceiverType> for ScopeImpl<State>
 where
-    Sch: Scheduler,
+    Sch: Scheduler<LocalScheduler = Sch>,
     ReceiverType: ReceiverOf<Sch, ()>,
     State: ScopeData,
 {
-    fn wrap(&self, rcv: ReceiverType) -> impl 'static + ReceiverOf<Sch, ()> {
+    type WrapOutput = ScopedReceiver<Sch>;
+
+    fn wrap(&self, rcv: ReceiverType) -> Self::WrapOutput {
         let rcv_fn: Option<Box<dyn FnOnce(ScopeFnArgument<Sch>)>> = {
             let data = self.data.clone();
             Some(Box::new(move |scope_arg: ScopeFnArgument<Sch>| {
@@ -203,11 +215,13 @@ where
 
 impl<Sch, ReceiverType, State> ScopeWrapSend<Sch, ReceiverType> for ScopeImpl<State>
 where
-    Sch: Scheduler,
+    Sch: Scheduler<LocalScheduler = Sch>,
     ReceiverType: Send + ReceiverOf<Sch, ()>,
     State: Send + ScopeData,
 {
-    fn wrap_send(&self, rcv: ReceiverType) -> impl 'static + Send + ReceiverOf<Sch, ()> {
+    type WrapSendOutput = ScopedReceiverSend<Sch>;
+
+    fn wrap_send(&self, rcv: ReceiverType) -> Self::WrapSendOutput {
         let rcv_fn: Option<Box<dyn Send + FnOnce(ScopeFnArgument<Sch>)>> = {
             let data = self.data.clone();
             Some(Box::new(move |scope_arg: ScopeFnArgument<Sch>| {
@@ -237,7 +251,7 @@ where
 
 impl<Sch, Values, ReceiverType, State> ScopeNest<Sch, Values, ReceiverType> for ScopeImpl<State>
 where
-    Sch: Scheduler,
+    Sch: Scheduler<LocalScheduler = Sch>,
     Values: Tuple,
     ReceiverType: ReceiverOf<Sch, Values>,
     State: ScopeData,

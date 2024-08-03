@@ -1,8 +1,6 @@
 use crate::errors::Error;
 use crate::scheduler::{ImmediateScheduler, Scheduler, WithScheduler};
-use crate::traits::{
-    BindSender, OperationState, Receiver, ReceiverOf, TypedSender, TypedSenderConnect,
-};
+use crate::traits::{BindSender, Receiver, ReceiverOf, TypedSender, TypedSenderConnect};
 use crate::tuple::Tuple;
 use std::marker::PhantomData;
 use std::ops::BitOr;
@@ -84,11 +82,21 @@ where
         ReceiverWrapper<'a, ReceiverType, Sch::LocalScheduler, Tpl>,
     >,
 {
-    fn connect<'scope>(
-        self,
-        scope: &ScopeImpl,
-        receiver: ReceiverType,
-    ) -> impl OperationState<'scope>
+    type Output<'scope> = <<Sch as Scheduler>::Sender
+        as
+	TypedSenderConnect<
+            'a,
+            ScopeImpl,
+            ReceiverWrapper<'a, ReceiverType, Sch::LocalScheduler, Tpl>,
+        >
+    >::Output<'scope>
+    where
+        'a: 'scope,
+        ScopeImpl: 'scope,
+        ReceiverType: 'scope,
+	;
+
+    fn connect<'scope>(self, scope: &ScopeImpl, receiver: ReceiverType) -> Self::Output<'scope>
     where
         'a: 'scope,
         ScopeImpl: 'scope,
@@ -116,11 +124,11 @@ where
     }
 }
 
-struct ReceiverWrapper<'a, ReceiverImpl, Sch, Tpl>
+pub struct ReceiverWrapper<'a, ReceiverImpl, Sch, Tpl>
 where
     ReceiverImpl: ReceiverOf<Sch, Tpl>,
     Tpl: 'a + Tuple,
-    Sch: Scheduler,
+    Sch: Scheduler<LocalScheduler = Sch>,
 {
     phantom: PhantomData<fn(Sch) -> &'a Tpl>,
     receiver: ReceiverImpl,
@@ -131,7 +139,7 @@ impl<'a, ReceiverImpl, Sch, Tpl> Receiver for ReceiverWrapper<'a, ReceiverImpl, 
 where
     ReceiverImpl: ReceiverOf<Sch, Tpl>,
     Tpl: 'a + Tuple,
-    Sch: Scheduler,
+    Sch: Scheduler<LocalScheduler = Sch>,
 {
     fn set_done(self) {
         self.receiver.set_done();
@@ -146,7 +154,7 @@ impl<'a, ReceiverImpl, Sch, Tpl> ReceiverOf<Sch, ()> for ReceiverWrapper<'a, Rec
 where
     ReceiverImpl: ReceiverOf<Sch, Tpl>,
     Tpl: 'a + Tuple,
-    Sch: Scheduler,
+    Sch: Scheduler<LocalScheduler = Sch>,
 {
     fn set_value(self, sch: Sch, _: ()) {
         self.receiver.set_value(sch, self.values);

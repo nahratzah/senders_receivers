@@ -45,7 +45,7 @@ impl Receiver for DiscardingReceiver {
 
 impl<Sch, Tpl> ReceiverOf<Sch, Tpl> for DiscardingReceiver
 where
-    Sch: Scheduler,
+    Sch: Scheduler<LocalScheduler = Sch>,
     Tpl: Tuple,
 {
     fn set_value(mut self, _: Sch, _: Tpl) {

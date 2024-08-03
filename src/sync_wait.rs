@@ -14,17 +14,26 @@ enum SyncWaitOutcome<Tpl: Tuple> {
     Done,
 }
 
-pub struct NoSendReceiver<Tpl: Tuple> {
+pub struct NoSendReceiver<Tpl>
+where
+    Tpl: Tuple,
+{
     tx: same_thread_channel::Sender<SyncWaitOutcome<Tpl>>,
 }
 
-impl<Tpl: Tuple> NoSendReceiver<Tpl> {
+impl<Tpl> NoSendReceiver<Tpl>
+where
+    Tpl: Tuple,
+{
     fn install_outcome(self, outcome: SyncWaitOutcome<Tpl>) {
         self.tx.send(outcome).expect("send must succeed");
     }
 }
 
-impl<Tpl: Tuple> Receiver for NoSendReceiver<Tpl> {
+impl<Tpl: Tuple> Receiver for NoSendReceiver<Tpl>
+where
+    Tpl: Tuple,
+{
     fn set_done(self) {
         self.install_outcome(SyncWaitOutcome::Done);
     }
@@ -34,17 +43,27 @@ impl<Tpl: Tuple> Receiver for NoSendReceiver<Tpl> {
     }
 }
 
-impl<Sch: Scheduler, Tpl: Tuple> ReceiverOf<Sch, Tpl> for NoSendReceiver<Tpl> {
+impl<Sch, Tpl> ReceiverOf<Sch, Tpl> for NoSendReceiver<Tpl>
+where
+    Sch: Scheduler<LocalScheduler = Sch>,
+    Tpl: Tuple,
+{
     fn set_value(self, _: Sch, values: Tpl) {
         self.install_outcome(SyncWaitOutcome::Value(values));
     }
 }
 
-pub struct SendReceiver<Tpl: Tuple + Send> {
+pub struct SendReceiver<Tpl>
+where
+    Tpl: Tuple + Send,
+{
     tx: mpsc::SyncSender<SyncWaitOutcome<Tpl>>,
 }
 
-impl<Tpl: Tuple + Send> Receiver for SendReceiver<Tpl> {
+impl<Tpl> Receiver for SendReceiver<Tpl>
+where
+    Tpl: Tuple + Send,
+{
     fn set_done(self) {
         self.tx
             .send(SyncWaitOutcome::Done)
@@ -58,7 +77,11 @@ impl<Tpl: Tuple + Send> Receiver for SendReceiver<Tpl> {
     }
 }
 
-impl<Sch: Scheduler, Tpl: Tuple + Send> ReceiverOf<Sch, Tpl> for SendReceiver<Tpl> {
+impl<Sch, Tpl> ReceiverOf<Sch, Tpl> for SendReceiver<Tpl>
+where
+    Sch: Scheduler<LocalScheduler = Sch>,
+    Tpl: Tuple + Send,
+{
     fn set_value(self, _: Sch, values: Tpl) {
         self.tx
             .send(SyncWaitOutcome::Value(values))

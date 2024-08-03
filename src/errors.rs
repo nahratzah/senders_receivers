@@ -4,7 +4,7 @@ use std::error;
 ///
 /// If you want to handle specific errors, you can downcast the relevant error to a type.
 /// The [new_error] function is provided to more easily convert an error into an [Error].
-pub type Error = Box<dyn error::Error + Send>;
+pub type Error = Box<dyn error::Error + Send + Sync>;
 
 /// Result type used in senders/receivers.
 pub type Result<T> = std::result::Result<T, Error>;
@@ -12,7 +12,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 /// Create a new error from something that looks like an error.
 pub fn new_error<E>(e: E) -> Error
 where
-    E: error::Error + Send + 'static + Sized,
+    E: error::Error + Send + Sync + 'static + Sized,
 {
     Box::new(e)
 }

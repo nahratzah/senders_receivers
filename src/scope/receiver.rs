@@ -37,7 +37,7 @@ pub(super) trait InnerScopeConstructor<OuterState, Rcv>: Sized {
 pub struct InnerScopeReceiver<OuterState, Sch, Values, Rcv>
 where
     OuterState: ScopeData,
-    Sch: Scheduler,
+    Sch: Scheduler<LocalScheduler = Sch>,
     Values: Tuple,
     Rcv: ReceiverOf<Sch, Values>,
 {
@@ -48,7 +48,7 @@ where
 pub struct InnerScopeSendReceiver<OuterState, Sch, Values, Rcv>
 where
     OuterState: ScopeData,
-    Sch: Scheduler,
+    Sch: Scheduler<LocalScheduler = Sch>,
     Values: Tuple,
     Rcv: ReceiverOf<Sch, Values>,
 {
@@ -60,7 +60,7 @@ impl<OuterState, Sch, Values, Rcv> InnerScopeConstructor<OuterState, Rcv>
     for InnerScopeReceiver<OuterState, Sch, Values, Rcv>
 where
     OuterState: ScopeData,
-    Sch: Scheduler,
+    Sch: Scheduler<LocalScheduler = Sch>,
     Values: Tuple,
     Rcv: ReceiverOf<Sch, Values>,
 {
@@ -96,7 +96,7 @@ impl<OuterState, Sch, Values, Rcv> InnerScopeConstructor<OuterState, Rcv>
     for InnerScopeSendReceiver<OuterState, Sch, Values, Rcv>
 where
     OuterState: ScopeData,
-    Sch: Scheduler,
+    Sch: Scheduler<LocalScheduler = Sch>,
     Values: Tuple,
     Rcv: ReceiverOf<Sch, Values>,
 {
@@ -134,7 +134,7 @@ where
 impl<OuterState, Sch, Values, Rcv> Receiver for InnerScopeReceiver<OuterState, Sch, Values, Rcv>
 where
     OuterState: ScopeData,
-    Sch: Scheduler,
+    Sch: Scheduler<LocalScheduler = Sch>,
     Values: Tuple,
     Rcv: ReceiverOf<Sch, Values>,
 {
@@ -161,7 +161,7 @@ where
 impl<OuterState, Sch, Values, Rcv> Receiver for InnerScopeSendReceiver<OuterState, Sch, Values, Rcv>
 where
     OuterState: ScopeData,
-    Sch: Scheduler,
+    Sch: Scheduler<LocalScheduler = Sch>,
     Values: Tuple,
     Rcv: ReceiverOf<Sch, Values>,
 {
@@ -188,7 +188,7 @@ impl<OuterState, Sch, Values, Rcv> ReceiverOf<Sch, Values>
     for InnerScopeReceiver<OuterState, Sch, Values, Rcv>
 where
     OuterState: ScopeData,
-    Sch: Scheduler,
+    Sch: Scheduler<LocalScheduler = Sch>,
     Values: Tuple,
     Rcv: ReceiverOf<Sch, Values>,
 {
@@ -209,7 +209,7 @@ impl<OuterState, Sch, Values, Rcv> ReceiverOf<Sch, Values>
     for InnerScopeSendReceiver<OuterState, Sch, Values, Rcv>
 where
     OuterState: ScopeData,
-    Sch: Scheduler,
+    Sch: Scheduler<LocalScheduler = Sch>,
     Values: Tuple,
     Rcv: ReceiverOf<Sch, Values>,
 {
@@ -225,7 +225,7 @@ where
 
 fn forward<Sch, Values, Rcv>(rcv: Rcv, argument: Option<Signal<Sch, Values>>)
 where
-    Sch: Scheduler,
+    Sch: Scheduler<LocalScheduler = Sch>,
     Values: Tuple,
     Rcv: ReceiverOf<Sch, Values>,
 {
@@ -244,7 +244,7 @@ type SharedValueSend<Sch, Values> = Arc<Mutex<Option<Signal<Sch, Values>>>>;
 struct ScopeDataNoSend<OuterState, Sch, Values, Rcv>
 where
     OuterState: ScopeData,
-    Sch: Scheduler,
+    Sch: Scheduler<LocalScheduler = Sch>,
     Values: Tuple,
     Rcv: ReceiverOf<Sch, Values>,
 {
@@ -257,7 +257,7 @@ where
 struct ScopeDataSend<OuterState, Sch, Values, Rcv>
 where
     OuterState: ScopeData,
-    Sch: Scheduler,
+    Sch: Scheduler<LocalScheduler = Sch>,
     Values: Tuple,
     Rcv: ReceiverOf<Sch, Values>,
 {
@@ -270,7 +270,7 @@ where
 impl<OuterState, Sch, Values, Rcv> ScopeDataNoSend<OuterState, Sch, Values, Rcv>
 where
     OuterState: ScopeData,
-    Sch: Scheduler,
+    Sch: Scheduler<LocalScheduler = Sch>,
     Values: Tuple,
     Rcv: ReceiverOf<Sch, Values>,
 {
@@ -295,7 +295,7 @@ where
 impl<OuterState, Sch, Values, Rcv> ScopeDataSend<OuterState, Sch, Values, Rcv>
 where
     OuterState: ScopeData,
-    Sch: Scheduler,
+    Sch: Scheduler<LocalScheduler = Sch>,
     Values: Tuple,
     Rcv: ReceiverOf<Sch, Values>,
 {
@@ -316,7 +316,7 @@ where
 impl<OuterState, Sch, Values, Rcv> Drop for ScopeDataNoSend<OuterState, Sch, Values, Rcv>
 where
     OuterState: ScopeData,
-    Sch: Scheduler,
+    Sch: Scheduler<LocalScheduler = Sch>,
     Values: Tuple,
     Rcv: ReceiverOf<Sch, Values>,
 {
@@ -338,7 +338,7 @@ where
 impl<OuterState, Sch, Values, Rcv> Drop for ScopeDataSend<OuterState, Sch, Values, Rcv>
 where
     OuterState: ScopeData,
-    Sch: Scheduler,
+    Sch: Scheduler<LocalScheduler = Sch>,
     Values: Tuple,
     Rcv: ReceiverOf<Sch, Values>,
 {
@@ -360,7 +360,7 @@ where
 pub struct ScopeDataNoSendPtr<OuterState, Sch, Values, Rcv>
 where
     OuterState: ScopeData,
-    Sch: Scheduler,
+    Sch: Scheduler<LocalScheduler = Sch>,
     Values: Tuple,
     Rcv: ReceiverOf<Sch, Values>,
 {
@@ -370,7 +370,7 @@ where
 pub struct ScopeDataSendPtr<OuterState, Sch, Values, Rcv>
 where
     OuterState: ScopeData,
-    Sch: Scheduler,
+    Sch: Scheduler<LocalScheduler = Sch>,
     Values: Tuple,
     Rcv: ReceiverOf<Sch, Values>,
 {
@@ -380,7 +380,7 @@ where
 impl<OuterState, Sch, Values, Rcv> ScopeDataNoSendPtr<OuterState, Sch, Values, Rcv>
 where
     OuterState: ScopeData,
-    Sch: Scheduler,
+    Sch: Scheduler<LocalScheduler = Sch>,
     Values: Tuple,
     Rcv: ReceiverOf<Sch, Values>,
 {
@@ -401,7 +401,7 @@ where
 impl<OuterState, Sch, Values, Rcv> ScopeDataSendPtr<OuterState, Sch, Values, Rcv>
 where
     OuterState: ScopeData,
-    Sch: Scheduler,
+    Sch: Scheduler<LocalScheduler = Sch>,
     Values: Tuple,
     Rcv: ReceiverOf<Sch, Values>,
 {
@@ -414,14 +414,14 @@ where
 impl<OuterState, Sch, Values, Rcv> ScopeData for ScopeDataNoSendPtr<OuterState, Sch, Values, Rcv>
 where
     OuterState: ScopeData,
-    Sch: Scheduler,
+    Sch: Scheduler<LocalScheduler = Sch>,
     Values: Tuple,
     Rcv: ReceiverOf<Sch, Values>,
 {
     type NewScopeType<NestedSch, NestedValues, NestedRcv> = ScopeDataNoSendPtr<Self, NestedSch, NestedValues, NestedRcv>
-    where NestedSch:Scheduler, NestedValues:Tuple, NestedRcv: ReceiverOf<NestedSch, NestedValues>;
+    where NestedSch:Scheduler<LocalScheduler=NestedSch>, NestedValues:Tuple, NestedRcv: ReceiverOf<NestedSch, NestedValues>;
     type NewReceiver<NestedSch, NestedValues, NestedRcv> = InnerScopeReceiver<Self, NestedSch, NestedValues, NestedRcv>
-    where NestedSch:Scheduler, NestedValues:Tuple, NestedRcv: ReceiverOf<NestedSch, NestedValues>;
+    where NestedSch:Scheduler<LocalScheduler=NestedSch>, NestedValues:Tuple, NestedRcv: ReceiverOf<NestedSch, NestedValues>;
 
     fn new_scope<NestedSch, NestedValues, NestedRcv>(
         &self,
@@ -432,7 +432,7 @@ where
         ScopedRefMut<NestedRcv, Self::NewScopeType<NestedSch, NestedValues, NestedRcv>>,
     )
     where
-        NestedSch: Scheduler,
+        NestedSch: Scheduler<LocalScheduler = NestedSch>,
         NestedValues: Tuple,
         NestedRcv: ReceiverOf<NestedSch, NestedValues>,
     {
@@ -447,14 +447,14 @@ where
 impl<OuterState, Sch, Values, Rcv> ScopeData for ScopeDataSendPtr<OuterState, Sch, Values, Rcv>
 where
     OuterState: ScopeData,
-    Sch: Scheduler,
+    Sch: Scheduler<LocalScheduler = Sch>,
     Values: Tuple,
     Rcv: ReceiverOf<Sch, Values>,
 {
     type NewScopeType<NestedSch, NestedValues, NestedRcv> = ScopeDataSendPtr<Self, NestedSch, NestedValues, NestedRcv>
-    where NestedSch:Scheduler, NestedValues:Tuple, NestedRcv: ReceiverOf<NestedSch, NestedValues>;
+    where NestedSch:Scheduler<LocalScheduler=NestedSch>, NestedValues:Tuple, NestedRcv: ReceiverOf<NestedSch, NestedValues>;
     type NewReceiver<NestedSch, NestedValues, NestedRcv> = InnerScopeSendReceiver<Self, NestedSch, NestedValues, NestedRcv>
-    where NestedSch:Scheduler, NestedValues:Tuple, NestedRcv: ReceiverOf<NestedSch, NestedValues>;
+    where NestedSch:Scheduler<LocalScheduler=NestedSch>, NestedValues:Tuple, NestedRcv: ReceiverOf<NestedSch, NestedValues>;
 
     fn new_scope<NestedSch, NestedValues, NestedRcv>(
         &self,
@@ -465,7 +465,7 @@ where
         ScopedRefMut<NestedRcv, Self::NewScopeType<NestedSch, NestedValues, NestedRcv>>,
     )
     where
-        NestedSch: Scheduler,
+        NestedSch: Scheduler<LocalScheduler = NestedSch>,
         NestedValues: Tuple,
         NestedRcv: ReceiverOf<NestedSch, NestedValues>,
     {
@@ -480,7 +480,7 @@ where
 impl<OuterState, Sch, Values, Rcv> fmt::Debug for ScopeDataNoSendPtr<OuterState, Sch, Values, Rcv>
 where
     OuterState: ScopeData,
-    Sch: Scheduler,
+    Sch: Scheduler<LocalScheduler = Sch>,
     Values: Tuple,
     Rcv: ReceiverOf<Sch, Values>,
 {
@@ -492,7 +492,7 @@ where
 impl<OuterState, Sch, Values, Rcv> fmt::Debug for ScopeDataSendPtr<OuterState, Sch, Values, Rcv>
 where
     OuterState: ScopeData,
-    Sch: Scheduler,
+    Sch: Scheduler<LocalScheduler = Sch>,
     Values: Tuple,
     Rcv: ReceiverOf<Sch, Values>,
 {
@@ -504,7 +504,7 @@ where
 impl<OuterState, Sch, Values, Rcv> Clone for ScopeDataNoSendPtr<OuterState, Sch, Values, Rcv>
 where
     OuterState: ScopeData,
-    Sch: Scheduler,
+    Sch: Scheduler<LocalScheduler = Sch>,
     Values: Tuple,
     Rcv: ReceiverOf<Sch, Values>,
 {
@@ -518,7 +518,7 @@ where
 impl<OuterState, Sch, Values, Rcv> Clone for ScopeDataSendPtr<OuterState, Sch, Values, Rcv>
 where
     OuterState: ScopeData,
-    Sch: Scheduler,
+    Sch: Scheduler<LocalScheduler = Sch>,
     Values: Tuple,
     Rcv: ReceiverOf<Sch, Values>,
 {
@@ -532,7 +532,7 @@ where
 impl<OuterState, Sch, Values, Rcv> fmt::Debug for ScopeDataNoSend<OuterState, Sch, Values, Rcv>
 where
     OuterState: ScopeData,
-    Sch: Scheduler,
+    Sch: Scheduler<LocalScheduler = Sch>,
     Values: Tuple,
     Rcv: ReceiverOf<Sch, Values>,
 {
@@ -567,7 +567,7 @@ where
 impl<OuterState, Sch, Values, Rcv> fmt::Debug for ScopeDataSend<OuterState, Sch, Values, Rcv>
 where
     OuterState: ScopeData,
-    Sch: Scheduler,
+    Sch: Scheduler<LocalScheduler = Sch>,
     Values: Tuple,
     Rcv: ReceiverOf<Sch, Values>,
 {

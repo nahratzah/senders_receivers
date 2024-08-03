@@ -227,11 +227,13 @@ where
     >,
     ScopeImpl: Clone,
 {
-    fn connect<'scope>(
-        self,
-        scope: &ScopeImpl,
-        receiver: ReceiverType,
-    ) -> impl OperationState<'scope>
+    type Output<'scope> = NestedSender::Output<'scope>
+    where
+        'a: 'scope,
+        ScopeImpl: 'scope,
+        ReceiverType: 'scope;
+
+    fn connect<'scope>(self, scope: &ScopeImpl, receiver: ReceiverType) -> Self::Output<'scope>
     where
         'a: 'scope,
         ScopeImpl: 'scope,
@@ -264,7 +266,7 @@ where
     }
 }
 
-struct ReceiverWrapper<'a, ScopeImpl, NestedReceiver, FnType, Sch, Out>
+pub struct ReceiverWrapper<'a, ScopeImpl, NestedReceiver, FnType, Sch, Out>
 where
     NestedReceiver: ReceiverOf<Sch::LocalScheduler, Out>,
     FnType: 'a + NoArgFunctor<'a, Output = Result<Out>>,
@@ -333,11 +335,11 @@ where
     }
 }
 
-struct DoneReceiver<'a, NestedReceiver, FnType, Sch, Out>
+pub struct DoneReceiver<'a, NestedReceiver, FnType, Sch, Out>
 where
     NestedReceiver: ReceiverOf<Sch, Out>,
     FnType: 'a + NoArgFunctor<'a, Output = Result<Out>>,
-    Sch: Scheduler,
+    Sch: Scheduler<LocalScheduler = Sch>,
     Out: 'a + Tuple,
 {
     nested: NestedReceiver,
@@ -350,7 +352,7 @@ impl<'a, NestedReceiver, FnType, Sch, Out> Receiver
 where
     NestedReceiver: ReceiverOf<Sch, Out>,
     FnType: 'a + NoArgFunctor<'a, Output = Result<Out>>,
-    Sch: Scheduler,
+    Sch: Scheduler<LocalScheduler = Sch>,
     Out: 'a + Tuple,
 {
     fn set_done(self) {
@@ -367,7 +369,7 @@ impl<'a, NestedReceiver, FnType, Sch, Out> ReceiverOf<Sch, ()>
 where
     NestedReceiver: ReceiverOf<Sch, Out>,
     FnType: 'a + NoArgFunctor<'a, Output = Result<Out>>,
-    Sch: Scheduler,
+    Sch: Scheduler<LocalScheduler = Sch>,
     Out: 'a + Tuple,
 {
     fn set_value(self, sch: Sch, _: ()) {
