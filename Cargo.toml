@@ -1,6 +1,6 @@
 [package]
 name = "senders_receivers"
-version = "0.0.5"
+version = "0.0.6"
 edition = "2021"
 authors = ["Ariane"]
 license = "BSD-2-Clause"
