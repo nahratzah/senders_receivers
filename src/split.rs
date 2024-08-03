@@ -160,7 +160,7 @@ where
 ///
 /// // We don't have to, but we can start the computation early.
 /// // Although keep in mind that `start_detached` will panic, if the computation yields an error.
-/// (sharable_expensive_computation.clone()).start_detached();
+/// sharable_expensive_computation.clone().start_detached();
 ///
 /// // Use the computation.
 /// let _ = (sharable_expensive_computation.clone() | Then::from(|(s,)| println!("The outcome is {}.", s))).sync_wait_send();
