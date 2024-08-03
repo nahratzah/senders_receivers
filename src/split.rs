@@ -21,9 +21,32 @@ use std::rc::Rc;
 use std::sync::Arc;
 use std::sync::Mutex;
 
-/// Split allows a single sender-chain to attach multiple times.
+/// Split turns a sender-chain into a re-usable sender-chain.
 ///
 /// The wrapped typed-sender will be run once, and its value will be shared across all chains that derive from this.
+/// It requires that the [Value](crate::traits::TypedSender::Value) implements [Clone].
+///
+/// [Split] is not sharable across thread boundaries (it does not implement [Send]).
+/// It therefore also doesn't require the wrapped sender-chain, or any attached sender-chains to be able to cross thread boundaries.
+/// Should you require that, you'll need to use [SplitSend].
+///
+/// # Example: Re-using a Computation
+/// ```
+/// use senders_receivers::{Just, Then, Split, SyncWait};
+///
+/// let expensive_computation = Just::default() | Then::from(|_| (String::from("super duper expensive"),));
+/// let sharable_expensive_computation = Split::from(expensive_computation); // Won't run until needed.
+///
+/// // Use the computation (this starts it).
+/// let _ = (sharable_expensive_computation.clone() | Then::from(|(s,)| println!("The outcome is {}.", s))).sync_wait();
+///
+/// // Use the same computation a second time (this re-uses the outcome from before).
+/// let _ = (sharable_expensive_computation | Then::from(|(s,)| println!("The outcome was {}.", s))).sync_wait();
+/// ```
+///
+/// # Error and Done Handling
+/// If the wrapped sender-chain produces an error, or the done signal, that too will be forwarded to all further sender-chains.
+/// However, errors are wrapped inside a [SharedError], which sadly means that casting to the underlying error type becomes difficult.
 pub struct Split<'a, TS>
 where
     TS: TypedSenderConnect<
@@ -118,9 +141,37 @@ where
     }
 }
 
-/// Split allows a single sender-chain to attach multiple times.
+/// Split turns a sender-chain into a re-usable sender-chain.
 ///
 /// The wrapped typed-sender will be run once, and its value will be shared across all chains that derive from this.
+/// It requires that the [Value](crate::traits::TypedSender::Value) implements [Clone].
+///
+/// Unlike [Split], [SplitSend] allows the wrapped sender-chain to cross thread boundaries.
+/// It therefore also requires that both the wrapped sender-chain, and all attached sender-chains, are able to cross thread boundaries (by implementing [Send]).
+///
+/// # Example: Re-using a Computation
+/// ```
+/// use threadpool::ThreadPool;
+/// use senders_receivers::{Just, Then, SplitSend, StartDetached, SyncWaitSend, Scheduler};
+///
+/// let pool = ThreadPool::with_name("example".into(), 2);
+/// let expensive_computation = pool.schedule() | Then::from(|_| (String::from("super duper expensive"),));
+/// let sharable_expensive_computation = SplitSend::from(expensive_computation); // Won't run until needed.
+///
+/// // We don't have to, but we can start the computation early.
+/// // Although keep in mind that `start_detached` will panic, if the computation yields an error.
+/// (sharable_expensive_computation.clone()).start_detached();
+///
+/// // Use the computation.
+/// let _ = (sharable_expensive_computation.clone() | Then::from(|(s,)| println!("The outcome is {}.", s))).sync_wait_send();
+///
+/// // Use the same computation a second time (this re-uses the outcome from before).
+/// let _ = (sharable_expensive_computation | Then::from(|(s,)| println!("The outcome was {}.", s))).sync_wait_send();
+/// ```
+///
+/// # Error and Done Handling
+/// If the wrapped sender-chain produces an error, or the done signal, that too will be forwarded to all further sender-chains.
+/// However, errors are wrapped inside a [SharedError], which sadly means that casting to the underlying error type becomes difficult.
 pub struct SplitSend<'a, TS>
 where
     TS: TypedSenderConnect<
@@ -501,9 +552,25 @@ where
     }
 }
 
+/// Wrap an [Error], so it can be shared across multiple sender-chains.
+///
+/// This is used by [Split] and [SplitSend] to share errors between multiple derived sender-chains.
+///
+/// My alternatives were to enforce that all errors implement [Clone], or to use [a shared pointer](Arc).
+/// I chose the latter, because I don't think all errors in the standard library implement [Clone],
+/// and it would probably be difficult for other types too.
 #[derive(Clone)]
-struct SharedError {
+pub struct SharedError {
     ptr: Arc<Error>,
+}
+
+impl SharedError {
+    /// Get the underlying error.
+    ///
+    /// This is a shared pointer, because... well, it's a shared error.
+    pub fn get_ptr(&self) -> Arc<Error> {
+        return self.ptr.clone();
+    }
 }
 
 impl From<Error> for SharedError {
@@ -685,10 +752,7 @@ where
     OpState: OperationState<'a> + Send,
 {
     fn start(self) {
-        // Start optimistic, with a read-lock, under the assumption that the split-sender has already completed.
-        // Without extra knowledge, it's hard to make any sensible remarks about the odds.
-        // But the hope is that the nested sender-chain is completed slightly-more-often than not.
-        let state = self.state.lock().unwrap();
+        let mut state = self.state.lock().unwrap();
         match &state.completion {
             Completion::Value(sch, value) => sch
                 .schedule()
@@ -697,40 +761,20 @@ where
             Completion::Error(error) => self.rcv.set_error(new_error(error.clone())),
             Completion::Done => self.rcv.set_done(),
             Completion::Pending => {
-                // Unlock state, so we can acquire a write-lock instead.
+                let receiver = ReceiverWrapperSend::new(self.state.clone(), self.rcv);
+                state
+                    .receivers
+                    .push(Box::new(receiver.into_fn(&self.scope)));
+
+                // Unlock state: if the sender-chain completes on this thread, we want to avoid dead-lock.
                 drop(state);
 
-                // If we reached this point, the nested sender-chain hasn't completed yet.
-                // (And possible hasn't started.)
-                // So we'll drop the read-lock, and switch to a write-lock.
-                //
-                // Note that this means we have to recheck the completion-state, because in between the locks
-                // another thread might've installed a completion-signal.
-                let mut state = self.state.lock().unwrap();
-                match &state.completion {
-                    Completion::Value(sch, value) => sch
-                        .schedule()
-                        .connect(&self.scope, WrapValue::new(value.clone(), self.rcv))
-                        .start(),
-                    Completion::Error(error) => self.rcv.set_error(new_error(error.clone())),
-                    Completion::Done => self.rcv.set_done(),
-                    Completion::Pending => {
-                        let receiver = ReceiverWrapperSend::new(self.state.clone(), self.rcv);
-                        state
-                            .receivers
-                            .push(Box::new(receiver.into_fn(&self.scope)));
-
-                        // Unlock state: if the sender-chain completes on this thread, we want to avoid dead-lock.
-                        drop(state);
-
-                        // We must make sure `ensure_started()` is the last operation.
-                        // Because if the sender-chain is started before the value is assigned:
-                        // - the opstate might deadlock trying to complete (if we held the mutex).
-                        // - if we didn't hold the mutex, it would invalidate our match branch.
-                        // - if the `state.receivers.push` operation fails, we would break the rule that scope must outlive the operation.
-                        self.opstate.ensure_started();
-                    }
-                };
+                // We must make sure `ensure_started()` is the last operation.
+                // Because if the sender-chain is started before the value is assigned:
+                // - the opstate might deadlock trying to complete (if we held the mutex).
+                // - if we didn't hold the mutex, it would invalidate our match branch.
+                // - if the `state.receivers.push` operation fails, we would break the rule that scope must outlive the operation.
+                self.opstate.ensure_started();
             }
         };
     }
