@@ -7,6 +7,7 @@ use crate::traits::{
     BindSender, OperationState, Receiver, ReceiverOf, Sender, TypedSender, TypedSenderConnect,
 };
 use crate::tuple::Tuple;
+use std::cell::RefCell;
 use std::marker::PhantomData;
 use std::ops::BitOr;
 use std::rc::Rc;
@@ -345,7 +346,7 @@ where
     Sch: Scheduler<LocalScheduler = Sch>,
     Value: 'static + Tuple,
 {
-    signal: Mutex<StateEnum<Sch, Value>>,
+    signal: RefCell<StateEnum<Sch, Value>>,
 }
 
 impl<Sch, Value> State<Sch, Value>
@@ -354,7 +355,7 @@ where
     Value: 'static + Tuple,
 {
     fn assign_signal(&self, new_signal: Signal<Sch, Value>) {
-        let mut signal = self.signal.lock().unwrap();
+        let mut signal = self.signal.borrow_mut();
         match &mut *signal {
             StateEnum::Pending => *signal = StateEnum::Signal(Some(new_signal)),
             StateEnum::Attached(opt_opstate) => {
@@ -389,7 +390,7 @@ where
         Rcv: 'scope + ReceiverOf<Sch, Value>,
         Scope: 'scope + ScopeWrap<ImmediateScheduler, StateReceiverWrapper<Sch, Value, Rcv>>,
     {
-        let mut signal = self.signal.lock().unwrap();
+        let mut signal = self.signal.borrow_mut();
         match &mut *signal {
             StateEnum::Pending => {
                 *signal = {
@@ -419,7 +420,7 @@ where
 {
     fn default() -> Self {
         Self {
-            signal: Mutex::new(StateEnum::Pending),
+            signal: RefCell::new(StateEnum::Pending),
         }
     }
 }
@@ -796,7 +797,7 @@ where
     Rcv: ReceiverOf<Sch, Value>,
 {
     fn set_value(self, _: AnySch, _: ()) {
-        match &mut *self.state.signal.lock().unwrap() {
+        match &mut *self.state.signal.borrow_mut() {
             StateEnum::Signal(signal) => match signal.take().expect("signal has not been consumed")
             {
                 Signal::Value(sch, value) => self.rcv.set_value(sch, value),
