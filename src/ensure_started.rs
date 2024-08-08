@@ -9,6 +9,7 @@ use crate::traits::{
 use crate::tuple::Tuple;
 use std::marker::PhantomData;
 use std::ops::BitOr;
+use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
 /// Start the sender-chain, while allowing for attaching further elements.
@@ -50,7 +51,7 @@ where
     TS::Value: 'static,
     TS::Output: StartDetached,
 {
-    let state = Arc::new(State::default());
+    let state = Rc::new(State::default());
     (ts | StateSender {
         state: state.clone(),
     })
@@ -381,7 +382,7 @@ where
         self.assign_signal(Signal::Done)
     }
 
-    fn attach_receiver<'scope, Scope, Rcv>(self: Arc<Self>, scope: Scope, rcv: Rcv)
+    fn attach_receiver<'scope, Scope, Rcv>(self: Rc<Self>, scope: Scope, rcv: Rcv)
     where
         Just<'scope, Sch, Value>:
             TypedSender<Scheduler = Sch, Value = Value> + TypedSenderConnect<'scope, Scope, Rcv>,
@@ -511,7 +512,7 @@ where
     }
 }
 
-type StatePtr<Sch, Value> = Arc<State<Sch, Value>>;
+type StatePtr<Sch, Value> = Rc<State<Sch, Value>>;
 type StateSendPtr<Sch, Value> = Arc<StateSend<Sch, Value>>;
 
 pub struct StateSender<Sch, Value>
