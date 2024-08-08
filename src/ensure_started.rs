@@ -865,3 +865,128 @@ where
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::ensure_started;
+    use super::ensure_started_send;
+    use crate::errors::{new_error, ErrorForTesting};
+    use crate::just::Just;
+    use crate::scheduler::{ImmediateScheduler, Scheduler};
+    use crate::sync_wait::{SyncWait, SyncWaitSend};
+    use crate::then::Then;
+    use std::sync::mpsc;
+    use threadpool::ThreadPool;
+
+    #[test]
+    fn unattached_works() {
+        let (tx, rx) = mpsc::channel();
+        let _ = ensure_started(
+            Just::default() | Then::from(move |_: ()| tx.send(10).map_err(new_error)),
+        );
+
+        assert_eq!(10, rx.recv().unwrap(), "sender chain must run regardless");
+    }
+
+    #[test]
+    fn send_unattached_works() {
+        let (tx, rx) = mpsc::channel();
+        let pool = ThreadPool::with_name("send_unattached_works".into(), 1);
+        let _ = ensure_started_send(
+            pool.schedule() | Then::from(move |_: ()| tx.send(10).map_err(new_error)),
+        );
+
+        assert_eq!(10, rx.recv().unwrap(), "sender chain must run regardless");
+    }
+
+    #[test]
+    fn unattached_error_does_not_panic() {
+        // We merely want to confirm this doesn't cause a panic.
+        let _ = ensure_started(ImmediateScheduler.schedule_error::<()>(new_error(
+            ErrorForTesting::from("this error won't cause a panic"),
+        )));
+    }
+
+    #[test]
+    fn send_unattached_error_does_not_panic() {
+        let pool = ThreadPool::with_name("send_unattached_error_does_not_panic".into(), 1);
+        // We merely want to confirm this doesn't cause a panic.
+        let _ = ensure_started(pool.schedule_error::<()>(new_error(ErrorForTesting::from(
+            "this error won't cause a panic",
+        ))));
+    }
+
+    #[test]
+    fn propagates_value() {
+        let sender =
+            ensure_started(ImmediateScheduler.schedule_value((10,))) | Then::from(|(x,)| (x + 1,));
+        assert_eq!(
+            11,
+            sender
+                .sync_wait()
+                .expect("no error")
+                .expect("no cancelation")
+                .0
+        );
+    }
+
+    #[test]
+    fn send_propagates_value() {
+        let pool = ThreadPool::with_name("send_propagates_value".into(), 1);
+        let sender = ensure_started_send(pool.schedule_value((10,))) | Then::from(|(x,)| (x + 1,));
+        assert_eq!(
+            11,
+            sender
+                .sync_wait_send()
+                .expect("no error")
+                .expect("no cancelation")
+                .0
+        );
+    }
+
+    #[test]
+    fn propagates_error() {
+        let sender = ensure_started(
+            ImmediateScheduler
+                .schedule_error::<(i32,)>(new_error(ErrorForTesting::from("intentional error"))),
+        ) | Then::from(|(x,)| (x + 1,));
+        assert_eq!(
+            ErrorForTesting::from("intentional error"),
+            *sender
+                .sync_wait()
+                .expect_err("should error")
+                .downcast::<ErrorForTesting>()
+                .unwrap()
+        );
+    }
+
+    #[test]
+    fn send_propagates_error() {
+        let pool = ThreadPool::with_name("send_propagates_error".into(), 1);
+        let sender = ensure_started_send(
+            pool.schedule_error::<(i32,)>(new_error(ErrorForTesting::from("intentional error"))),
+        ) | Then::from(|(x,)| (x + 1,));
+        assert_eq!(
+            ErrorForTesting::from("intentional error"),
+            *sender
+                .sync_wait_send()
+                .expect_err("should error")
+                .downcast::<ErrorForTesting>()
+                .unwrap()
+        );
+    }
+
+    #[test]
+    fn propagates_done() {
+        let sender = ensure_started(ImmediateScheduler.schedule_done::<(i32,)>())
+            | Then::from(|(x,)| (x + 1,));
+        assert_eq!(None, sender.sync_wait().expect("no error"));
+    }
+
+    #[test]
+    fn send_propagates_done() {
+        let pool = ThreadPool::with_name("send_propagates_error".into(), 1);
+        let sender = ensure_started(pool.schedule_done::<(i32,)>()) | Then::from(|(x,)| (x + 1,));
+        assert_eq!(None, sender.sync_wait_send().expect("no error"));
+    }
+}
