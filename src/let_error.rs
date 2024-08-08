@@ -231,9 +231,9 @@ mod tests {
     fn it_works() {
         assert_eq!(
             Some((String::from("yay"),)),
-            (ImmediateScheduler.schedule_error::<(String,)>(new_error(
-                ErrorForTesting::from("this error will be consumed")
-            )) | LetError::from(|error: Error| {
+            (ImmediateScheduler.schedule_error::<(String,)>(new_error(ErrorForTesting::from(
+                "this error will be consumed"
+            ))) | LetError::from(|error: Error| {
                 assert_eq!(
                     ErrorForTesting::from("this error will be consumed"),
                     *error.downcast_ref::<ErrorForTesting>().unwrap()
@@ -249,16 +249,14 @@ mod tests {
     fn it_works_with_errors() {
         assert_eq!(
             ErrorForTesting::from("this error will be returned"),
-            *(ImmediateScheduler.schedule_error::<(String,)>(new_error(
-                ErrorForTesting::from("this error will be consumed")
-            )) | LetError::from(|error: Error| {
+            *(ImmediateScheduler.schedule_error::<(String,)>(new_error(ErrorForTesting::from(
+                "this error will be consumed"
+            ))) | LetError::from(|error: Error| {
                 match error.downcast_ref::<ErrorForTesting>() {
                     Some(_) => Err(new_error(ErrorForTesting::from(
                         "this error will be returned",
                     ))),
-                    None => {
-                        Ok(ImmediateScheduler.schedule_value((String::from("nay"),)))
-                    }
+                    None => Ok(ImmediateScheduler.schedule_value((String::from("nay"),))),
                 }
             }))
             .sync_wait()

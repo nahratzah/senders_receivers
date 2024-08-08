@@ -264,7 +264,7 @@ mod let_done;
 mod let_error;
 mod split;
 
-pub use ensure_started::ensure_started;
+pub use ensure_started::{ensure_started, ensure_started_send};
 pub use errors::{new_error, Error, Result};
 pub use just::Just;
 pub use just_done::JustDone;

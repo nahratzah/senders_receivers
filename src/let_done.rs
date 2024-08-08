@@ -232,9 +232,7 @@ mod tests {
         assert_eq!(
             (String::from("yay"),),
             (ImmediateScheduler.schedule_done::<(String,)>()
-                | LetDone::from(|| {
-                    ImmediateScheduler.schedule_value((String::from("yay"),))
-                }))
+                | LetDone::from(|| { ImmediateScheduler.schedule_value((String::from("yay"),)) }))
             .sync_wait()
             .expect("should succeed")
             .expect("should not be the done signal")
@@ -263,9 +261,9 @@ mod tests {
     fn it_cascades_error() {
         assert_eq!(
             ErrorForTesting::from("should be passed through"),
-            *(ImmediateScheduler.schedule_error::<(String,)>(new_error(
-                ErrorForTesting::from("should be passed through")
-            )) | LetDone::from(|| -> Just<ImmediateScheduler, (String,)> {
+            *(ImmediateScheduler.schedule_error::<(String,)>(new_error(ErrorForTesting::from(
+                "should be passed through"
+            ))) | LetDone::from(|| -> Just<ImmediateScheduler, (String,)> {
                 panic!("should not be called!");
             }))
             .sync_wait()
