@@ -152,15 +152,14 @@ where
 /// # Example: Re-using a Computation
 /// ```
 /// use threadpool::ThreadPool;
-/// use senders_receivers::{Just, Then, SplitSend, StartDetached, SyncWaitSend, Scheduler};
+/// use senders_receivers::{Just, Then, SplitSend, StartDetached, SyncWaitSend, Scheduler, ensure_started_send};
 ///
 /// let pool = ThreadPool::with_name("example".into(), 2);
 /// let expensive_computation = pool.schedule() | Then::from(|_| (String::from("super duper expensive"),));
 /// let sharable_expensive_computation = SplitSend::from(expensive_computation); // Won't run until needed.
 ///
 /// // We don't have to, but we can start the computation early.
-/// // Although keep in mind that `start_detached` will panic, if the computation yields an error.
-/// sharable_expensive_computation.clone().start_detached();
+/// let _ = ensure_started_send(sharable_expensive_computation.clone());
 ///
 /// // Use the computation.
 /// let _ = (sharable_expensive_computation.clone() | Then::from(|(s,)| println!("The outcome is {}.", s))).sync_wait_send();
