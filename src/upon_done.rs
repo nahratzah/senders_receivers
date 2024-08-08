@@ -61,7 +61,7 @@ where
     fn from(fn_impl: FnType) -> Self {
         Self {
             fn_impl,
-            sch: ImmediateScheduler::default(),
+            sch: ImmediateScheduler,
             phantom: PhantomData,
         }
     }

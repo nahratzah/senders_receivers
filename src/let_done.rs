@@ -231,9 +231,9 @@ mod tests {
     fn it_works() {
         assert_eq!(
             (String::from("yay"),),
-            (ImmediateScheduler::default().schedule_done::<(String,)>()
+            (ImmediateScheduler.schedule_done::<(String,)>()
                 | LetDone::from(|| {
-                    ImmediateScheduler::default().schedule_value((String::from("yay"),))
+                    ImmediateScheduler.schedule_value((String::from("yay"),))
                 }))
             .sync_wait()
             .expect("should succeed")
@@ -245,7 +245,7 @@ mod tests {
     fn it_works_with_errors() {
         assert_eq!(
             ErrorForTesting::from("this error will be returned"),
-            *(ImmediateScheduler::default().schedule_done::<(String,)>()
+            *(ImmediateScheduler.schedule_done::<(String,)>()
                 | LetDone::from(|| {
                     let result: Result<Just<ImmediateScheduler, (String,)>> = Err(new_error(
                         ErrorForTesting::from("this error will be returned"),
@@ -263,7 +263,7 @@ mod tests {
     fn it_cascades_error() {
         assert_eq!(
             ErrorForTesting::from("should be passed through"),
-            *(ImmediateScheduler::default().schedule_error::<(String,)>(new_error(
+            *(ImmediateScheduler.schedule_error::<(String,)>(new_error(
                 ErrorForTesting::from("should be passed through")
             )) | LetDone::from(|| -> Just<ImmediateScheduler, (String,)> {
                 panic!("should not be called!");
@@ -279,7 +279,7 @@ mod tests {
     fn it_cascades_value() {
         assert_eq!(
             Some((String::from("yay"),)),
-            (ImmediateScheduler::default().schedule_value((String::from("yay"),))
+            (ImmediateScheduler.schedule_value((String::from("yay"),))
                 | LetDone::from(|| -> Just<ImmediateScheduler, (String,)> {
                     panic!("should not be called!");
                 }))

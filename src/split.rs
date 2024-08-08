@@ -569,7 +569,7 @@ impl SharedError {
     ///
     /// This is a shared pointer, because... well, it's a shared error.
     pub fn get_ptr(&self) -> Arc<Error> {
-        return self.ptr.clone();
+        self.ptr.clone()
     }
 }
 
@@ -883,7 +883,7 @@ where
         Scope: ScopeWrap<ImmediateScheduler, Self>,
     {
         let r = scope.wrap(self);
-        Box::new(move || r.set_value(ImmediateScheduler::default(), ()))
+        Box::new(move || r.set_value(ImmediateScheduler, ()))
     }
 }
 
@@ -956,7 +956,7 @@ where
         Scope: ScopeWrapSend<ImmediateScheduler, Self>,
     {
         let r = scope.wrap_send(self);
-        Box::new(move || r.set_value(ImmediateScheduler::default(), ()))
+        Box::new(move || r.set_value(ImmediateScheduler, ()))
     }
 }
 

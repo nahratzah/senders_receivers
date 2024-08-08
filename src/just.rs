@@ -46,7 +46,7 @@ impl<'a, Tpl: 'a + Tuple> From<Tpl> for Just<'a, ImmediateScheduler, Tpl> {
     fn from(init: Tpl) -> Self {
         Just {
             phantom: PhantomData,
-            sch: ImmediateScheduler::default(),
+            sch: ImmediateScheduler,
             values: init,
         }
     }

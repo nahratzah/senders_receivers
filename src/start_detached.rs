@@ -94,7 +94,7 @@ mod test {
 
     #[test]
     fn handles_done() {
-        ImmediateScheduler::default()
+        ImmediateScheduler
             .schedule_done::<(i32, i32, i32)>()
             .start_detached();
     }

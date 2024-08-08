@@ -137,7 +137,7 @@ where
     {
         ImmediateOperationState {
             phantom: PhantomData,
-            receiver: receiver,
+            receiver,
         }
     }
 }

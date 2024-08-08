@@ -769,7 +769,7 @@ mod tests {
     fn it_works() {
         let sender = NoSchedulerSenderImpl::from(Just::from((1, 2)))
             .cat(NoSchedulerSenderImpl::from(Just::from((3, 4))))
-            .schedule(ImmediateScheduler::default());
+            .schedule(ImmediateScheduler);
         assert_eq!((1, 2, 3, 4), sender.sync_wait().unwrap().unwrap());
     }
 
@@ -788,7 +788,7 @@ mod tests {
             new_error(ErrorForTesting::from("error")),
         ))
         .cat(NoSchedulerSenderImpl::from(Just::from((3, 4))))
-        .schedule(ImmediateScheduler::default())
+        .schedule(ImmediateScheduler)
         .sync_wait()
         {
             Ok(_) => panic!("expected an error"),
@@ -805,7 +805,7 @@ mod tests {
     fn done_is_propagated() {
         match NoSchedulerSenderImpl::from(JustDone::<ImmediateScheduler, (i32, i32)>::new())
             .cat(NoSchedulerSenderImpl::from(Just::from((3, 4))))
-            .schedule(ImmediateScheduler::default())
+            .schedule(ImmediateScheduler)
             .sync_wait()
         {
             Ok(None) => {}
@@ -824,7 +824,7 @@ mod tests {
             >::from(new_error(
                 ErrorForTesting::from("error"),
             ))))
-            .schedule(ImmediateScheduler::default())
+            .schedule(ImmediateScheduler)
             .sync_wait()
         {
             Ok(_) => panic!("expected an error"),
