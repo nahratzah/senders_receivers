@@ -95,7 +95,7 @@ pub trait Scheduler: Eq + Clone + 'static {
 
 /// An immediate-scheduler is a [Scheduler] which runs any tasks on it immediately.
 #[derive(Clone, Default, Eq, PartialEq)]
-pub struct ImmediateScheduler {}
+pub struct ImmediateScheduler;
 
 /// This scheduler is a basic scheduler, that just runs everything immediately.
 impl Scheduler for ImmediateScheduler {
@@ -104,13 +104,13 @@ impl Scheduler for ImmediateScheduler {
     type Sender = ImmediateSender;
 
     fn schedule(&self) -> Self::Sender {
-        ImmediateSender {}
+        ImmediateSender
     }
 }
 
 impl EnableDefaultIO for ImmediateScheduler {}
 
-pub struct ImmediateSender {}
+pub struct ImmediateSender;
 
 impl TypedSender for ImmediateSender {
     type Scheduler = ImmediateScheduler;
@@ -124,9 +124,10 @@ where
         <ImmediateSender as TypedSender>::Scheduler,
         <ImmediateSender as TypedSender>::Value,
     >,
-    ScopeImpl: ScopeWrap<<ImmediateSender as TypedSender>::Scheduler, ReceiverType>,
 {
-    type Output<'scope> = ImmediateOperationState<'scope, ReceiverType> where 'a:'scope,ScopeImpl:'scope,ReceiverType:'scope;
+    type Output<'scope> = ImmediateOperationState<'scope, ReceiverType>
+    where
+        'a:'scope,ScopeImpl:'scope,ReceiverType:'scope;
 
     fn connect<'scope>(self, _: &ScopeImpl, receiver: ReceiverType) -> Self::Output<'scope>
     where
@@ -136,7 +137,7 @@ where
     {
         ImmediateOperationState {
             phantom: PhantomData,
-            receiver,
+            receiver: receiver,
         }
     }
 }

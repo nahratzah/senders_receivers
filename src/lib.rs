@@ -259,10 +259,12 @@ mod upon_error;
 mod when_all;
 #[macro_use]
 mod when_all_transfer;
+mod ensure_started;
 mod let_done;
 mod let_error;
 mod split;
 
+pub use ensure_started::ensure_started;
 pub use errors::{new_error, Error, Result};
 pub use just::Just;
 pub use just_done::JustDone;
