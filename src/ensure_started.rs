@@ -361,6 +361,8 @@ where
                     .take()
                     .expect("signal is delivered for the first time");
                 *signal = StateEnum::Signal(Some(new_signal));
+                drop(signal); // Release the lock, so the opstate_fn can re-acquire it.
+
                 opstate_fn();
             }
             _ => panic!("already completed"),
@@ -443,6 +445,8 @@ where
                     .take()
                     .expect("signal is delivered for the first time");
                 *signal = StateSendEnum::Signal(Some(new_signal));
+                drop(signal); // Release the lock, so the opstate_fn can re-acquire it.
+
                 opstate_fn();
             }
             _ => panic!("already completed"),
