@@ -263,6 +263,7 @@ mod ensure_started;
 mod let_done;
 mod let_error;
 mod split;
+mod stop_if_requested;
 pub mod stop_token;
 
 pub use ensure_started::{ensure_started, ensure_started_send};
@@ -276,6 +277,7 @@ pub use let_value::LetValue;
 pub use scheduler::{ImmediateScheduler, Scheduler, WithScheduler};
 pub use split::{SharedError, Split, SplitSend};
 pub use start_detached::StartDetached;
+pub use stop_if_requested::StopIfRequested;
 pub use sync_wait::{SyncWait, SyncWaitSend};
 pub use then::Then;
 pub use traits::{
