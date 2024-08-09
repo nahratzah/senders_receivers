@@ -3,6 +3,7 @@ use crate::scheduler::Scheduler;
 use crate::scope::scope_data::{ScopeDataPtr, ScopeDataSendPtr};
 use crate::scope::ScopeImpl;
 use crate::scope::{scope, scope_send};
+use crate::stop_token::NeverStopToken;
 use crate::sync::same_thread_channel;
 use crate::traits::{OperationState, Receiver, ReceiverOf, TypedSenderConnect};
 use crate::tuple::Tuple;
@@ -123,13 +124,19 @@ where
 impl<'a, Value, T> SyncWait<'a, Value> for T
 where
     Value: 'a + Tuple,
-    T: TypedSenderConnect<'a, ScopeImpl<ScopeDataPtr>, NoSendReceiver<Value>, Value = Value>,
+    T: TypedSenderConnect<
+        'a,
+        ScopeImpl<ScopeDataPtr>,
+        NeverStopToken,
+        NoSendReceiver<Value>,
+        Value = Value,
+    >,
 {
     fn sync_wait(self) -> Result<Option<Value>> {
         scope(move |scope: &ScopeImpl<ScopeDataPtr>| {
             let (tx, rx) = same_thread_channel::channel(1);
             let receiver = NoSendReceiver { tx };
-            self.connect(scope, receiver).start();
+            self.connect(scope, NeverStopToken, receiver).start();
             match rx.recv().expect("a single value must be delivered") {
                 SyncWaitOutcome::Value(tuple) => Ok(Some(tuple)),
                 SyncWaitOutcome::Error(error) => Err(error),
@@ -171,9 +178,10 @@ where
 impl<'a, Value, T> SyncWaitSend<'a, Value> for T
 where
     Value: 'a + Tuple + Send,
-    T: for<'scope> TypedSenderConnect<
+    T: TypedSenderConnect<
         'a,
         ScopeImpl<ScopeDataSendPtr>,
+        NeverStopToken,
         SendReceiver<Value>,
         Value = Value,
     >,
@@ -182,7 +190,7 @@ where
         scope_send(move |scope: &ScopeImpl<ScopeDataSendPtr>| {
             let (tx, rx) = mpsc::sync_channel(1);
             let receiver = SendReceiver { tx };
-            self.connect(scope, receiver).start();
+            self.connect(scope, NeverStopToken, receiver).start();
             match rx.recv().expect("a single value must be delivered") {
                 SyncWaitOutcome::Value(tuple) => Ok(Some(tuple)),
                 SyncWaitOutcome::Error(error) => Err(error),

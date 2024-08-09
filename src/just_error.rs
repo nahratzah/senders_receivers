@@ -61,8 +61,8 @@ impl<Sch: Scheduler, Tpl: Tuple> TypedSender for JustError<Sch, Tpl> {
     type Scheduler = Sch::LocalScheduler;
 }
 
-impl<'a, ScopeImpl, ReceiverType, Sch, Tpl> TypedSenderConnect<'a, ScopeImpl, ReceiverType>
-    for JustError<Sch, Tpl>
+impl<'a, ScopeImpl, StopTokenImpl, ReceiverType, Sch, Tpl>
+    TypedSenderConnect<'a, ScopeImpl, StopTokenImpl, ReceiverType> for JustError<Sch, Tpl>
 where
     Sch: Scheduler,
     Tpl: Tuple,
@@ -74,7 +74,12 @@ where
         ScopeImpl: 'scope,
         ReceiverType: 'scope;
 
-    fn connect<'scope>(self, _: &ScopeImpl, receiver: ReceiverType) -> Self::Output<'scope>
+    fn connect<'scope>(
+        self,
+        _: &ScopeImpl,
+        _: StopTokenImpl,
+        receiver: ReceiverType,
+    ) -> Self::Output<'scope>
     where
         'a: 'scope,
         ScopeImpl: 'scope,

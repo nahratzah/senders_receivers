@@ -266,15 +266,26 @@ where
     type Scheduler = Out::Scheduler;
 }
 
-impl<'a, ScopeImpl, ReceiverImpl, NestedSender, FnType, Out, Sch, Value, State>
-    TypedSenderConnect<'a, ScopeImpl, ReceiverImpl>
+impl<'a, ScopeImpl, StopTokenImpl, ReceiverImpl, NestedSender, FnType, Out, Sch, Value, State>
+    TypedSenderConnect<'a, ScopeImpl, StopTokenImpl, ReceiverImpl>
     for LetValueTS<'a, NestedSender, FnType, Out, Sch, Value, State>
 where
     NestedSender: TypedSender<Scheduler = Sch, Value = Value>
         + TypedSenderConnect<
             'a,
             ScopeImpl,
-            LetValueReceiver<'a, ScopeImpl, ReceiverImpl, FnType, Out, Sch, Value, State>,
+            StopTokenImpl,
+            LetValueReceiver<
+                'a,
+                ScopeImpl,
+                StopTokenImpl,
+                ReceiverImpl,
+                FnType,
+                Out,
+                Sch,
+                Value,
+                State,
+            >,
         >,
     FnType: 'a + BiFunctor<'a, Sch, Value, State, Output = Result<Out>>,
     Sch: Scheduler<LocalScheduler = Sch>,
@@ -284,6 +295,7 @@ where
         + TypedSenderConnect<
             'a, // XXX 'a is also wrong here!
             ScopeImpl::NewScopeType,
+            StopTokenImpl,
             ScopeImpl::NewReceiver,
         >,
     Out::Value: 'a,
@@ -297,6 +309,7 @@ where
             ReceiverImpl,
         >,
     >,
+    StopTokenImpl: 'a + Clone,
     (Value, Out::Value): TupleCat,
     <(Value, Out::Value) as TupleCat>::Output: 'a + Tuple,
     ReceiverImpl: ReceiverOf<Out::Scheduler, <(Value, Out::Value) as TupleCat>::Output>,
@@ -309,7 +322,12 @@ where
         ScopeImpl: 'scope,
         ReceiverImpl: 'scope ;
 
-    fn connect<'scope>(self, scope: &ScopeImpl, receiver: ReceiverImpl) -> Self::Output<'scope>
+    fn connect<'scope>(
+        self,
+        scope: &ScopeImpl,
+        stop_token: StopTokenImpl,
+        receiver: ReceiverImpl,
+    ) -> Self::Output<'scope>
     where
         'a: 'scope,
         ScopeImpl: 'scope,
@@ -319,14 +337,24 @@ where
             phantom: PhantomData,
             nested: receiver,
             scope: scope.clone(),
+            stop_token: stop_token.clone(),
             fn_impl: self.fn_impl,
         };
-        self.nested.connect(scope, receiver)
+        self.nested.connect(scope, stop_token, receiver)
     }
 }
 
-pub struct LetValueReceiver<'a, ScopeImpl, NestedReceiver, FnType, Out, Sch, Value, State>
-where
+pub struct LetValueReceiver<
+    'a,
+    ScopeImpl,
+    StopTokenImpl,
+    NestedReceiver,
+    FnType,
+    Out,
+    Sch,
+    Value,
+    State,
+> where
     ScopeImpl: ScopeNest<
         <Out as TypedSender>::Scheduler,
         <Out as TypedSender>::Value,
@@ -348,6 +376,7 @@ where
         + TypedSenderConnect<
             'a, // XXX 'a is wrong here
             ScopeImpl::NewScopeType,
+            StopTokenImpl,
             ScopeImpl::NewReceiver,
         >,
     Out::Value: 'a,
@@ -358,11 +387,22 @@ where
     phantom: PhantomData<&'a fn(Sch, Value, State) -> Out>,
     nested: NestedReceiver,
     scope: ScopeImpl,
+    stop_token: StopTokenImpl,
     fn_impl: FnType,
 }
 
-impl<'a, ScopeImpl, NestedReceiver, FnType, Out, Sch, Value, State> Receiver
-    for LetValueReceiver<'a, ScopeImpl, NestedReceiver, FnType, Out, Sch, Value, State>
+impl<'a, ScopeImpl, StopTokenImpl, NestedReceiver, FnType, Out, Sch, Value, State> Receiver
+    for LetValueReceiver<
+        'a,
+        ScopeImpl,
+        StopTokenImpl,
+        NestedReceiver,
+        FnType,
+        Out,
+        Sch,
+        Value,
+        State,
+    >
 where
     ScopeImpl: ScopeNest<
         <Out as TypedSender>::Scheduler,
@@ -382,6 +422,7 @@ where
         + TypedSenderConnect<
             'a, // XXX 'a is wrong here
             ScopeImpl::NewScopeType,
+            StopTokenImpl,
             ScopeImpl::NewReceiver,
         >,
     Out::Value: 'a,
@@ -398,8 +439,19 @@ where
     }
 }
 
-impl<'a, ScopeImpl, NestedReceiver, FnType, Out, Sch, Value, State> ReceiverOf<Sch, Value>
-    for LetValueReceiver<'a, ScopeImpl, NestedReceiver, FnType, Out, Sch, Value, State>
+impl<'a, ScopeImpl, StopTokenImpl, NestedReceiver, FnType, Out, Sch, Value, State>
+    ReceiverOf<Sch, Value>
+    for LetValueReceiver<
+        'a,
+        ScopeImpl,
+        StopTokenImpl,
+        NestedReceiver,
+        FnType,
+        Out,
+        Sch,
+        Value,
+        State,
+    >
 where
     ScopeImpl: ScopeNest<
         <Out as TypedSender>::Scheduler,
@@ -420,6 +472,7 @@ where
         + TypedSenderConnect<
             'a, // XXX 'a is wrong here
             ScopeImpl::NewScopeType,
+            StopTokenImpl,
             ScopeImpl::NewReceiver,
         >,
     Out::Value: 'a,
@@ -444,7 +497,9 @@ where
         );
 
         match self.fn_impl.tuple_invoke(sch, values_ref.sr_into()) {
-            Ok(local_sender) => local_sender.connect(&local_scope, local_receiver).start(),
+            Ok(local_sender) => local_sender
+                .connect(&local_scope, self.stop_token, local_receiver)
+                .start(),
             Err(error) => local_receiver.set_error(error),
         };
     }

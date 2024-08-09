@@ -158,20 +158,22 @@ where
     }
 }
 
-impl<'a, ScopeImpl, ReceiverType, Sch, X, Y> TypedSenderConnect<'a, ScopeImpl, ReceiverType>
-    for WhenAll<'a, Sch, X, Y>
+impl<'a, ScopeImpl, StopTokenImpl, ReceiverType, Sch, X, Y>
+    TypedSenderConnect<'a, ScopeImpl, StopTokenImpl, ReceiverType> for WhenAll<'a, Sch, X, Y>
 where
     Sch: Scheduler<LocalScheduler = Sch>,
     X: TypedSender<Scheduler = Sch>
         + TypedSenderConnect<
             'a,
             ScopeImpl,
+            StopTokenImpl,
             XReceiver<ReceiverType, <X as TypedSender>::Value, <Y as TypedSender>::Value>,
         >,
     Y: TypedSender<Scheduler = Sch>
         + TypedSenderConnect<
             'a,
             ScopeImpl,
+            StopTokenImpl,
             YReceiver<ReceiverType, <X as TypedSender>::Value, <Y as TypedSender>::Value>,
         >,
     X::Value: 'a,
@@ -179,6 +181,7 @@ where
     (X::Value, Y::Value): TupleCat,
     <(X::Value, Y::Value) as TupleCat>::Output: Tuple,
     ScopeImpl: Clone,
+    StopTokenImpl: Clone,
     ReceiverType: ReceiverOf<Sch, <(X::Value, Y::Value) as TupleCat>::Output>,
 {
     type Output<'scope> = WhenAllOperationState<
@@ -191,7 +194,12 @@ where
         ScopeImpl: 'scope,
         ReceiverType: 'scope;
 
-    fn connect<'scope>(self, scope: &ScopeImpl, receiver: ReceiverType) -> Self::Output<'scope>
+    fn connect<'scope>(
+        self,
+        scope: &ScopeImpl,
+        stop_token: StopTokenImpl,
+        receiver: ReceiverType,
+    ) -> Self::Output<'scope>
     where
         'a: 'scope,
         ScopeImpl: 'scope,
@@ -200,9 +208,10 @@ where
         let outer_receiver = WhenAllReceiver::new(receiver);
         let x_receiver = XReceiver::new(outer_receiver.clone());
         let y_receiver = YReceiver::new(outer_receiver);
+        let stop_token_clone = stop_token.clone();
         WhenAllOperationState::new(
-            self.x.connect(scope, x_receiver),
-            self.y.connect(scope, y_receiver),
+            self.x.connect(scope, stop_token_clone, x_receiver),
+            self.y.connect(scope, stop_token, y_receiver),
         )
     }
 }

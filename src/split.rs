@@ -5,6 +5,7 @@ use crate::scheduler::Scheduler;
 use crate::scope::detached_scope;
 use crate::scope::ScopeImpl;
 use crate::scope::{ScopeDataSendPtr, ScopeWrap, ScopeWrapSend};
+use crate::stop_token::NeverStopToken;
 use crate::traits::BindSender;
 use crate::traits::OperationState;
 use crate::traits::Receiver;
@@ -52,6 +53,7 @@ where
     TS: TypedSenderConnect<
         'a,
         ScopeImpl<ScopeDataSendPtr>,
+        NeverStopToken,
         CompletionReceiver<<TS as TypedSender>::Scheduler, <TS as TypedSender>::Value>,
     >,
     TS::Value: 'a + Clone,
@@ -65,6 +67,7 @@ where
     TS: TypedSenderConnect<
         'a,
         ScopeImpl<ScopeDataSendPtr>,
+        NeverStopToken,
         CompletionReceiver<<TS as TypedSender>::Scheduler, <TS as TypedSender>::Value>,
     >,
     TS::Value: 'a + Clone,
@@ -74,7 +77,7 @@ where
         let opstate = Rc::new(OpStateWrapper::from({
             let state = state.clone();
             detached_scope(move |scope: &ScopeImpl<ScopeDataSendPtr>| {
-                sender.connect(scope, CompletionReceiver::new(state))
+                sender.connect(scope, NeverStopToken, CompletionReceiver::new(state))
             })
         }));
 
@@ -87,6 +90,7 @@ where
     TS: TypedSenderConnect<
         'a,
         ScopeImpl<ScopeDataSendPtr>,
+        NeverStopToken,
         CompletionReceiver<<TS as TypedSender>::Scheduler, <TS as TypedSender>::Value>,
     >,
     TS::Value: 'a + Clone,
@@ -104,6 +108,7 @@ where
     TS: TypedSenderConnect<
         'a,
         ScopeImpl<ScopeDataSendPtr>,
+        NeverStopToken,
         CompletionReceiver<<TS as TypedSender>::Scheduler, <TS as TypedSender>::Value>,
     >,
     TS::Value: 'a + Clone,
@@ -112,16 +117,18 @@ where
     type Value = TS::Value;
 }
 
-impl<'a, TS, Scope, Rcv> TypedSenderConnect<'a, Scope, Rcv> for Split<'a, TS>
+impl<'a, TS, Scope, StopTokenImpl, Rcv> TypedSenderConnect<'a, Scope, StopTokenImpl, Rcv>
+    for Split<'a, TS>
 where
     TS: TypedSenderConnect<
         'a,
         ScopeImpl<ScopeDataSendPtr>,
+        NeverStopToken,
         CompletionReceiver<<TS as TypedSender>::Scheduler, <TS as TypedSender>::Value>,
     >,
     TS::Value: 'a + Clone,
     <TS::Scheduler as Scheduler>::Sender:
-        for<'b> TypedSenderConnect<'b, Scope, WrapValue<TS::Value, Rcv>>,
+        for<'b> TypedSenderConnect<'b, Scope, NeverStopToken, WrapValue<TS::Value, Rcv>>,
     Scope: Clone + ScopeWrap<ImmediateScheduler, ReceiverWrapper<TS::Scheduler, TS::Value, Rcv>>,
     Rcv: ReceiverOf<TS::Scheduler, TS::Value>,
 {
@@ -131,7 +138,7 @@ where
         Scope: 'scope,
         Rcv: 'scope;
 
-    fn connect<'scope>(self, scope: &Scope, rcv: Rcv) -> Self::Output<'scope>
+    fn connect<'scope>(self, scope: &Scope, _: StopTokenImpl, rcv: Rcv) -> Self::Output<'scope>
     where
         'a: 'scope,
         Scope: 'scope,
@@ -176,6 +183,7 @@ where
     TS: TypedSenderConnect<
         'a,
         ScopeImpl<ScopeDataSendPtr>,
+        NeverStopToken,
         CompletionReceiverSend<<TS as TypedSender>::Scheduler, <TS as TypedSender>::Value>,
     >,
     TS::Scheduler: Send,
@@ -191,6 +199,7 @@ where
     TS: TypedSenderConnect<
         'a,
         ScopeImpl<ScopeDataSendPtr>,
+        NeverStopToken,
         CompletionReceiverSend<<TS as TypedSender>::Scheduler, <TS as TypedSender>::Value>,
     >,
     TS::Scheduler: Send,
@@ -202,7 +211,7 @@ where
         let opstate = Arc::new(OpStateWrapperSend::from({
             let state = state.clone();
             detached_scope(move |scope: &ScopeImpl<ScopeDataSendPtr>| {
-                sender.connect(scope, CompletionReceiverSend::new(state))
+                sender.connect(scope, NeverStopToken, CompletionReceiverSend::new(state))
             })
         }));
 
@@ -215,6 +224,7 @@ where
     TS: TypedSenderConnect<
         'a,
         ScopeImpl<ScopeDataSendPtr>,
+        NeverStopToken,
         CompletionReceiverSend<<TS as TypedSender>::Scheduler, <TS as TypedSender>::Value>,
     >,
     TS::Scheduler: Send,
@@ -234,6 +244,7 @@ where
     TS: TypedSenderConnect<
         'a,
         ScopeImpl<ScopeDataSendPtr>,
+        NeverStopToken,
         CompletionReceiverSend<<TS as TypedSender>::Scheduler, <TS as TypedSender>::Value>,
     >,
     TS::Scheduler: Send,
@@ -244,18 +255,20 @@ where
     type Value = TS::Value;
 }
 
-impl<'a, TS, Scope, Rcv> TypedSenderConnect<'a, Scope, Rcv> for SplitSend<'a, TS>
+impl<'a, TS, Scope, StopTokenImpl, Rcv> TypedSenderConnect<'a, Scope, StopTokenImpl, Rcv>
+    for SplitSend<'a, TS>
 where
     TS: TypedSenderConnect<
         'a,
         ScopeImpl<ScopeDataSendPtr>,
+        NeverStopToken,
         CompletionReceiverSend<<TS as TypedSender>::Scheduler, <TS as TypedSender>::Value>,
     >,
     TS::Scheduler: Send,
     TS::Value: 'a + Clone + Send,
     for<'scope> TS::Output<'scope>: Send,
     <TS::Scheduler as Scheduler>::Sender:
-        for<'b> TypedSenderConnect<'b, Scope, WrapValue<TS::Value, Rcv>>,
+        for<'b> TypedSenderConnect<'b, Scope, NeverStopToken, WrapValue<TS::Value, Rcv>>,
     Scope: Clone
         + ScopeWrapSend<ImmediateScheduler, ReceiverWrapperSend<TS::Scheduler, TS::Value, Rcv>>
         + Send,
@@ -268,7 +281,7 @@ where
         Scope: 'scope,
         Rcv: 'scope;
 
-    fn connect<'scope>(self, scope: &Scope, rcv: Rcv) -> Self::Output<'scope>
+    fn connect<'scope>(self, scope: &Scope, _: StopTokenImpl, rcv: Rcv) -> Self::Output<'scope>
     where
         'a: 'scope,
         Scope: 'scope,
@@ -618,7 +631,7 @@ pub struct SplitOpState<'scope, 'a, Sch, Value, OpState, Scope, Rcv>
 where
     Sch: Scheduler<LocalScheduler = Sch>,
     Value: 'scope + Clone + Tuple,
-    Sch::Sender: for<'b> TypedSenderConnect<'b, Scope, WrapValue<Value, Rcv>>,
+    Sch::Sender: for<'b> TypedSenderConnect<'b, Scope, NeverStopToken, WrapValue<Value, Rcv>>,
     Scope: ScopeWrap<ImmediateScheduler, ReceiverWrapper<Sch, Value, Rcv>>,
     Rcv: 'scope + ReceiverOf<Sch, Value>,
     OpState: OperationState<'a>,
@@ -635,7 +648,7 @@ impl<'scope, 'a, Sch, Value, OpState, Scope, Rcv>
 where
     Sch: Scheduler<LocalScheduler = Sch>,
     Value: 'scope + Clone + Tuple,
-    Sch::Sender: for<'b> TypedSenderConnect<'b, Scope, WrapValue<Value, Rcv>>,
+    Sch::Sender: for<'b> TypedSenderConnect<'b, Scope, NeverStopToken, WrapValue<Value, Rcv>>,
     Scope: ScopeWrap<ImmediateScheduler, ReceiverWrapper<Sch, Value, Rcv>>,
     Rcv: 'scope + ReceiverOf<Sch, Value>,
     OpState: OperationState<'a>,
@@ -661,7 +674,7 @@ impl<'scope, 'a, Sch, Value, OpState, Scope, Rcv> OperationState<'scope>
 where
     Sch: Scheduler<LocalScheduler = Sch>,
     Value: 'scope + Clone + Tuple,
-    Sch::Sender: for<'b> TypedSenderConnect<'b, Scope, WrapValue<Value, Rcv>>,
+    Sch::Sender: for<'b> TypedSenderConnect<'b, Scope, NeverStopToken, WrapValue<Value, Rcv>>,
     Scope: ScopeWrap<ImmediateScheduler, ReceiverWrapper<Sch, Value, Rcv>>,
     Rcv: 'scope + ReceiverOf<Sch, Value>,
     OpState: OperationState<'a>,
@@ -671,7 +684,11 @@ where
         match &state.completion {
             Completion::Value(sch, value) => sch
                 .schedule()
-                .connect(&self.scope, WrapValue::new(value.clone(), self.rcv))
+                .connect(
+                    &self.scope,
+                    NeverStopToken,
+                    WrapValue::new(value.clone(), self.rcv),
+                )
                 .start(),
             Completion::Error(error) => self.rcv.set_error(new_error(error.clone())),
             Completion::Done => self.rcv.set_done(),
@@ -699,7 +716,7 @@ pub struct SplitOpStateSend<'scope, 'a, Sch, Value, OpState, Scope, Rcv>
 where
     Sch: Scheduler<LocalScheduler = Sch> + Send,
     Value: 'scope + Clone + Tuple + Send,
-    Sch::Sender: for<'b> TypedSenderConnect<'b, Scope, WrapValue<Value, Rcv>>,
+    Sch::Sender: for<'b> TypedSenderConnect<'b, Scope, NeverStopToken, WrapValue<Value, Rcv>>,
     Scope: 'scope + ScopeWrapSend<ImmediateScheduler, ReceiverWrapperSend<Sch, Value, Rcv>> + Send,
     Scope::WrapSendOutput: Send,
     Rcv: 'scope + ReceiverOf<Sch, Value> + Send,
@@ -717,7 +734,7 @@ impl<'scope, 'a, Sch, Value, OpState, Scope, Rcv>
 where
     Sch: Scheduler<LocalScheduler = Sch> + Send,
     Value: 'scope + Clone + Tuple + Send,
-    Sch::Sender: for<'b> TypedSenderConnect<'b, Scope, WrapValue<Value, Rcv>>,
+    Sch::Sender: for<'b> TypedSenderConnect<'b, Scope, NeverStopToken, WrapValue<Value, Rcv>>,
     Scope: 'scope + ScopeWrapSend<ImmediateScheduler, ReceiverWrapperSend<Sch, Value, Rcv>> + Send,
     Scope::WrapSendOutput: Send,
     Rcv: 'scope + ReceiverOf<Sch, Value> + Send,
@@ -744,7 +761,7 @@ impl<'scope, 'a, Sch, Value, OpState, Scope, Rcv> OperationState<'scope>
 where
     Sch: Scheduler<LocalScheduler = Sch> + Send,
     Value: 'scope + Clone + Tuple + Send,
-    Sch::Sender: for<'b> TypedSenderConnect<'b, Scope, WrapValue<Value, Rcv>>,
+    Sch::Sender: for<'b> TypedSenderConnect<'b, Scope, NeverStopToken, WrapValue<Value, Rcv>>,
     Scope: 'scope + ScopeWrapSend<ImmediateScheduler, ReceiverWrapperSend<Sch, Value, Rcv>> + Send,
     Scope::WrapSendOutput: Send,
     Rcv: 'scope + ReceiverOf<Sch, Value> + Send,
@@ -755,7 +772,11 @@ where
         match &state.completion {
             Completion::Value(sch, value) => sch
                 .schedule()
-                .connect(&self.scope, WrapValue::new(value.clone(), self.rcv))
+                .connect(
+                    &self.scope,
+                    NeverStopToken,
+                    WrapValue::new(value.clone(), self.rcv),
+                )
                 .start(),
             Completion::Error(error) => self.rcv.set_error(new_error(error.clone())),
             Completion::Done => self.rcv.set_done(),
@@ -992,6 +1013,7 @@ where
     TS: TypedSenderConnect<
         'a,
         ScopeImpl<ScopeDataSendPtr>,
+        NeverStopToken,
         CompletionReceiver<<TS as TypedSender>::Scheduler, <TS as TypedSender>::Value>,
     >,
     TS::Value: 'a + Clone,
@@ -1009,6 +1031,7 @@ where
     TS: TypedSenderConnect<
         'a,
         ScopeImpl<ScopeDataSendPtr>,
+        NeverStopToken,
         CompletionReceiverSend<<TS as TypedSender>::Scheduler, <TS as TypedSender>::Value>,
     >,
     TS::Scheduler: Send,

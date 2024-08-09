@@ -128,16 +128,22 @@ where
     type Scheduler = Out::Scheduler;
 }
 
-impl<'a, ScopeImpl, ReceiverType, FnType, Out, NestedSender>
-    TypedSenderConnect<'a, ScopeImpl, ReceiverType>
+impl<'a, ScopeImpl, StopTokenImpl, ReceiverType, FnType, Out, NestedSender>
+    TypedSenderConnect<'a, ScopeImpl, StopTokenImpl, ReceiverType>
     for LetErrorSender<'a, NestedSender, FnType, Out>
 where
     NestedSender: TypedSender<Scheduler = Out::Scheduler, Value = Out::Value>
-        + TypedSenderConnect<'a, ScopeImpl, ReceiverWrapper<'a, ScopeImpl, ReceiverType, FnType, Out>>,
+        + TypedSenderConnect<
+            'a,
+            ScopeImpl,
+            StopTokenImpl,
+            ReceiverWrapper<'a, ScopeImpl, StopTokenImpl, ReceiverType, FnType, Out>,
+        >,
     FnType: 'a + Functor<'a, Error, Output = Result<Out>>,
-    Out: TypedSender + TypedSenderConnect<'a, ScopeImpl, ReceiverType>,
+    Out: TypedSender + TypedSenderConnect<'a, ScopeImpl, StopTokenImpl, ReceiverType>,
     ReceiverType: ReceiverOf<Out::Scheduler, Out::Value>,
     ScopeImpl: Clone,
+    StopTokenImpl: 'a + Clone,
 {
     type Output<'scope> = NestedSender::Output<'scope>
     where
@@ -145,7 +151,12 @@ where
         ScopeImpl: 'scope,
         ReceiverType: 'scope;
 
-    fn connect<'scope>(self, scope: &ScopeImpl, receiver: ReceiverType) -> Self::Output<'scope>
+    fn connect<'scope>(
+        self,
+        scope: &ScopeImpl,
+        stop_token: StopTokenImpl,
+        receiver: ReceiverType,
+    ) -> Self::Output<'scope>
     where
         'a: 'scope,
         ScopeImpl: 'scope,
@@ -156,8 +167,9 @@ where
             fn_impl: self.fn_impl,
             phantom: PhantomData,
             scope: scope.clone(),
+            stop_token: stop_token.clone(),
         };
-        self.nested.connect(scope, receiver)
+        self.nested.connect(scope, stop_token, receiver)
     }
 }
 
@@ -176,24 +188,25 @@ where
     }
 }
 
-pub struct ReceiverWrapper<'a, ScopeImpl, ReceiverType, FnType, Out>
+pub struct ReceiverWrapper<'a, ScopeImpl, StopTokenImpl, ReceiverType, FnType, Out>
 where
     ReceiverType: ReceiverOf<Out::Scheduler, Out::Value>,
     FnType: Functor<'a, Error, Output = Result<Out>>,
-    Out: TypedSenderConnect<'a, ScopeImpl, ReceiverType>,
+    Out: TypedSenderConnect<'a, ScopeImpl, StopTokenImpl, ReceiverType>,
 {
     receiver: ReceiverType,
     fn_impl: FnType,
     phantom: PhantomData<&'a fn() -> Out>,
     scope: ScopeImpl,
+    stop_token: StopTokenImpl,
 }
 
-impl<'a, ScopeImpl, ReceiverType, FnType, Out> Receiver
-    for ReceiverWrapper<'a, ScopeImpl, ReceiverType, FnType, Out>
+impl<'a, ScopeImpl, StopTokenImpl, ReceiverType, FnType, Out> Receiver
+    for ReceiverWrapper<'a, ScopeImpl, StopTokenImpl, ReceiverType, FnType, Out>
 where
     ReceiverType: ReceiverOf<Out::Scheduler, Out::Value>,
     FnType: Functor<'a, Error, Output = Result<Out>>,
-    Out: TypedSenderConnect<'a, ScopeImpl, ReceiverType>,
+    Out: TypedSenderConnect<'a, ScopeImpl, StopTokenImpl, ReceiverType>,
 {
     fn set_done(self) {
         self.receiver.set_done();
@@ -201,18 +214,20 @@ where
 
     fn set_error(self, error: Error) {
         match self.fn_impl.tuple_invoke(error) {
-            Ok(sender) => sender.connect(&self.scope, self.receiver).start(),
+            Ok(sender) => sender
+                .connect(&self.scope, self.stop_token, self.receiver)
+                .start(),
             Err(error) => self.receiver.set_error(error),
         };
     }
 }
 
-impl<'a, ScopeImpl, ReceiverType, FnType, Out> ReceiverOf<Out::Scheduler, Out::Value>
-    for ReceiverWrapper<'a, ScopeImpl, ReceiverType, FnType, Out>
+impl<'a, ScopeImpl, StopTokenImpl, ReceiverType, FnType, Out> ReceiverOf<Out::Scheduler, Out::Value>
+    for ReceiverWrapper<'a, ScopeImpl, StopTokenImpl, ReceiverType, FnType, Out>
 where
     ReceiverType: ReceiverOf<Out::Scheduler, Out::Value>,
     FnType: Functor<'a, Error, Output = Result<Out>>,
-    Out: TypedSenderConnect<'a, ScopeImpl, ReceiverType>,
+    Out: TypedSenderConnect<'a, ScopeImpl, StopTokenImpl, ReceiverType>,
 {
     fn set_value(self, sch: Out::Scheduler, value: Out::Value) {
         self.receiver.set_value(sch, value);

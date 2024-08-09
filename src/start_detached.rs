@@ -1,6 +1,7 @@
 use crate::errors::Error;
 use crate::scheduler::Scheduler;
 use crate::scope::{detached_scope, ScopeDataSendPtr, ScopeImpl};
+use crate::stop_token::NeverStopToken;
 use crate::traits::{OperationState, Receiver, ReceiverOf, TypedSenderConnect};
 use crate::tuple::Tuple;
 
@@ -15,12 +16,16 @@ pub trait StartDetached {
 
 impl<T> StartDetached for T
 where
-    T: TypedSenderConnect<'static, ScopeImpl<ScopeDataSendPtr>, DiscardingReceiver>,
+    T: TypedSenderConnect<'static, ScopeImpl<ScopeDataSendPtr>, NeverStopToken, DiscardingReceiver>,
 {
     fn start_detached(self) {
         detached_scope(move |scope: &ScopeImpl<ScopeDataSendPtr>| {
-            self.connect(scope, DiscardingReceiver { completed: false })
-                .start();
+            self.connect(
+                scope,
+                NeverStopToken,
+                DiscardingReceiver { completed: false },
+            )
+            .start();
         })
     }
 }

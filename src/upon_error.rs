@@ -1,6 +1,7 @@
 use crate::errors::{Error, Result};
 use crate::functor::{Closure, Functor, NoErrFunctor};
 use crate::scheduler::{ImmediateScheduler, Scheduler, WithScheduler};
+use crate::stop_token::NeverStopToken;
 use crate::traits::{
     BindSender, OperationState, Receiver, ReceiverOf, Sender, TypedSender, TypedSenderConnect,
 };
@@ -222,8 +223,8 @@ where
     type Value = Out;
 }
 
-impl<'a, ScopeImpl, ReceiverType, NestedSender, FnType, Sch, Out>
-    TypedSenderConnect<'a, ScopeImpl, ReceiverType>
+impl<'a, ScopeImpl, StopTokenImpl, ReceiverType, NestedSender, FnType, Sch, Out>
+    TypedSenderConnect<'a, ScopeImpl, StopTokenImpl, ReceiverType>
     for UponErrorTS<'a, NestedSender, FnType, Sch, Out>
 where
     ReceiverType: ReceiverOf<Sch::LocalScheduler, Out>,
@@ -231,6 +232,7 @@ where
         + TypedSenderConnect<
             'a,
             ScopeImpl,
+            StopTokenImpl,
             ReceiverWrapper<'a, ScopeImpl, ReceiverType, FnType, Sch, Out>,
         >,
     FnType: 'a + Functor<'a, Error, Output = Result<Out>>,
@@ -239,6 +241,7 @@ where
     Sch::Sender: TypedSenderConnect<
         'a,
         ScopeImpl,
+        NeverStopToken,
         ErrorReceiver<'a, ReceiverType, FnType, Sch::LocalScheduler, Out>,
     >,
     ScopeImpl: Clone,
@@ -249,7 +252,12 @@ where
         ScopeImpl: 'scope,
         ReceiverType: 'scope;
 
-    fn connect<'scope>(self, scope: &ScopeImpl, receiver: ReceiverType) -> Self::Output<'scope>
+    fn connect<'scope>(
+        self,
+        scope: &ScopeImpl,
+        stop_token: StopTokenImpl,
+        receiver: ReceiverType,
+    ) -> Self::Output<'scope>
     where
         'a: 'scope,
         ScopeImpl: 'scope,
@@ -262,7 +270,7 @@ where
             phantom: PhantomData,
             scope: scope.clone(),
         };
-        self.nested.connect(scope, receiver)
+        self.nested.connect(scope, stop_token, receiver)
     }
 }
 
@@ -290,6 +298,7 @@ where
     Sch::Sender: TypedSenderConnect<
         'a,
         ScopeImpl,
+        NeverStopToken,
         ErrorReceiver<'a, NestedReceiver, FnType, Sch::LocalScheduler, Out>,
     >,
     Out: 'a + Tuple,
@@ -310,6 +319,7 @@ where
     Sch::Sender: TypedSenderConnect<
         'a,
         ScopeImpl,
+        NeverStopToken,
         ErrorReceiver<'a, NestedReceiver, FnType, Sch::LocalScheduler, Out>,
     >,
     Out: 'a + Tuple,
@@ -323,6 +333,7 @@ where
             .schedule()
             .connect(
                 &self.scope,
+                NeverStopToken,
                 ErrorReceiver::<'a, NestedReceiver, FnType, Sch::LocalScheduler, Out> {
                     nested: self.nested,
                     error,
@@ -343,6 +354,7 @@ where
     Sch::Sender: TypedSenderConnect<
         'a,
         ScopeImpl,
+        NeverStopToken,
         ErrorReceiver<'a, NestedReceiver, FnType, Sch::LocalScheduler, Out>,
     >,
     Out: 'a + Tuple,

@@ -70,8 +70,8 @@ impl<'a, Sch: Scheduler, Tpl: 'a + Tuple> TypedSender for Just<'a, Sch, Tpl> {
     type Scheduler = Sch::LocalScheduler;
 }
 
-impl<'a, ScopeImpl, ReceiverType, Sch, Tpl> TypedSenderConnect<'a, ScopeImpl, ReceiverType>
-    for Just<'a, Sch, Tpl>
+impl<'a, ScopeImpl, StopTokenImpl, ReceiverType, Sch, Tpl>
+    TypedSenderConnect<'a, ScopeImpl, StopTokenImpl, ReceiverType> for Just<'a, Sch, Tpl>
 where
     Sch: Scheduler,
     Tpl: 'a + Tuple,
@@ -79,6 +79,7 @@ where
     Sch::Sender: TypedSenderConnect<
         'a,
         ScopeImpl,
+        StopTokenImpl,
         ReceiverWrapper<'a, ReceiverType, Sch::LocalScheduler, Tpl>,
     >,
 {
@@ -87,16 +88,21 @@ where
 	TypedSenderConnect<
             'a,
             ScopeImpl,
+            StopTokenImpl,
             ReceiverWrapper<'a, ReceiverType, Sch::LocalScheduler, Tpl>,
         >
     >::Output<'scope>
     where
         'a: 'scope,
         ScopeImpl: 'scope,
-        ReceiverType: 'scope,
-	;
+        ReceiverType: 'scope;
 
-    fn connect<'scope>(self, scope: &ScopeImpl, receiver: ReceiverType) -> Self::Output<'scope>
+    fn connect<'scope>(
+        self,
+        scope: &ScopeImpl,
+        stop_token: StopTokenImpl,
+        receiver: ReceiverType,
+    ) -> Self::Output<'scope>
     where
         'a: 'scope,
         ScopeImpl: 'scope,
@@ -107,7 +113,7 @@ where
             receiver,
             values: self.values,
         };
-        self.sch.schedule().connect(scope, receiver)
+        self.sch.schedule().connect(scope, stop_token, receiver)
     }
 }
 

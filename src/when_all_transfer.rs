@@ -1,5 +1,6 @@
 use crate::errors::Error;
 use crate::scheduler::Scheduler;
+use crate::stop_token::{NeverStopToken, StopToken};
 use crate::traits::{
     BindSender, OperationState, Receiver, ReceiverOf, TypedSender, TypedSenderConnect,
 };
@@ -123,9 +124,11 @@ pub trait NoSchedulerSenderValue {
 }
 
 /// A [TypedSenderConnect] trait, except it lacks a [Scheduler](TypedSender::Scheduler) type.
-pub trait NoSchedulerSender<'a, ScopeImpl, ReceiverType>: NoSchedulerSenderValue
+pub trait NoSchedulerSender<'a, ScopeImpl, StopTokenImpl, ReceiverType>:
+    NoSchedulerSenderValue
 where
     ReceiverType: NoSchedulerReceiver<<Self as NoSchedulerSenderValue>::Value>,
+    StopTokenImpl: StopToken,
 {
     /// The [OperationState] returned by [NoSchedulerSender::connect()].
     type Output<'scope>: 'scope + OperationState<'scope>
@@ -135,7 +138,12 @@ where
         ReceiverType: 'scope;
 
     /// Connect a [NoSchedulerReceiver] to this sender.
-    fn connect<'scope>(self, scope: &ScopeImpl, rcv: ReceiverType) -> Self::Output<'scope>
+    fn connect<'scope>(
+        self,
+        scope: &ScopeImpl,
+        stop_token: StopTokenImpl,
+        rcv: ReceiverType,
+    ) -> Self::Output<'scope>
     where
         'a: 'scope,
         ScopeImpl: 'scope,
@@ -181,23 +189,34 @@ where
     type Value = TS::Value;
 }
 
-impl<'a, ScopeImpl, ReceiverType, TS> NoSchedulerSender<'a, ScopeImpl, ReceiverType>
-    for NoSchedulerSenderImpl<TS>
+impl<'a, ScopeImpl, StopTokenImpl, ReceiverType, TS>
+    NoSchedulerSender<'a, ScopeImpl, StopTokenImpl, ReceiverType> for NoSchedulerSenderImpl<TS>
 where
     ReceiverType: NoSchedulerReceiver<<Self as NoSchedulerSenderValue>::Value>,
     TS: TypedSender
-        + TypedSenderConnect<'a, ScopeImpl, Wrap<ReceiverType, <TS as TypedSender>::Value>>,
+        + TypedSenderConnect<
+            'a,
+            ScopeImpl,
+            StopTokenImpl,
+            Wrap<ReceiverType, <TS as TypedSender>::Value>,
+        >,
     <TS as TypedSender>::Value: 'a,
+    StopTokenImpl: StopToken,
 {
     type Output<'scope> = TS::Output<'scope> where 'a:'scope,ScopeImpl:'scope,ReceiverType:'scope;
 
-    fn connect<'scope>(self, scope: &ScopeImpl, rcv: ReceiverType) -> Self::Output<'scope>
+    fn connect<'scope>(
+        self,
+        scope: &ScopeImpl,
+        stop_token: StopTokenImpl,
+        rcv: ReceiverType,
+    ) -> Self::Output<'scope>
     where
         'a: 'scope,
         ScopeImpl: 'scope,
         ReceiverType: 'scope,
     {
-        self.sender.connect(scope, Wrap::from(rcv))
+        self.sender.connect(scope, stop_token, Wrap::from(rcv))
     }
 }
 
@@ -283,13 +302,15 @@ where
     type Value = <(X::Value, Y::Value) as TupleCat>::Output;
 }
 
-impl<'a, ScopeImpl, ReceiverType, X, Y> NoSchedulerSender<'a, ScopeImpl, ReceiverType>
-    for PairwiseTS<X, Y>
+impl<'a, ScopeImpl, StopTokenImpl, ReceiverType, X, Y>
+    NoSchedulerSender<'a, ScopeImpl, StopTokenImpl, ReceiverType> for PairwiseTS<X, Y>
 where
+    StopTokenImpl: StopToken,
     X: NoSchedulerSenderValue
         + NoSchedulerSender<
             'a,
             ScopeImpl,
+            StopTokenImpl,
             XSplitReceiver<
                 ReceiverType,
                 <X as NoSchedulerSenderValue>::Value,
@@ -300,6 +321,7 @@ where
         + NoSchedulerSender<
             'a,
             ScopeImpl,
+            StopTokenImpl,
             YSplitReceiver<
                 ReceiverType,
                 <X as NoSchedulerSenderValue>::Value,
@@ -322,15 +344,22 @@ where
         ScopeImpl: 'scope,
         ReceiverType: 'scope;
 
-    fn connect<'scope>(self, scope: &ScopeImpl, rcv: ReceiverType) -> Self::Output<'scope>
+    fn connect<'scope>(
+        self,
+        scope: &ScopeImpl,
+        stop_token: StopTokenImpl,
+        rcv: ReceiverType,
+    ) -> Self::Output<'scope>
     where
         'a: 'scope,
         ScopeImpl: 'scope,
         ReceiverType: 'scope,
     {
         let rcv = Arc::new(Mutex::new(SplitReceiver::from(rcv)));
-        let x_opstate = self.x.connect(scope, XSplitReceiver::from(rcv.clone()));
-        let y_opstate = self.y.connect(scope, YSplitReceiver::from(rcv));
+        let x_opstate =
+            self.x
+                .connect(scope, stop_token.clone(), XSplitReceiver::from(rcv.clone()));
+        let y_opstate = self.y.connect(scope, stop_token, YSplitReceiver::from(rcv));
         WhenAllOperationState::new(x_opstate, y_opstate)
     }
 }
@@ -571,18 +600,20 @@ where
     type Value = Sender::Value;
 }
 
-impl<'a, ScopeImpl, Rcv, Sch, Sender> TypedSenderConnect<'a, ScopeImpl, Rcv>
-    for SchedulerTS<Sch, Sender>
+impl<'a, ScopeImpl, StopTokenImpl, Rcv, Sch, Sender>
+    TypedSenderConnect<'a, ScopeImpl, StopTokenImpl, Rcv> for SchedulerTS<Sch, Sender>
 where
     Sch: Scheduler,
     Sch::Sender: for<'b> TypedSenderConnect<
         'b,
         ScopeImpl,
+        NeverStopToken,
         WrapValue<<Sender as NoSchedulerSenderValue>::Value, Rcv>,
     >,
     Sender: NoSchedulerSenderValue
-        + NoSchedulerSender<'a, ScopeImpl, SchedulerReceiver<ScopeImpl, Sch, Rcv>>,
+        + NoSchedulerSender<'a, ScopeImpl, StopTokenImpl, SchedulerReceiver<ScopeImpl, Sch, Rcv>>,
     ScopeImpl: Clone,
+    StopTokenImpl: StopToken,
     Rcv: ReceiverOf<Sch::LocalScheduler, Sender::Value>,
 {
     type Output<'scope> = Sender::Output<'scope>
@@ -591,14 +622,19 @@ where
         ScopeImpl: 'scope,
         Rcv: 'scope;
 
-    fn connect<'scope>(self, scope: &ScopeImpl, rcv: Rcv) -> Self::Output<'scope>
+    fn connect<'scope>(
+        self,
+        scope: &ScopeImpl,
+        stop_token: StopTokenImpl,
+        rcv: Rcv,
+    ) -> Self::Output<'scope>
     where
         'a: 'scope,
         ScopeImpl: 'scope,
         Rcv: 'scope,
     {
         let rcv = SchedulerReceiver::new(scope.clone(), self.sch, rcv);
-        self.sender.connect(scope, rcv)
+        self.sender.connect(scope, stop_token, rcv)
     }
 }
 
@@ -642,7 +678,7 @@ where
 impl<Scope, Sch, Value, Rcv> NoSchedulerReceiver<Value> for SchedulerReceiver<Scope, Sch, Rcv>
 where
     Sch: Scheduler,
-    Sch::Sender: for<'a> TypedSenderConnect<'a, Scope, WrapValue<Value, Rcv>>,
+    Sch::Sender: for<'a> TypedSenderConnect<'a, Scope, NeverStopToken, WrapValue<Value, Rcv>>,
     Value: Tuple,
     Rcv: Receiver + ReceiverOf<Sch::LocalScheduler, Value>,
 {
@@ -665,6 +701,7 @@ where
             .schedule()
             .connect(
                 &self.scope,
+                NeverStopToken,
                 WrapValue::new(
                     value,
                     self.rcv.take().expect("receiver has not yet completed"),

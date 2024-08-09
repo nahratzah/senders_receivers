@@ -1,5 +1,6 @@
 use crate::errors::Error;
 use crate::scheduler::Scheduler;
+use crate::stop_token::NeverStopToken;
 use crate::traits::{
     BindSender, OperationState, Receiver, ReceiverOf, Sender, TypedSender, TypedSenderConnect,
 };
@@ -89,7 +90,8 @@ where
     type Scheduler = Sch::LocalScheduler;
 }
 
-impl<'a, ScopeImpl, ReceiverType, NestedSender, Sch> TypedSenderConnect<'a, ScopeImpl, ReceiverType>
+impl<'a, ScopeImpl, StopTokenImpl, ReceiverType, NestedSender, Sch>
+    TypedSenderConnect<'a, ScopeImpl, StopTokenImpl, ReceiverType>
     for TransferTS<'a, NestedSender, Sch>
 where
     ReceiverType: ReceiverOf<Sch::LocalScheduler, NestedSender::Value>,
@@ -98,6 +100,7 @@ where
         + TypedSenderConnect<
             'a,
             ScopeImpl,
+            StopTokenImpl,
             ReceiverWrapper<'a, ScopeImpl, ReceiverType, Sch, <NestedSender as TypedSender>::Value>,
         >,
     Sch: Scheduler,
@@ -105,6 +108,7 @@ where
         + TypedSenderConnect<
             'a,
             ScopeImpl,
+            NeverStopToken,
             ContinuingReceiverWrapper<ReceiverType, Sch::LocalScheduler, NestedSender::Value>,
         >,
     ScopeImpl: Clone,
@@ -115,7 +119,12 @@ where
         ScopeImpl: 'scope,
         ReceiverType: 'scope;
 
-    fn connect<'scope>(self, scope: &ScopeImpl, nested: ReceiverType) -> Self::Output<'scope>
+    fn connect<'scope>(
+        self,
+        scope: &ScopeImpl,
+        stop_token: StopTokenImpl,
+        nested: ReceiverType,
+    ) -> Self::Output<'scope>
     where
         'a: 'scope,
         ScopeImpl: 'scope,
@@ -127,7 +136,7 @@ where
             phantom: PhantomData,
             scope: scope.clone(),
         };
-        self.nested.connect(scope, receiver)
+        self.nested.connect(scope, stop_token, receiver)
     }
 }
 
@@ -184,6 +193,7 @@ where
     Sch::Sender: TypedSenderConnect<
         'a,
         ScopeImpl,
+        NeverStopToken,
         ContinuingReceiverWrapper<NestedReceiver, Sch::LocalScheduler, Value>,
     >,
 {
@@ -192,6 +202,7 @@ where
             .schedule()
             .connect(
                 &self.scope,
+                NeverStopToken,
                 ContinuingReceiverWrapper {
                     nested: self.nested,
                     phantom: PhantomData,

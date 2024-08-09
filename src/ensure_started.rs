@@ -3,6 +3,7 @@ use crate::just::Just;
 use crate::scheduler::{ImmediateScheduler, Scheduler, WithScheduler};
 use crate::scope::{ScopeWrap, ScopeWrapSend};
 use crate::start_detached::StartDetached;
+use crate::stop_token::NeverStopToken;
 use crate::traits::{
     BindSender, OperationState, Receiver, ReceiverOf, Sender, TypedSender, TypedSenderConnect,
 };
@@ -150,14 +151,19 @@ where
     type Value = Value;
 }
 
-impl<'a, Scope, Rcv, Sch, Value> TypedSenderConnect<'a, Scope, Rcv> for EnsureStartedTS<Sch, Value>
+impl<'a, Scope, StopTokenImpl, Rcv, Sch, Value> TypedSenderConnect<'a, Scope, StopTokenImpl, Rcv>
+    for EnsureStartedTS<Sch, Value>
 where
     Sch: Scheduler<LocalScheduler = Sch>,
     Value: 'static + Tuple,
     Scope: Clone + ScopeWrap<ImmediateScheduler, StateReceiverWrapper<Sch, Value, Rcv>>,
     Rcv: ReceiverOf<Sch, Value>,
-    Sch::Sender:
-        for<'b> TypedSenderConnect<'b, Scope, crate::just::ReceiverWrapper<'b, Rcv, Sch, Value>>,
+    Sch::Sender: for<'b> TypedSenderConnect<
+        'b,
+        Scope,
+        NeverStopToken,
+        crate::just::ReceiverWrapper<'b, Rcv, Sch, Value>,
+    >,
 {
     type Output<'scope> = EnsureStartedOpstate<'scope, Sch, Value, Scope, Rcv>
     where
@@ -165,7 +171,7 @@ where
         Scope: 'scope,
         Rcv: 'scope;
 
-    fn connect<'scope>(self, scope: &Scope, rcv: Rcv) -> Self::Output<'scope>
+    fn connect<'scope>(self, scope: &Scope, _: StopTokenImpl, rcv: Rcv) -> Self::Output<'scope>
     where
         'a: 'scope,
         Scope: 'scope,
@@ -220,15 +226,19 @@ where
     type Value = Value;
 }
 
-impl<'a, Scope, Rcv, Sch, Value> TypedSenderConnect<'a, Scope, Rcv>
+impl<'a, Scope, StopTokenImpl, Rcv, Sch, Value> TypedSenderConnect<'a, Scope, StopTokenImpl, Rcv>
     for EnsureStartedSendTS<Sch, Value>
 where
     Sch: Scheduler<LocalScheduler = Sch> + Send,
     Value: 'static + Tuple + Send,
     Scope: Clone + ScopeWrapSend<ImmediateScheduler, StateSendReceiverWrapper<Sch, Value, Rcv>>,
     Rcv: ReceiverOf<Sch, Value> + Send,
-    Sch::Sender:
-        for<'b> TypedSenderConnect<'b, Scope, crate::just::ReceiverWrapper<'b, Rcv, Sch, Value>>,
+    Sch::Sender: for<'b> TypedSenderConnect<
+        'b,
+        Scope,
+        NeverStopToken,
+        crate::just::ReceiverWrapper<'b, Rcv, Sch, Value>,
+    >,
 {
     type Output<'scope> = EnsureStartedSendOpstate<'scope, Sch, Value, Scope, Rcv>
     where
@@ -236,7 +246,7 @@ where
         Scope: 'scope,
         Rcv: 'scope;
 
-    fn connect<'scope>(self, scope: &Scope, rcv: Rcv) -> Self::Output<'scope>
+    fn connect<'scope>(self, scope: &Scope, _: StopTokenImpl, rcv: Rcv) -> Self::Output<'scope>
     where
         'a: 'scope,
         Scope: 'scope,
@@ -257,8 +267,12 @@ where
     Value: 'static + Tuple,
     Scope: 'scope + ScopeWrap<ImmediateScheduler, StateReceiverWrapper<Sch, Value, Rcv>>,
     Rcv: ReceiverOf<Sch, Value>,
-    Sch::Sender:
-        for<'a> TypedSenderConnect<'a, Scope, crate::just::ReceiverWrapper<'a, Rcv, Sch, Value>>,
+    Sch::Sender: for<'a> TypedSenderConnect<
+        'a,
+        Scope,
+        NeverStopToken,
+        crate::just::ReceiverWrapper<'a, Rcv, Sch, Value>,
+    >,
 {
     phantom: PhantomData<&'scope ()>,
     state: StatePtr<Sch, Value>,
@@ -273,8 +287,12 @@ where
     Value: 'static + Tuple,
     Scope: 'scope + ScopeWrap<ImmediateScheduler, StateReceiverWrapper<Sch, Value, Rcv>>,
     Rcv: 'scope + ReceiverOf<Sch, Value>,
-    Sch::Sender:
-        for<'a> TypedSenderConnect<'a, Scope, crate::just::ReceiverWrapper<'a, Rcv, Sch, Value>>,
+    Sch::Sender: for<'a> TypedSenderConnect<
+        'a,
+        Scope,
+        NeverStopToken,
+        crate::just::ReceiverWrapper<'a, Rcv, Sch, Value>,
+    >,
 {
     fn start(self) {
         self.state.attach_receiver::<'scope>(self.scope, self.rcv);
@@ -287,8 +305,12 @@ where
     Value: 'static + Tuple + Send,
     Scope: 'scope + ScopeWrapSend<ImmediateScheduler, StateSendReceiverWrapper<Sch, Value, Rcv>>,
     Rcv: ReceiverOf<Sch, Value> + Send,
-    Sch::Sender:
-        for<'a> TypedSenderConnect<'a, Scope, crate::just::ReceiverWrapper<'a, Rcv, Sch, Value>>,
+    Sch::Sender: for<'a> TypedSenderConnect<
+        'a,
+        Scope,
+        NeverStopToken,
+        crate::just::ReceiverWrapper<'a, Rcv, Sch, Value>,
+    >,
 {
     phantom: PhantomData<&'scope ()>,
     state: StateSendPtr<Sch, Value>,
@@ -303,8 +325,12 @@ where
     Value: 'static + Tuple + Send,
     Scope: 'scope + ScopeWrapSend<ImmediateScheduler, StateSendReceiverWrapper<Sch, Value, Rcv>>,
     Rcv: 'scope + ReceiverOf<Sch, Value> + Send,
-    Sch::Sender:
-        for<'a> TypedSenderConnect<'a, Scope, crate::just::ReceiverWrapper<'a, Rcv, Sch, Value>>,
+    Sch::Sender: for<'a> TypedSenderConnect<
+        'a,
+        Scope,
+        NeverStopToken,
+        crate::just::ReceiverWrapper<'a, Rcv, Sch, Value>,
+    >,
 {
     fn start(self) {
         self.state.attach_receiver::<'scope>(self.scope, self.rcv);
@@ -385,8 +411,8 @@ where
 
     fn attach_receiver<'scope, Scope, Rcv>(self: Rc<Self>, scope: Scope, rcv: Rcv)
     where
-        Just<'scope, Sch, Value>:
-            TypedSender<Scheduler = Sch, Value = Value> + TypedSenderConnect<'scope, Scope, Rcv>,
+        Just<'scope, Sch, Value>: TypedSender<Scheduler = Sch, Value = Value>
+            + TypedSenderConnect<'scope, Scope, NeverStopToken, Rcv>,
         Rcv: 'scope + ReceiverOf<Sch, Value>,
         Scope: 'scope + ScopeWrap<ImmediateScheduler, StateReceiverWrapper<Sch, Value, Rcv>>,
     {
@@ -403,7 +429,7 @@ where
             StateEnum::Signal(signal) => match signal.take().expect("signal is not consumed twice")
             {
                 Signal::Value(sch, value) => Just::<'scope, Sch, Value>::with_scheduler(sch, value)
-                    .connect(&scope, rcv)
+                    .connect(&scope, NeverStopToken, rcv)
                     .start(),
                 Signal::Error(error) => rcv.set_error(error),
                 Signal::Done => rcv.set_done(),
@@ -469,8 +495,8 @@ where
 
     fn attach_receiver<'scope, Scope, Rcv>(self: Arc<Self>, scope: Scope, rcv: Rcv)
     where
-        Just<'scope, Sch, Value>:
-            TypedSender<Scheduler = Sch, Value = Value> + TypedSenderConnect<'scope, Scope, Rcv>,
+        Just<'scope, Sch, Value>: TypedSender<Scheduler = Sch, Value = Value>
+            + TypedSenderConnect<'scope, Scope, NeverStopToken, Rcv>,
         Rcv: 'scope + ReceiverOf<Sch, Value> + Send,
         Scope:
             'scope + ScopeWrapSend<ImmediateScheduler, StateSendReceiverWrapper<Sch, Value, Rcv>>,
@@ -491,7 +517,7 @@ where
                 .expect("signal is not consumed twice")
             {
                 Signal::Value(sch, value) => Just::<'scope, Sch, Value>::with_scheduler(sch, value)
-                    .connect(&scope, rcv)
+                    .connect(&scope, NeverStopToken, rcv)
                     .start(),
                 Signal::Error(error) => rcv.set_error(error),
                 Signal::Done => rcv.set_done(),
@@ -596,11 +622,13 @@ where
     type Value = TS::Value;
 }
 
-impl<'a, Scope, Rcv, TS> TypedSenderConnect<'a, Scope, Rcv> for StateSenderTS<TS>
+impl<'a, Scope, StopTokenImpl, Rcv, TS> TypedSenderConnect<'a, Scope, StopTokenImpl, Rcv>
+    for StateSenderTS<TS>
 where
     TS: TypedSenderConnect<
         'a,
         Scope,
+        StopTokenImpl,
         StateReceiver<<TS as TypedSender>::Scheduler, <TS as TypedSender>::Value, Rcv>,
     >,
     TS::Value: 'static,
@@ -608,7 +636,12 @@ where
 {
     type Output<'scope> = TS::Output<'scope> where 'a: 'scope, Scope: 'scope, Rcv: 'scope;
 
-    fn connect<'scope>(self, scope: &Scope, rcv: Rcv) -> Self::Output<'scope>
+    fn connect<'scope>(
+        self,
+        scope: &Scope,
+        stop_token: StopTokenImpl,
+        rcv: Rcv,
+    ) -> Self::Output<'scope>
     where
         'a: 'scope,
         Scope: 'scope,
@@ -616,6 +649,7 @@ where
     {
         self.ts.connect(
             scope,
+            stop_token,
             StateReceiver {
                 state: self.state,
                 nested: rcv,
@@ -644,11 +678,13 @@ where
     type Value = TS::Value;
 }
 
-impl<'a, Scope, Rcv, TS> TypedSenderConnect<'a, Scope, Rcv> for StateSenderSendTS<TS>
+impl<'a, Scope, StopTokenImpl, Rcv, TS> TypedSenderConnect<'a, Scope, StopTokenImpl, Rcv>
+    for StateSenderSendTS<TS>
 where
     TS: TypedSenderConnect<
         'a,
         Scope,
+        StopTokenImpl,
         StateSendReceiver<<TS as TypedSender>::Scheduler, <TS as TypedSender>::Value, Rcv>,
     >,
     TS::Scheduler: Send,
@@ -657,7 +693,12 @@ where
 {
     type Output<'scope> = TS::Output<'scope> where 'a: 'scope, Scope: 'scope, Rcv: 'scope;
 
-    fn connect<'scope>(self, scope: &Scope, rcv: Rcv) -> Self::Output<'scope>
+    fn connect<'scope>(
+        self,
+        scope: &Scope,
+        stop_token: StopTokenImpl,
+        rcv: Rcv,
+    ) -> Self::Output<'scope>
     where
         'a: 'scope,
         Scope: 'scope,
@@ -665,6 +706,7 @@ where
     {
         self.ts.connect(
             scope,
+            stop_token,
             StateSendReceiver {
                 state: self.state,
                 nested: rcv,

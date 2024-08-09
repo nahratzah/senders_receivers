@@ -165,14 +165,16 @@ where
     type Scheduler = NestedSender::Scheduler;
 }
 
-impl<'a, ScopeImpl, ReceiverImpl, NestedSender, FnType, Out>
-    TypedSenderConnect<'a, ScopeImpl, ReceiverImpl> for ThenSender<'a, NestedSender, FnType, Out>
+impl<'a, ScopeImpl, StopTokenImpl, ReceiverImpl, NestedSender, FnType, Out>
+    TypedSenderConnect<'a, ScopeImpl, StopTokenImpl, ReceiverImpl>
+    for ThenSender<'a, NestedSender, FnType, Out>
 where
     ReceiverImpl: ReceiverOf<Self::Scheduler, Out>,
     NestedSender: TypedSender
         + TypedSenderConnect<
             'a,
             ScopeImpl,
+            StopTokenImpl,
             ThenWrappedReceiver<
                 'a,
                 ReceiverImpl,
@@ -192,7 +194,12 @@ where
         ScopeImpl: 'scope,
         ReceiverImpl: 'scope;
 
-    fn connect<'scope>(self, scope: &ScopeImpl, receiver: ReceiverImpl) -> Self::Output<'scope>
+    fn connect<'scope>(
+        self,
+        scope: &ScopeImpl,
+        stop_token: StopTokenImpl,
+        receiver: ReceiverImpl,
+    ) -> Self::Output<'scope>
     where
         'a: 'scope,
         ScopeImpl: 'scope,
@@ -204,7 +211,7 @@ where
             phantom: PhantomData,
         };
 
-        self.nested.connect(scope, wrapped_receiver)
+        self.nested.connect(scope, stop_token, wrapped_receiver)
     }
 }
 

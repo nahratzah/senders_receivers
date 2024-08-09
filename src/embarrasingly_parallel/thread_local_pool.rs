@@ -89,8 +89,8 @@ impl TypedSender for ThreadLocalPoolTS {
     type Value = ();
 }
 
-impl<'a, ScopeImpl, ReceiverType> TypedSenderConnect<'a, ScopeImpl, ReceiverType>
-    for ThreadLocalPoolTS
+impl<'a, ScopeImpl, StopTokenImpl, ReceiverType>
+    TypedSenderConnect<'a, ScopeImpl, StopTokenImpl, ReceiverType> for ThreadLocalPoolTS
 where
     ReceiverType: ReceiverOf<ThreadLocalPool, ()>,
     ScopeImpl: ScopeWrap<ThreadLocalPool, ReceiverType>,
@@ -101,7 +101,12 @@ where
         ScopeImpl: 'scope,
         ReceiverType: 'scope;
 
-    fn connect<'scope>(self, scope: &ScopeImpl, receiver: ReceiverType) -> Self::Output<'scope>
+    fn connect<'scope>(
+        self,
+        scope: &ScopeImpl,
+        _: StopTokenImpl,
+        receiver: ReceiverType,
+    ) -> Self::Output<'scope>
     where
         'a: 'scope,
         ScopeImpl: 'scope,

@@ -117,8 +117,8 @@ impl TypedSender for ImmediateSender {
     type Value = ();
 }
 
-impl<'a, ScopeImpl, ReceiverType> TypedSenderConnect<'a, ScopeImpl, ReceiverType>
-    for ImmediateSender
+impl<'a, ScopeImpl, StopTokenImpl, ReceiverType>
+    TypedSenderConnect<'a, ScopeImpl, StopTokenImpl, ReceiverType> for ImmediateSender
 where
     ReceiverType: ReceiverOf<
         <ImmediateSender as TypedSender>::Scheduler,
@@ -129,7 +129,12 @@ where
     where
         'a:'scope,ScopeImpl:'scope,ReceiverType:'scope;
 
-    fn connect<'scope>(self, _: &ScopeImpl, receiver: ReceiverType) -> Self::Output<'scope>
+    fn connect<'scope>(
+        self,
+        _: &ScopeImpl,
+        _: StopTokenImpl,
+        receiver: ReceiverType,
+    ) -> Self::Output<'scope>
     where
         'a: 'scope,
         ScopeImpl: 'scope,
@@ -191,8 +196,8 @@ impl TypedSender for ThreadPoolSender {
     type Scheduler = ThreadPool;
 }
 
-impl<'a, ScopeImpl, ReceiverType> TypedSenderConnect<'a, ScopeImpl, ReceiverType>
-    for ThreadPoolSender
+impl<'a, ScopeImpl, StopTokenImpl, ReceiverType>
+    TypedSenderConnect<'a, ScopeImpl, StopTokenImpl, ReceiverType> for ThreadPoolSender
 where
     ReceiverType: Send
         + ReceiverOf<
@@ -203,7 +208,12 @@ where
 {
     type Output<'scope> = ThreadPoolOperationState<'scope, ScopeImpl::WrapSendOutput> where 'a:'scope, ScopeImpl:'scope,ReceiverType:'scope;
 
-    fn connect<'scope>(self, scope: &ScopeImpl, receiver: ReceiverType) -> Self::Output<'scope>
+    fn connect<'scope>(
+        self,
+        scope: &ScopeImpl,
+        _: StopTokenImpl,
+        receiver: ReceiverType,
+    ) -> Self::Output<'scope>
     where
         'a: 'scope,
         ScopeImpl: 'scope,
@@ -304,8 +314,8 @@ where
     type Value = ();
 }
 
-impl<'a, ScopeImpl, ReceiverType, Sch> TypedSenderConnect<'a, ScopeImpl, ReceiverType>
-    for LazySchedulerTS<Sch>
+impl<'a, ScopeImpl, StopTokenImpl, ReceiverType, Sch>
+    TypedSenderConnect<'a, ScopeImpl, StopTokenImpl, ReceiverType> for LazySchedulerTS<Sch>
 where
     ReceiverType: ReceiverOf<Sch, ()>,
     Sch: Scheduler<LocalScheduler = Sch>,
@@ -313,7 +323,12 @@ where
 {
     type Output<'scope> = LazySchedulerOperationState<'scope, Sch,ReceiverType> where 'a:'scope,ScopeImpl:'scope,ReceiverType:'scope;
 
-    fn connect<'scope>(self, _: &ScopeImpl, receiver: ReceiverType) -> Self::Output<'scope>
+    fn connect<'scope>(
+        self,
+        _: &ScopeImpl,
+        _: StopTokenImpl,
+        receiver: ReceiverType,
+    ) -> Self::Output<'scope>
     where
         'a: 'scope,
         ScopeImpl: 'scope,

@@ -94,8 +94,8 @@ impl TypedSender for CrossThreadPoolTS {
     type Value = ();
 }
 
-impl<'a, ScopeImpl, ReceiverType> TypedSenderConnect<'a, ScopeImpl, ReceiverType>
-    for CrossThreadPoolTS
+impl<'a, ScopeImpl, StopTokenImpl, ReceiverType>
+    TypedSenderConnect<'a, ScopeImpl, StopTokenImpl, ReceiverType> for CrossThreadPoolTS
 where
     ReceiverType: ReceiverOf<ThreadLocalPool, ()> + Send,
     ScopeImpl: ScopeWrapSend<ThreadLocalPool, ReceiverType>,
@@ -103,7 +103,12 @@ where
     type Output<'scope> = CrossThreadPoolOperationState<'scope, ScopeImpl::WrapSendOutput>
     where 'a: 'scope, ScopeImpl:'scope, ReceiverType: 'scope;
 
-    fn connect<'scope>(self, scope: &ScopeImpl, receiver: ReceiverType) -> Self::Output<'scope>
+    fn connect<'scope>(
+        self,
+        scope: &ScopeImpl,
+        _: StopTokenImpl,
+        receiver: ReceiverType,
+    ) -> Self::Output<'scope>
     where
         'a: 'scope,
         ScopeImpl: 'scope,

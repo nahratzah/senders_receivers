@@ -3,6 +3,7 @@ use crate::io::default::EnableDefaultIO;
 use crate::refs;
 use crate::scheduler::Scheduler;
 use crate::scope::ScopeWrap;
+use crate::stop_token::NeverStopToken;
 use crate::traits::{BindSender, Receiver, ReceiverOf, TypedSender, TypedSenderConnect};
 use std::fmt;
 use std::io;
@@ -140,14 +141,16 @@ where
     type Value = (usize,);
 }
 
-impl<'a, ScopeImpl, ReceiverType, Sch, Fd, SelfState, BufState>
-    TypedSenderConnect<'a, ScopeImpl, ReceiverType> for WriteTS<Sch, Fd, SelfState, BufState>
+impl<'a, ScopeImpl, StopTokenImpl, ReceiverType, Sch, Fd, SelfState, BufState>
+    TypedSenderConnect<'a, ScopeImpl, StopTokenImpl, ReceiverType>
+    for WriteTS<Sch, Fd, SelfState, BufState>
 where
     Fd: 'static + io::Write + ?Sized,
     Sch: Scheduler + EnableDefaultIO,
     Sch::Sender: TypedSenderConnect<
         'a,
         ScopeImpl,
+        NeverStopToken,
         ReceiverWrapper<ReceiverType, Sch::LocalScheduler, Fd, SelfState, BufState>,
     >,
     ReceiverType: ReceiverOf<Sch::LocalScheduler, (usize,)>,
@@ -163,6 +166,7 @@ where
 	    TypedSenderConnect<
                 'a,
                 ScopeImpl,
+                NeverStopToken,
                 ReceiverWrapper<ReceiverType, Sch::LocalScheduler, Fd, SelfState, BufState>,
             >
 	>::Output<'scope>
@@ -171,7 +175,13 @@ where
         ScopeImpl: 'scope,
         ReceiverType: 'scope ;
 
-    fn connect<'scope>(self, scope: &ScopeImpl, receiver: ReceiverType) -> Self::Output<'scope>
+    // XXX hook up StopTokenImpl, but do it conditionally.
+    fn connect<'scope>(
+        self,
+        scope: &ScopeImpl,
+        _: StopTokenImpl,
+        receiver: ReceiverType,
+    ) -> Self::Output<'scope>
     where
         'a: 'scope,
         ScopeImpl: 'scope,
@@ -179,6 +189,7 @@ where
     {
         self.sch.schedule().connect(
             scope,
+            NeverStopToken,
             ReceiverWrapper {
                 nested: receiver,
                 fd: self.fd,
@@ -279,14 +290,16 @@ where
     type Value = ();
 }
 
-impl<'a, ScopeImpl, ReceiverType, Sch, Fd, SelfState, BufState>
-    TypedSenderConnect<'a, ScopeImpl, ReceiverType> for WriteAllTS<Sch, Fd, SelfState, BufState>
+impl<'a, ScopeImpl, StopTokenImpl, ReceiverType, Sch, Fd, SelfState, BufState>
+    TypedSenderConnect<'a, ScopeImpl, StopTokenImpl, ReceiverType>
+    for WriteAllTS<Sch, Fd, SelfState, BufState>
 where
     Fd: 'static + io::Write + ?Sized,
     Sch: Scheduler + EnableDefaultIO,
     Sch::Sender: TypedSenderConnect<
         'a,
         ScopeImpl,
+        NeverStopToken,
         AllReceiverWrapper<ReceiverType, Sch::LocalScheduler, Fd, SelfState, BufState>,
     >,
     ReceiverType: ReceiverOf<Sch::LocalScheduler, ()>,
@@ -302,6 +315,7 @@ where
 	TypedSenderConnect<
             'a,
             ScopeImpl,
+            NeverStopToken,
             AllReceiverWrapper<ReceiverType, Sch::LocalScheduler, Fd, SelfState, BufState>,
         >
     >::Output<'scope>
@@ -311,7 +325,12 @@ where
         ReceiverType: 'scope
     ;
 
-    fn connect<'scope>(self, scope: &ScopeImpl, receiver: ReceiverType) -> Self::Output<'scope>
+    fn connect<'scope>(
+        self,
+        scope: &ScopeImpl,
+        _: StopTokenImpl,
+        receiver: ReceiverType,
+    ) -> Self::Output<'scope>
     where
         'a: 'scope,
         ScopeImpl: 'scope,
@@ -319,6 +338,7 @@ where
     {
         self.sch.schedule().connect(
             scope,
+            NeverStopToken,
             AllReceiverWrapper {
                 nested: receiver,
                 fd: self.fd,
