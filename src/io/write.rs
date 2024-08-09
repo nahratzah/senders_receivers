@@ -3,7 +3,7 @@ use crate::io::default::EnableDefaultIO;
 use crate::refs;
 use crate::scheduler::Scheduler;
 use crate::scope::ScopeWrap;
-use crate::stop_token::NeverStopToken;
+use crate::stop_token::{NeverStopToken, StopToken};
 use crate::traits::{BindSender, Receiver, ReceiverOf, TypedSender, TypedSenderConnect};
 use std::fmt;
 use std::io;
@@ -158,6 +158,7 @@ where
         Sch::LocalScheduler,
         ReceiverWrapper<ReceiverType, Sch::LocalScheduler, Fd, SelfState, BufState>,
     >,
+    StopTokenImpl: StopToken,
     SelfState: 'static + Clone + fmt::Debug,
     BufState: 'static + Clone + fmt::Debug,
 {
@@ -173,6 +174,7 @@ where
     where
         'a: 'scope,
         ScopeImpl: 'scope,
+        StopTokenImpl: 'scope,
         ReceiverType: 'scope ;
 
     // XXX hook up StopTokenImpl, but do it conditionally.
@@ -185,6 +187,7 @@ where
     where
         'a: 'scope,
         ScopeImpl: 'scope,
+        StopTokenImpl: 'scope,
         ReceiverType: 'scope,
     {
         self.sch.schedule().connect(
@@ -307,6 +310,7 @@ where
         Sch::LocalScheduler,
         AllReceiverWrapper<ReceiverType, Sch::LocalScheduler, Fd, SelfState, BufState>,
     >,
+    StopTokenImpl: StopToken,
     SelfState: 'static + Clone + fmt::Debug,
     BufState: 'static + Clone + fmt::Debug,
 {
@@ -322,6 +326,7 @@ where
     where
         'a: 'scope,
         ScopeImpl: 'scope,
+        StopTokenImpl: 'scope,
         ReceiverType: 'scope
     ;
 
@@ -334,6 +339,7 @@ where
     where
         'a: 'scope,
         ScopeImpl: 'scope,
+        StopTokenImpl: 'scope,
         ReceiverType: 'scope,
     {
         self.sch.schedule().connect(

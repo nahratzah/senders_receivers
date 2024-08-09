@@ -135,6 +135,7 @@ where
     where
         'a: 'scope,
         ScopeImpl: 'scope,
+        StopTokenImpl: 'scope,
         ReceiverType: 'scope;
 
     /// Connect a [NoSchedulerReceiver] to this sender.
@@ -147,6 +148,7 @@ where
     where
         'a: 'scope,
         ScopeImpl: 'scope,
+        StopTokenImpl: 'scope,
         ReceiverType: 'scope;
 }
 
@@ -203,7 +205,10 @@ where
     <TS as TypedSender>::Value: 'a,
     StopTokenImpl: StopToken,
 {
-    type Output<'scope> = TS::Output<'scope> where 'a:'scope,ScopeImpl:'scope,ReceiverType:'scope;
+    type Output<'scope> = TS::Output<'scope>
+    where 'a:'scope,ScopeImpl:'scope,
+	StopTokenImpl:'scope,
+        ReceiverType:'scope;
 
     fn connect<'scope>(
         self,
@@ -214,6 +219,7 @@ where
     where
         'a: 'scope,
         ScopeImpl: 'scope,
+        StopTokenImpl: 'scope,
         ReceiverType: 'scope,
     {
         self.sender.connect(scope, stop_token, Wrap::from(rcv))
@@ -342,6 +348,7 @@ where
     where
         'a: 'scope,
         ScopeImpl: 'scope,
+        StopTokenImpl: 'scope,
         ReceiverType: 'scope;
 
     fn connect<'scope>(
@@ -353,6 +360,7 @@ where
     where
         'a: 'scope,
         ScopeImpl: 'scope,
+        StopTokenImpl: 'scope,
         ReceiverType: 'scope,
     {
         let rcv = Arc::new(Mutex::new(SplitReceiver::from(rcv)));
@@ -620,6 +628,7 @@ where
     where
         'a: 'scope,
         ScopeImpl: 'scope,
+        StopTokenImpl: 'scope,
         Rcv: 'scope;
 
     fn connect<'scope>(
@@ -631,6 +640,7 @@ where
     where
         'a: 'scope,
         ScopeImpl: 'scope,
+        StopTokenImpl: 'scope,
         Rcv: 'scope,
     {
         let rcv = SchedulerReceiver::new(scope.clone(), self.sch, rcv);

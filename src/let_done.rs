@@ -1,5 +1,6 @@
 use crate::errors::{Error, Result};
 use crate::functor::{NoArgClosure, NoArgFunctor, NoErrNoArgFunctor};
+use crate::stop_token::StopToken;
 use crate::traits::{
     BindSender, OperationState, Receiver, ReceiverOf, Sender, TypedSender, TypedSenderConnect,
 };
@@ -142,12 +143,13 @@ where
     Out: TypedSender + TypedSenderConnect<'a, ScopeImpl, StopTokenImpl, ReceiverType>,
     ReceiverType: ReceiverOf<Out::Scheduler, Out::Value>,
     ScopeImpl: Clone,
-    StopTokenImpl: 'a + Clone,
+    StopTokenImpl: StopToken,
 {
     type Output<'scope> = NestedSender::Output<'scope>
     where
         'a: 'scope,
         ScopeImpl: 'scope,
+        StopTokenImpl: 'scope,
         ReceiverType: 'scope;
 
     fn connect<'scope>(
@@ -159,6 +161,7 @@ where
     where
         'a: 'scope,
         ScopeImpl: 'scope,
+        StopTokenImpl: 'scope,
         ReceiverType: 'scope,
     {
         let receiver = ReceiverWrapper {
@@ -192,6 +195,7 @@ where
     ReceiverType: ReceiverOf<Out::Scheduler, Out::Value>,
     FnType: NoArgFunctor<'a, Output = Result<Out>>,
     Out: TypedSenderConnect<'a, ScopeImpl, StopTokenImpl, ReceiverType>,
+    StopTokenImpl: StopToken,
 {
     receiver: ReceiverType,
     fn_impl: FnType,
@@ -206,6 +210,7 @@ where
     ReceiverType: ReceiverOf<Out::Scheduler, Out::Value>,
     FnType: NoArgFunctor<'a, Output = Result<Out>>,
     Out: TypedSenderConnect<'a, ScopeImpl, StopTokenImpl, ReceiverType>,
+    StopTokenImpl: StopToken,
 {
     fn set_done(self) {
         match self.fn_impl.tuple_invoke() {
@@ -227,6 +232,7 @@ where
     ReceiverType: ReceiverOf<Out::Scheduler, Out::Value>,
     FnType: NoArgFunctor<'a, Output = Result<Out>>,
     Out: TypedSenderConnect<'a, ScopeImpl, StopTokenImpl, ReceiverType>,
+    StopTokenImpl: StopToken,
 {
     fn set_value(self, sch: Out::Scheduler, value: Out::Value) {
         self.receiver.set_value(sch, value);

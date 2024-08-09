@@ -5,6 +5,7 @@ use crate::refs::SRInto;
 use crate::refs::ScopedRefMut;
 use crate::scheduler::Scheduler;
 use crate::scope::ScopeNest;
+use crate::stop_token::StopToken;
 use crate::traits::{
     BindSender, OperationState, Receiver, ReceiverOf, Sender, TypedSender, TypedSenderConnect,
 };
@@ -309,7 +310,7 @@ where
             ReceiverImpl,
         >,
     >,
-    StopTokenImpl: 'a + Clone,
+    StopTokenImpl: StopToken,
     (Value, Out::Value): TupleCat,
     <(Value, Out::Value) as TupleCat>::Output: 'a + Tuple,
     ReceiverImpl: ReceiverOf<Out::Scheduler, <(Value, Out::Value) as TupleCat>::Output>,
@@ -320,6 +321,7 @@ where
     where
         'a: 'scope,
         ScopeImpl: 'scope,
+        StopTokenImpl: 'scope,
         ReceiverImpl: 'scope ;
 
     fn connect<'scope>(
@@ -331,6 +333,7 @@ where
     where
         'a: 'scope,
         ScopeImpl: 'scope,
+        StopTokenImpl: 'scope,
         ReceiverImpl: 'scope,
     {
         let receiver = LetValueReceiver {
@@ -365,6 +368,7 @@ pub struct LetValueReceiver<
             NestedReceiver,
         >,
     >,
+    StopTokenImpl: StopToken,
     NestedReceiver: ReceiverOf<
         <Out as TypedSender>::Scheduler,
         <(Value, <Out as TypedSender>::Value) as TupleCat>::Output,
@@ -414,6 +418,7 @@ where
             NestedReceiver,
         >,
     >,
+    StopTokenImpl: StopToken,
     NestedReceiver: ReceiverOf<Out::Scheduler, <(Value, Out::Value) as TupleCat>::Output>,
     FnType: 'a + BiFunctor<'a, Sch, Value, State, Output = Result<Out>>,
     Sch: Scheduler<LocalScheduler = Sch>,
@@ -463,6 +468,7 @@ where
             NestedReceiver,
         >,
     >,
+    StopTokenImpl: StopToken,
     NestedReceiver:
         ReceiverOf<Out::Scheduler, <(Value, <Out as TypedSender>::Value) as TupleCat>::Output>,
     FnType: 'a + BiFunctor<'a, Sch, Value, State, Output = Result<Out>>,

@@ -2,6 +2,7 @@ use crate::embarrasingly_parallel::cross_thread_pool::CrossThreadPool;
 use crate::embarrasingly_parallel::tasks::{SendTask, Task};
 use crate::scheduler::Scheduler;
 use crate::scope::ScopeWrap;
+use crate::stop_token::StopToken;
 use crate::sync::{cross_thread_channel, same_thread_channel};
 use crate::traits::{BindSender, OperationState, ReceiverOf, TypedSender, TypedSenderConnect};
 use std::marker::PhantomData;
@@ -94,11 +95,13 @@ impl<'a, ScopeImpl, StopTokenImpl, ReceiverType>
 where
     ReceiverType: ReceiverOf<ThreadLocalPool, ()>,
     ScopeImpl: ScopeWrap<ThreadLocalPool, ReceiverType>,
+    StopTokenImpl: StopToken,
 {
     type Output<'scope> = ThreadLocalPoolOperationState<'scope, ScopeImpl::WrapOutput>
     where
         'a: 'scope,
         ScopeImpl: 'scope,
+        StopTokenImpl: 'scope,
         ReceiverType: 'scope;
 
     fn connect<'scope>(
@@ -110,6 +113,7 @@ where
     where
         'a: 'scope,
         ScopeImpl: 'scope,
+        StopTokenImpl: 'scope,
         ReceiverType: 'scope,
     {
         ThreadLocalPoolOperationState {

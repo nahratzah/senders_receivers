@@ -1,4 +1,5 @@
 use crate::scheduler::{ImmediateScheduler, Scheduler};
+use crate::stop_token::StopToken;
 use crate::traits::{
     BindSender, OperationState, Receiver, ReceiverOf, TypedSender, TypedSenderConnect,
 };
@@ -55,11 +56,13 @@ where
     Sch: Scheduler,
     Tpl: Tuple,
     ReceiverType: ReceiverOf<Sch::LocalScheduler, Tpl>,
+    StopTokenImpl: StopToken,
 {
     type Output<'scope> = JustDoneOperationState<'scope, ReceiverType>
     where
         'a: 'scope,
         ScopeImpl: 'scope,
+        StopTokenImpl: 'scope,
         ReceiverType: 'scope ;
 
     fn connect<'scope>(
@@ -71,6 +74,7 @@ where
     where
         'a: 'scope,
         ScopeImpl: 'scope,
+        StopTokenImpl: 'scope,
         ReceiverType: 'scope,
     {
         JustDoneOperationState {

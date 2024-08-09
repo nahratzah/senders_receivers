@@ -4,6 +4,7 @@ use crate::just::Just;
 use crate::just_done::JustDone;
 use crate::just_error::JustError;
 use crate::scope::{ScopeWrap, ScopeWrapSend};
+use crate::stop_token::StopToken;
 use crate::traits::{BindSender, OperationState, ReceiverOf, TypedSender, TypedSenderConnect};
 use crate::tuple::Tuple;
 use std::marker::PhantomData;
@@ -124,10 +125,14 @@ where
         <ImmediateSender as TypedSender>::Scheduler,
         <ImmediateSender as TypedSender>::Value,
     >,
+    StopTokenImpl: StopToken,
 {
     type Output<'scope> = ImmediateOperationState<'scope, ReceiverType>
     where
-        'a:'scope,ScopeImpl:'scope,ReceiverType:'scope;
+        'a:'scope,
+	ScopeImpl:'scope,
+	StopTokenImpl:'scope,
+	ReceiverType:'scope;
 
     fn connect<'scope>(
         self,
@@ -138,6 +143,7 @@ where
     where
         'a: 'scope,
         ScopeImpl: 'scope,
+        StopTokenImpl: 'scope,
         ReceiverType: 'scope,
     {
         ImmediateOperationState {
@@ -205,8 +211,13 @@ where
             <ThreadPoolSender as TypedSender>::Value,
         >,
     ScopeImpl: ScopeWrapSend<<ThreadPoolSender as TypedSender>::Scheduler, ReceiverType>,
+    StopTokenImpl: StopToken,
 {
-    type Output<'scope> = ThreadPoolOperationState<'scope, ScopeImpl::WrapSendOutput> where 'a:'scope, ScopeImpl:'scope,ReceiverType:'scope;
+    type Output<'scope> = ThreadPoolOperationState<'scope, ScopeImpl::WrapSendOutput>
+    where
+	'a:'scope, ScopeImpl:'scope,
+	StopTokenImpl: 'scope,
+	ReceiverType:'scope;
 
     fn connect<'scope>(
         self,
@@ -217,6 +228,7 @@ where
     where
         'a: 'scope,
         ScopeImpl: 'scope,
+        StopTokenImpl: 'scope,
         ReceiverType: 'scope,
     {
         ThreadPoolOperationState {
@@ -320,8 +332,14 @@ where
     ReceiverType: ReceiverOf<Sch, ()>,
     Sch: Scheduler<LocalScheduler = Sch>,
     ScopeImpl: ScopeWrap<Sch, ReceiverType>,
+    StopTokenImpl: StopToken,
 {
-    type Output<'scope> = LazySchedulerOperationState<'scope, Sch,ReceiverType> where 'a:'scope,ScopeImpl:'scope,ReceiverType:'scope;
+    type Output<'scope> = LazySchedulerOperationState<'scope, Sch,ReceiverType>
+    where
+	'a:'scope,
+	ScopeImpl:'scope,
+	StopTokenImpl: 'scope,
+	ReceiverType:'scope;
 
     fn connect<'scope>(
         self,
@@ -332,6 +350,7 @@ where
     where
         'a: 'scope,
         ScopeImpl: 'scope,
+        StopTokenImpl: 'scope,
         ReceiverType: 'scope,
     {
         LazySchedulerOperationState {

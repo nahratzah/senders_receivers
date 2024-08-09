@@ -1,5 +1,6 @@
 use crate::errors::Error;
 use crate::scheduler::Scheduler;
+use crate::stop_token::StopToken;
 use crate::traits::{
     BindSender, OperationState, Receiver, ReceiverOf, TypedSender, TypedSenderConnect,
 };
@@ -181,7 +182,7 @@ where
     (X::Value, Y::Value): TupleCat,
     <(X::Value, Y::Value) as TupleCat>::Output: Tuple,
     ScopeImpl: Clone,
-    StopTokenImpl: Clone,
+    StopTokenImpl: StopToken,
     ReceiverType: ReceiverOf<Sch, <(X::Value, Y::Value) as TupleCat>::Output>,
 {
     type Output<'scope> = WhenAllOperationState<
@@ -192,6 +193,7 @@ where
     where
         'a: 'scope,
         ScopeImpl: 'scope,
+        StopTokenImpl: 'scope,
         ReceiverType: 'scope;
 
     fn connect<'scope>(
@@ -203,6 +205,7 @@ where
     where
         'a: 'scope,
         ScopeImpl: 'scope,
+        StopTokenImpl: 'scope,
         ReceiverType: 'scope,
     {
         let outer_receiver = WhenAllReceiver::new(receiver);

@@ -1,5 +1,6 @@
 use crate::errors::Error;
 use crate::scheduler::Scheduler;
+use crate::stop_token::StopToken;
 use crate::tuple::Tuple;
 
 /// Common receiver logic.
@@ -55,12 +56,14 @@ pub trait TypedSender {
 pub trait TypedSenderConnect<'a, ScopeImpl, StopTokenImpl, ReceiverType>: TypedSender
 where
     ReceiverType: ReceiverOf<Self::Scheduler, Self::Value>,
+    StopTokenImpl: StopToken,
 {
     /// The [OperationState] returned by [TypedSenderConnect::connect()].
     type Output<'scope>: 'scope + OperationState<'scope>
     where
         'a: 'scope,
         ScopeImpl: 'scope,
+        StopTokenImpl: 'scope,
         ReceiverType: 'scope;
 
     /// Attach a receiver.
@@ -74,6 +77,7 @@ where
     where
         'a: 'scope,
         ScopeImpl: 'scope,
+        StopTokenImpl: 'scope,
         ReceiverType: 'scope;
 }
 

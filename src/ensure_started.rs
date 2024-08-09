@@ -3,7 +3,7 @@ use crate::just::Just;
 use crate::scheduler::{ImmediateScheduler, Scheduler, WithScheduler};
 use crate::scope::{ScopeWrap, ScopeWrapSend};
 use crate::start_detached::StartDetached;
-use crate::stop_token::NeverStopToken;
+use crate::stop_token::{NeverStopToken, StopToken};
 use crate::traits::{
     BindSender, OperationState, Receiver, ReceiverOf, Sender, TypedSender, TypedSenderConnect,
 };
@@ -157,6 +157,7 @@ where
     Sch: Scheduler<LocalScheduler = Sch>,
     Value: 'static + Tuple,
     Scope: Clone + ScopeWrap<ImmediateScheduler, StateReceiverWrapper<Sch, Value, Rcv>>,
+    StopTokenImpl: StopToken,
     Rcv: ReceiverOf<Sch, Value>,
     Sch::Sender: for<'b> TypedSenderConnect<
         'b,
@@ -169,12 +170,14 @@ where
     where
         'a: 'scope,
         Scope: 'scope,
+        StopTokenImpl: 'scope,
         Rcv: 'scope;
 
     fn connect<'scope>(self, scope: &Scope, _: StopTokenImpl, rcv: Rcv) -> Self::Output<'scope>
     where
         'a: 'scope,
         Scope: 'scope,
+        StopTokenImpl: 'scope,
         Rcv: 'scope,
     {
         EnsureStartedOpstate {
@@ -232,6 +235,7 @@ where
     Sch: Scheduler<LocalScheduler = Sch> + Send,
     Value: 'static + Tuple + Send,
     Scope: Clone + ScopeWrapSend<ImmediateScheduler, StateSendReceiverWrapper<Sch, Value, Rcv>>,
+    StopTokenImpl: StopToken,
     Rcv: ReceiverOf<Sch, Value> + Send,
     Sch::Sender: for<'b> TypedSenderConnect<
         'b,
@@ -244,12 +248,14 @@ where
     where
         'a: 'scope,
         Scope: 'scope,
+        StopTokenImpl: 'scope,
         Rcv: 'scope;
 
     fn connect<'scope>(self, scope: &Scope, _: StopTokenImpl, rcv: Rcv) -> Self::Output<'scope>
     where
         'a: 'scope,
         Scope: 'scope,
+        StopTokenImpl: 'scope,
         Rcv: 'scope,
     {
         EnsureStartedSendOpstate {
@@ -633,8 +639,14 @@ where
     >,
     TS::Value: 'static,
     Rcv: ReceiverOf<TS::Scheduler, TS::Value>,
+    StopTokenImpl: StopToken,
 {
-    type Output<'scope> = TS::Output<'scope> where 'a: 'scope, Scope: 'scope, Rcv: 'scope;
+    type Output<'scope> = TS::Output<'scope>
+    where
+	'a: 'scope,
+	Scope: 'scope,
+	StopTokenImpl: 'scope,
+        Rcv: 'scope;
 
     fn connect<'scope>(
         self,
@@ -690,8 +702,14 @@ where
     TS::Scheduler: Send,
     TS::Value: 'static + Send,
     Rcv: ReceiverOf<TS::Scheduler, TS::Value>,
+    StopTokenImpl: StopToken,
 {
-    type Output<'scope> = TS::Output<'scope> where 'a: 'scope, Scope: 'scope, Rcv: 'scope;
+    type Output<'scope> = TS::Output<'scope>
+    where
+        'a: 'scope,
+        Scope: 'scope,
+        StopTokenImpl: 'scope,
+        Rcv: 'scope;
 
     fn connect<'scope>(
         self,
@@ -702,6 +720,7 @@ where
     where
         'a: 'scope,
         Scope: 'scope,
+        StopTokenImpl: 'scope,
         Rcv: 'scope,
     {
         self.ts.connect(

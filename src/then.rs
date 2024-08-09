@@ -1,6 +1,7 @@
 use crate::errors::{Error, Result};
 use crate::functor::{Closure, Functor, NoErrFunctor};
 use crate::scheduler::Scheduler;
+use crate::stop_token::StopToken;
 use crate::traits::{BindSender, Receiver, ReceiverOf, Sender, TypedSender, TypedSenderConnect};
 use crate::tuple::Tuple;
 use std::marker::PhantomData;
@@ -187,11 +188,13 @@ where
     NestedSender::Value: 'a,
     FnType: 'a + Functor<'a, NestedSender::Value, Output = Result<Out>>,
     Out: 'a + Tuple,
+    StopTokenImpl: StopToken,
 {
     type Output<'scope> = NestedSender::Output<'scope>
     where
         'a: 'scope,
         ScopeImpl: 'scope,
+        StopTokenImpl: 'scope,
         ReceiverImpl: 'scope;
 
     fn connect<'scope>(
@@ -203,6 +206,7 @@ where
     where
         'a: 'scope,
         ScopeImpl: 'scope,
+        StopTokenImpl: 'scope,
         ReceiverImpl: 'scope,
     {
         let wrapped_receiver = ThenWrappedReceiver {

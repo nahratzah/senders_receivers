@@ -1,6 +1,6 @@
 use crate::errors::Error;
 use crate::scheduler::Scheduler;
-use crate::stop_token::NeverStopToken;
+use crate::stop_token::{NeverStopToken, StopToken};
 use crate::traits::{
     BindSender, OperationState, Receiver, ReceiverOf, Sender, TypedSender, TypedSenderConnect,
 };
@@ -112,11 +112,13 @@ where
             ContinuingReceiverWrapper<ReceiverType, Sch::LocalScheduler, NestedSender::Value>,
         >,
     ScopeImpl: Clone,
+    StopTokenImpl: StopToken,
 {
     type Output<'scope> = NestedSender::Output<'scope>
     where
         'a: 'scope,
         ScopeImpl: 'scope,
+        StopTokenImpl: 'scope,
         ReceiverType: 'scope;
 
     fn connect<'scope>(
@@ -128,6 +130,7 @@ where
     where
         'a: 'scope,
         ScopeImpl: 'scope,
+        StopTokenImpl: 'scope,
         ReceiverType: 'scope,
     {
         let receiver = ReceiverWrapper {

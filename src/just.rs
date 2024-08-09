@@ -1,5 +1,6 @@
 use crate::errors::Error;
 use crate::scheduler::{ImmediateScheduler, Scheduler, WithScheduler};
+use crate::stop_token::StopToken;
 use crate::traits::{BindSender, Receiver, ReceiverOf, TypedSender, TypedSenderConnect};
 use crate::tuple::Tuple;
 use std::marker::PhantomData;
@@ -82,6 +83,7 @@ where
         StopTokenImpl,
         ReceiverWrapper<'a, ReceiverType, Sch::LocalScheduler, Tpl>,
     >,
+    StopTokenImpl: StopToken,
 {
     type Output<'scope> = <<Sch as Scheduler>::Sender
         as
@@ -95,6 +97,7 @@ where
     where
         'a: 'scope,
         ScopeImpl: 'scope,
+        StopTokenImpl: 'scope,
         ReceiverType: 'scope;
 
     fn connect<'scope>(
@@ -106,6 +109,7 @@ where
     where
         'a: 'scope,
         ScopeImpl: 'scope,
+        StopTokenImpl: 'scope,
         ReceiverType: 'scope,
     {
         let receiver = ReceiverWrapper {

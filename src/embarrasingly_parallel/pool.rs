@@ -7,7 +7,7 @@ use crate::refs;
 use crate::scheduler::{ImmediateScheduler, Scheduler};
 use crate::scope::ScopeWrapSend;
 use crate::start_detached::StartDetached;
-use crate::stop_token::NeverStopToken;
+use crate::stop_token::{NeverStopToken, StopToken};
 use crate::traits::{BindSender, OperationState, ReceiverOf, TypedSender, TypedSenderConnect};
 use rand::Rng;
 use std::io;
@@ -174,6 +174,7 @@ impl<'a, ScopeImpl, StopTokenImpl, ReceiverType>
 where
     ReceiverType: ReceiverOf<ThreadLocalPool, ()> + Send,
     ScopeImpl: ScopeWrapSend<ThreadLocalPool, ReceiverType>,
+    StopTokenImpl: StopToken,
 {
     type Output<'scope> = ThreadPoolOperationState<
         'scope,
@@ -183,6 +184,7 @@ where
     where
         'a: 'scope,
         ScopeImpl: 'scope,
+        StopTokenImpl: 'scope,
         ReceiverType: 'scope;
 
     fn connect<'scope>(
@@ -194,6 +196,7 @@ where
     where
         'a: 'scope,
         ScopeImpl: 'scope,
+        StopTokenImpl: 'scope,
         ReceiverType: 'scope,
     {
         ThreadPoolOperationState {

@@ -1,5 +1,6 @@
 use crate::errors::Error;
 use crate::scheduler::{ImmediateScheduler, Scheduler, WithScheduler};
+use crate::stop_token::StopToken;
 use crate::traits::{
     BindSender, OperationState, Receiver, ReceiverOf, TypedSender, TypedSenderConnect,
 };
@@ -67,11 +68,13 @@ where
     Sch: Scheduler,
     Tpl: Tuple,
     ReceiverType: ReceiverOf<Sch::LocalScheduler, Tpl> + 'a,
+    StopTokenImpl: StopToken,
 {
     type Output<'scope> = JustErrorOperationState<'scope, ReceiverType>
     where
         'a: 'scope,
         ScopeImpl: 'scope,
+        StopTokenImpl: 'scope,
         ReceiverType: 'scope;
 
     fn connect<'scope>(
@@ -83,6 +86,7 @@ where
     where
         'a: 'scope,
         ScopeImpl: 'scope,
+        StopTokenImpl: 'scope,
         ReceiverType: 'scope,
     {
         JustErrorOperationState {

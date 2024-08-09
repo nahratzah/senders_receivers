@@ -5,13 +5,10 @@ use crate::scheduler::Scheduler;
 use crate::scope::detached_scope;
 use crate::scope::ScopeImpl;
 use crate::scope::{ScopeDataSendPtr, ScopeWrap, ScopeWrapSend};
-use crate::stop_token::NeverStopToken;
-use crate::traits::BindSender;
-use crate::traits::OperationState;
-use crate::traits::Receiver;
-use crate::traits::ReceiverOf;
-use crate::traits::TypedSender;
-use crate::traits::TypedSenderConnect;
+use crate::stop_token::{NeverStopToken, StopToken};
+use crate::traits::{
+    BindSender, OperationState, Receiver, ReceiverOf, TypedSender, TypedSenderConnect,
+};
 use crate::tuple::Tuple;
 use std::cell::RefCell;
 use std::error;
@@ -130,18 +127,21 @@ where
     <TS::Scheduler as Scheduler>::Sender:
         for<'b> TypedSenderConnect<'b, Scope, NeverStopToken, WrapValue<TS::Value, Rcv>>,
     Scope: Clone + ScopeWrap<ImmediateScheduler, ReceiverWrapper<TS::Scheduler, TS::Value, Rcv>>,
+    StopTokenImpl: StopToken,
     Rcv: ReceiverOf<TS::Scheduler, TS::Value>,
 {
     type Output<'scope> = SplitOpState<'scope, 'a, TS::Scheduler, TS::Value, TS::Output<'a>, Scope, Rcv>
     where
         'a: 'scope,
         Scope: 'scope,
+        StopTokenImpl: 'scope,
         Rcv: 'scope;
 
     fn connect<'scope>(self, scope: &Scope, _: StopTokenImpl, rcv: Rcv) -> Self::Output<'scope>
     where
         'a: 'scope,
         Scope: 'scope,
+        StopTokenImpl: 'scope,
         Rcv: 'scope,
     {
         SplitOpState::new(self.opstate, self.state, scope.clone(), rcv)
@@ -273,18 +273,21 @@ where
         + ScopeWrapSend<ImmediateScheduler, ReceiverWrapperSend<TS::Scheduler, TS::Value, Rcv>>
         + Send,
     Scope::WrapSendOutput: Send,
+    StopTokenImpl: StopToken,
     Rcv: ReceiverOf<TS::Scheduler, TS::Value> + Send,
 {
     type Output<'scope> = SplitOpStateSend<'scope, 'a, TS::Scheduler, TS::Value, TS::Output<'a>, Scope, Rcv>
     where
         'a: 'scope,
         Scope: 'scope,
+        StopTokenImpl: 'scope,
         Rcv: 'scope;
 
     fn connect<'scope>(self, scope: &Scope, _: StopTokenImpl, rcv: Rcv) -> Self::Output<'scope>
     where
         'a: 'scope,
         Scope: 'scope,
+        StopTokenImpl: 'scope,
         Rcv: 'scope,
     {
         SplitOpStateSend::new(self.opstate, self.state, scope.clone(), rcv)
