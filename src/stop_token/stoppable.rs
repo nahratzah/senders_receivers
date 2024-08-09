@@ -276,7 +276,7 @@ where
         Self(Some(f), stacktrace)
     }
 
-    fn into_inner(&mut self) -> Option<F> {
+    fn move_functor(&mut self) -> Option<F> {
         self.0.take()
     }
 }
@@ -286,13 +286,13 @@ where
     F: 'static + FnOnce(),
 {
     fn invoke(&mut self) {
-        if let Some(f) = self.into_inner() {
+        if let Some(f) = self.move_functor() {
             f()
         }
     }
 
     fn clear(&mut self) {
-        drop(self.into_inner())
+        drop(self.move_functor())
     }
 }
 

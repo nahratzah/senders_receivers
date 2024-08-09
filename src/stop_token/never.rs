@@ -31,9 +31,10 @@ mod tests {
     use super::{NeverStopToken, StopToken, StopTokenCallback};
 
     #[test]
+    #[allow(clippy::assertions_on_constants)]
     fn it_works() {
-        assert_eq!(false, NeverStopToken::STOP_POSSIBLE);
-        assert_eq!(false, NeverStopToken.stop_requested());
+        assert!(!NeverStopToken::STOP_POSSIBLE);
+        assert!(!NeverStopToken.stop_requested());
         assert!(NeverStopToken.callback(|| ()).is_ok());
     }
 }
