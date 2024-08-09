@@ -263,6 +263,7 @@ mod ensure_started;
 mod let_done;
 mod let_error;
 mod split;
+pub mod stop_token;
 
 pub use ensure_started::{ensure_started, ensure_started_send};
 pub use errors::{new_error, Error, Result};
