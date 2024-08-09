@@ -12,7 +12,7 @@
 //! assert!(!token.stop_requested()); // The token is used to observe the source.
 //!
 //! // Once the source is stopped, the token will reflect this:
-//! source.request_cancel();
+//! source.request_stop();
 //! assert!(token.stop_requested());
 //! ```
 //!
@@ -25,7 +25,7 @@
 //! let token = source.token();
 //! let my_callback = token.callback(|| println!("the source was stopped"));
 //!
-//! source.request_cancel(); // Prints "the source was stopped".
+//! source.request_stop(); // Prints "the source was stopped".
 //! ```
 
 mod never;

@@ -24,8 +24,8 @@ impl Default for StopSource {
 
 impl StopSource {
     /// Request that any sender-chains be canceled.
-    pub fn request_cancel(&self) {
-        self.state.request_cancel()
+    pub fn request_stop(&self) {
+        self.state.request_stop()
     }
 
     /// Get the [StopToken] for this.
@@ -55,8 +55,8 @@ impl Default for StopSourceSend {
 
 impl StopSourceSend {
     /// Request that any sender-chains be canceled.
-    pub fn request_cancel(&self) {
-        self.state.request_cancel()
+    pub fn request_stop(&self) {
+        self.state.request_stop()
     }
 
     /// Get the [StopToken] for this.
@@ -172,7 +172,7 @@ struct StopSourceState {
 }
 
 impl StopSourceState {
-    fn request_cancel(&self) {
+    fn request_stop(&self) {
         self.stopped.store(true, Ordering::Relaxed);
         for callback in &mut *self.callbacks.lock().unwrap() {
             callback.invoke();
@@ -219,7 +219,7 @@ struct StopSourceSendState {
 }
 
 impl StopSourceSendState {
-    fn request_cancel(&self) {
+    fn request_stop(&self) {
         self.stopped.store(true, Ordering::Relaxed);
         for callback in &mut *self.callbacks.lock().unwrap() {
             callback.invoke();
@@ -343,7 +343,7 @@ mod tests {
             assert!(get_stop_possible(&token));
             assert!(!token.stop_requested(), "source should not be stopped");
 
-            source.request_cancel();
+            source.request_stop();
             assert!(
                 token.stop_requested(),
                 "source should be marked stopped, now that we've requested it"
@@ -368,7 +368,7 @@ mod tests {
                 "should not yet be called, because the source isn't stopped"
             );
 
-            source.request_cancel();
+            source.request_stop();
             assert!(
                 cb_state.is_called(),
                 "should have been called, because we requested stop"
@@ -396,7 +396,7 @@ mod tests {
             );
             drop(cb); // Drop the callback. This should deregister it.
 
-            source.request_cancel();
+            source.request_stop();
             assert!(!cb_state.is_called(), "should not be called at all, because we deregistered the callback prior to requesting stop");
         }
     }
@@ -473,7 +473,7 @@ mod tests {
         /// Request the stop in another thread, so that Send will complain if we lack it.
         fn req_cancel_in_thread(source: &StopSourceSend) {
             let source = source.clone();
-            thread::spawn(move || source.request_cancel())
+            thread::spawn(move || source.request_stop())
                 .join()
                 .expect("thread completes successfully")
         }
