@@ -256,8 +256,10 @@ pub mod tuple;
 mod upon_done;
 mod upon_error;
 #[macro_use]
-mod when_all;
+#[doc(hidden)]
+pub mod when_all;
 #[macro_use]
+#[doc(hidden)]
 mod when_all_transfer;
 mod ensure_started;
 mod let_done;
@@ -286,8 +288,6 @@ pub use traits::{
 pub use transfer::Transfer;
 pub use upon_done::UponDone;
 pub use upon_error::UponError;
-#[doc(hidden)]
-pub use when_all::WhenAll;
 #[doc(hidden)]
 pub use when_all_transfer::{
     NoSchedulerReceiver, NoSchedulerSender, NoSchedulerSenderImpl, NoSchedulerSenderValue,
