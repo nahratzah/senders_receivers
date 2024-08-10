@@ -260,7 +260,7 @@ mod upon_error;
 pub mod when_all;
 #[macro_use]
 #[doc(hidden)]
-pub mod when_all_transfer;
+pub mod transfer_when_all;
 mod ensure_started;
 mod let_done;
 mod let_error;

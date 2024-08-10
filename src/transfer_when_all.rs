@@ -28,23 +28,23 @@ use std::sync::{Arc, Mutex};
 ///
 /// # Example
 /// ```
-/// use senders_receivers::{when_all_transfer, Just, SyncWaitSend};
+/// use senders_receivers::{transfer_when_all, Just, SyncWaitSend};
 /// use threadpool::ThreadPool;
 ///
 /// let pool = threadpool::ThreadPool::with_name("example".into(), 1);
 /// assert_eq!(
 ///     (1, 2, 3, 4),
-///     when_all_transfer!(pool, Just::from((1, 2)), Just::from((3, 4))).sync_wait_send().unwrap().unwrap());
+///     transfer_when_all!(pool, Just::from((1, 2)), Just::from((3, 4))).sync_wait_send().unwrap().unwrap());
 /// ```
 ///
 /// ```
-/// use senders_receivers::{when_all_transfer, Just, SyncWaitSend};
+/// use senders_receivers::{transfer_when_all, Just, SyncWaitSend};
 /// use threadpool::ThreadPool;
 ///
 /// let pool = threadpool::ThreadPool::with_name("example".into(), 1);
 /// assert_eq!(
 ///     (1, 2, 3, 4, 5, 6, 7, 8, 9),
-///     when_all_transfer!(
+///     transfer_when_all!(
 ///         pool,
 ///         Just::from((1, 2)),
 ///         Just::from((3, 4)),
@@ -63,7 +63,7 @@ use std::sync::{Arc, Mutex};
 /// let pool = threadpool::ThreadPool::with_name("example".into(), 1);
 /// assert_eq!(
 ///     (1, 2, 3, 4, 5, 6, 7, 8, 9),
-///     senders_receivers::when_all_transfer!(
+///     senders_receivers::transfer_when_all!(
 ///         pool,
 ///         Just::from((1, 2)),
 ///         Just::from((3, 4)),
@@ -75,35 +75,35 @@ use std::sync::{Arc, Mutex};
 ///
 /// Unlike [when_all!](crate::when_all!), the macro also works if you have no senders:
 /// ```
-/// use senders_receivers::{when_all_transfer, SyncWaitSend};
+/// use senders_receivers::{transfer_when_all, SyncWaitSend};
 /// use threadpool::ThreadPool;
 ///
 /// let pool = threadpool::ThreadPool::with_name("example".into(), 1);
 /// assert_eq!(
 ///     (),
-///     when_all_transfer!(pool).sync_wait_send().unwrap().unwrap());
+///     transfer_when_all!(pool).sync_wait_send().unwrap().unwrap());
 /// ```
 #[macro_export]
-macro_rules! when_all_transfer {
+macro_rules! transfer_when_all {
     ($scheduler:expr $(,)?) => {{
         use senders_receivers::Scheduler;
         $scheduler.schedule()
     }};
     ($scheduler:expr, $typed_sender_0:expr, $($senders:expr),* $(,)?) => {{
         use senders_receivers;
-        use senders_receivers::when_all_transfer;
-        use senders_receivers::when_all_transfer::NoSchedulerSenderValue;
+        use senders_receivers::transfer_when_all;
+        use senders_receivers::transfer_when_all::NoSchedulerSenderValue;
 
         let stop_source = senders_receivers::stop_token::StopSource::default();
-        when_all_transfer::NoSchedulerSenderImpl::new(stop_source.clone(), $typed_sender_0)
-            $(.cat(when_all_transfer::NoSchedulerSenderImpl::new(stop_source.clone(), $senders)))*
+        transfer_when_all::NoSchedulerSenderImpl::new(stop_source.clone(), $typed_sender_0)
+            $(.cat(transfer_when_all::NoSchedulerSenderImpl::new(stop_source.clone(), $senders)))*
             .schedule(stop_source, $scheduler)
     }};
 }
 
 /// A [TypedSender] trait, except it lacks a [Scheduler](TypedSender::Scheduler) type.
 ///
-/// It also implements the functions required by the [when_all_transfer!] macro.
+/// It also implements the functions required by the [transfer_when_all!] macro.
 pub trait NoSchedulerSenderValue {
     /// The value type that this sender will create.
     type Value: Tuple;

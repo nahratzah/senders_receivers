@@ -25,7 +25,7 @@ use std::sync::{Arc, Mutex};
 ///
 /// # Note
 /// The `when_all!` macro does not transfer scheduler, and therefore requires that all of its senders use the same scheduler type.
-/// If you need to combine multiple senders that use different schedulers, consider using [when_all_transfer!](crate::when_all_transfer!).
+/// If you need to combine multiple senders that use different schedulers, consider using [transfer_when_all!](crate::transfer_when_all!).
 ///
 /// # Example
 /// ```
