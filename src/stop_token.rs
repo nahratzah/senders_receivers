@@ -27,19 +27,22 @@
 //!
 //! source.request_stop(); // Prints "the source was stopped".
 //! ```
+//!
+//! # Bugs
+//! This should really be a separate crate. :/
 
 mod never;
 mod stoppable;
 
 pub use never::NeverStopToken;
-pub use stoppable::{StopSource, StopSourceSend, StoppableToken, StoppableTokenSend};
+pub use stoppable::{StopSource, StoppableToken};
 
 /// A stop-token keeps track of if a sender-chain has been requested to stop.
 ///
 /// Stop-tokens allow two ways of checking if an operation has been canceled:
 /// - by inspecting the [StopToken::stop_requested] method
 /// - by installing a callback that'll be invoked once a stop is requested
-pub trait StopToken: Clone {
+pub trait StopToken: Send + Clone {
     /// Indicate if this stop-token can actually ever result in a stop being requested.
     const STOP_POSSIBLE: bool;
 
