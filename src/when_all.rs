@@ -16,8 +16,10 @@ use std::sync::{Arc, Mutex};
 ///
 /// If any of the senders yields an error, the returned [TypedSender] will also yield an error-signal.
 /// The first received error is forwarded, it's non-deterministic which happens to win the race.
+/// In this case, the [StopToken] passed to the wrapped sender-chains is marked as `stopped`, so that the other sender-chains can terminate early.
 ///
 /// If no sender yields an error, and any sender completes with the done signal, the returned [TypedSender] will also yield a done-signal.
+/// In this case, the [StopToken] passed to the wrapped sender-chains is marked as `stopped`, so that the other sender-chains can terminate early.
 ///
 /// Only if all senders complete with a value, will the returned [TypedSender] yield a value.
 ///
