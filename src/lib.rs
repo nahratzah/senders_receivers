@@ -260,7 +260,7 @@ mod upon_error;
 pub mod when_all;
 #[macro_use]
 #[doc(hidden)]
-mod when_all_transfer;
+pub mod when_all_transfer;
 mod ensure_started;
 mod let_done;
 mod let_error;
@@ -288,8 +288,3 @@ pub use traits::{
 pub use transfer::Transfer;
 pub use upon_done::UponDone;
 pub use upon_error::UponError;
-#[doc(hidden)]
-pub use when_all_transfer::{
-    NoSchedulerReceiver, NoSchedulerSender, NoSchedulerSenderImpl, NoSchedulerSenderValue,
-    PairwiseTS, SchedulerTS,
-};

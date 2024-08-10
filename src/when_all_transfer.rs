@@ -91,11 +91,12 @@ macro_rules! when_all_transfer {
     }};
     ($scheduler:expr, $typed_sender_0:expr, $($senders:expr),* $(,)?) => {{
         use senders_receivers;
-        use senders_receivers::NoSchedulerSenderValue;
+        use senders_receivers::when_all_transfer;
+        use senders_receivers::when_all_transfer::NoSchedulerSenderValue;
 
         let stop_source = senders_receivers::stop_token::StopSource::default();
-        senders_receivers::NoSchedulerSenderImpl::new(stop_source.clone(), $typed_sender_0)
-            $(.cat(senders_receivers::NoSchedulerSenderImpl::new(stop_source.clone(), $senders)))*
+        when_all_transfer::NoSchedulerSenderImpl::new(stop_source.clone(), $typed_sender_0)
+            $(.cat(when_all_transfer::NoSchedulerSenderImpl::new(stop_source.clone(), $senders)))*
             .schedule(stop_source, $scheduler)
     }};
 }
