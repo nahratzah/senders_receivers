@@ -2,8 +2,8 @@ use crate::errors::Error;
 use crate::just::Just;
 use crate::scheduler::{ImmediateScheduler, Scheduler, WithScheduler};
 use crate::scope::{ScopeWrap, ScopeWrapSend};
-use crate::start_detached::StartDetached;
-use crate::stop_token::{NeverStopToken, StopToken};
+use crate::start_detached::StartDetachedWithStopToken;
+use crate::stop_token::{NeverStopToken, StopSource, StopToken, StoppableToken};
 use crate::traits::{
     BindSender, OperationState, Receiver, ReceiverOf, Sender, TypedSender, TypedSenderConnect,
 };
@@ -24,6 +24,8 @@ use std::sync::{Arc, Mutex};
 /// This function does not require the sender argument to implement [Send],
 /// but as a consequence the returned sender will also not implement [Send].
 /// If you do need to send this across threads, or the sender uses a scheduler that does, use [ensure_started_send] instead.
+///
+/// The [StopToken] from the later attached operation, will be propagated into the earlier started sender chain.
 ///
 /// Example:
 /// ```
@@ -51,14 +53,15 @@ pub fn ensure_started<TS>(ts: TS) -> EnsureStartedTS<TS::Scheduler, TS::Value>
 where
     TS: 'static + TypedSender + BitOr<StateSender<TS::Scheduler, TS::Value>>,
     TS::Value: 'static,
-    TS::Output: StartDetached,
+    TS::Output: StartDetachedWithStopToken<StoppableToken>,
 {
+    let stop_source = StopSource::default();
     let state = Rc::new(State::default());
     (ts | StateSender {
         state: state.clone(),
     })
-    .start_detached();
-    EnsureStartedTS::from(state)
+    .start_detached_with_stop_token(stop_source.token());
+    EnsureStartedTS::new(stop_source, state)
 }
 
 /// Start the sender-chain, while allowing for attaching further elements.
@@ -71,6 +74,8 @@ where
 /// This function requires the sender argument to implement [Send],
 /// and the returned sender will also implement [Send].
 /// [ensure_started] is the counterpart that doesn't have the [Send] requirement.
+///
+/// The [StopToken] from the later attached operation, will be propagated into the earlier started sender chain.
 ///
 /// Example:
 /// ```
@@ -101,14 +106,15 @@ where
     TS: 'static + TypedSender + BitOr<StateSenderSend<TS::Scheduler, TS::Value>>,
     TS::Scheduler: Send,
     TS::Value: 'static + Send,
-    TS::Output: StartDetached,
+    TS::Output: StartDetachedWithStopToken<StoppableToken>,
 {
+    let stop_source = StopSource::default();
     let state = Arc::new(StateSend::default());
     (ts | StateSenderSend {
         state: state.clone(),
     })
-    .start_detached();
-    EnsureStartedSendTS::from(state)
+    .start_detached_with_stop_token(stop_source.token());
+    EnsureStartedSendTS::new(stop_source, state)
 }
 
 pub struct EnsureStartedTS<Sch, Value>
@@ -116,16 +122,17 @@ where
     Sch: Scheduler<LocalScheduler = Sch>,
     Value: 'static + Tuple,
 {
+    stop_source: StopSource,
     state: StatePtr<Sch, Value>,
 }
 
-impl<Sch, Value> From<StatePtr<Sch, Value>> for EnsureStartedTS<Sch, Value>
+impl<Sch, Value> EnsureStartedTS<Sch, Value>
 where
     Sch: Scheduler<LocalScheduler = Sch>,
     Value: 'static + Tuple,
 {
-    fn from(state: StatePtr<Sch, Value>) -> Self {
-        Self { state }
+    fn new(stop_source: StopSource, state: StatePtr<Sch, Value>) -> Self {
+        Self { stop_source, state }
     }
 }
 
@@ -173,13 +180,26 @@ where
         StopTokenImpl: 'scope,
         Rcv: 'scope;
 
-    fn connect<'scope>(self, scope: &Scope, _: StopTokenImpl, rcv: Rcv) -> Self::Output<'scope>
+    fn connect<'scope>(
+        self,
+        scope: &Scope,
+        stop_token: StopTokenImpl,
+        rcv: Rcv,
+    ) -> Self::Output<'scope>
     where
         'a: 'scope,
         Scope: 'scope,
         StopTokenImpl: 'scope,
         Rcv: 'scope,
     {
+        if StopTokenImpl::STOP_POSSIBLE {
+            let stop_source = self.stop_source;
+            if let Err(f) = stop_token.detached_callback(move || stop_source.request_stop()) {
+                // Already stopped, so just run the callback to propagate the stop-request.
+                f();
+            }
+        }
+
         EnsureStartedOpstate {
             phantom: PhantomData,
             state: self.state,
@@ -194,16 +214,17 @@ where
     Sch: Scheduler<LocalScheduler = Sch> + Send,
     Value: 'static + Tuple + Send,
 {
+    stop_source: StopSource,
     state: StateSendPtr<Sch, Value>,
 }
 
-impl<Sch, Value> From<StateSendPtr<Sch, Value>> for EnsureStartedSendTS<Sch, Value>
+impl<Sch, Value> EnsureStartedSendTS<Sch, Value>
 where
     Sch: Scheduler<LocalScheduler = Sch> + Send,
     Value: 'static + Tuple + Send,
 {
-    fn from(state: StateSendPtr<Sch, Value>) -> Self {
-        Self { state }
+    fn new(stop_source: StopSource, state: StateSendPtr<Sch, Value>) -> Self {
+        Self { stop_source, state }
     }
 }
 
@@ -251,13 +272,26 @@ where
         StopTokenImpl: 'scope,
         Rcv: 'scope;
 
-    fn connect<'scope>(self, scope: &Scope, _: StopTokenImpl, rcv: Rcv) -> Self::Output<'scope>
+    fn connect<'scope>(
+        self,
+        scope: &Scope,
+        stop_token: StopTokenImpl,
+        rcv: Rcv,
+    ) -> Self::Output<'scope>
     where
         'a: 'scope,
         Scope: 'scope,
         StopTokenImpl: 'scope,
         Rcv: 'scope,
     {
+        if StopTokenImpl::STOP_POSSIBLE {
+            let stop_source = self.stop_source;
+            if let Err(f) = stop_token.detached_callback(move || stop_source.request_stop()) {
+                // Already stopped, so just run the callback to propagate the stop-request.
+                f();
+            }
+        }
+
         EnsureStartedSendOpstate {
             phantom: PhantomData,
             state: self.state,

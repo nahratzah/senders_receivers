@@ -1,7 +1,7 @@
 use crate::errors::Error;
 use crate::scheduler::Scheduler;
 use crate::scope::{detached_scope, ScopeDataSendPtr, ScopeImpl};
-use crate::stop_token::NeverStopToken;
+use crate::stop_token::{NeverStopToken, StopToken};
 use crate::traits::{OperationState, Receiver, ReceiverOf, TypedSenderConnect};
 use crate::tuple::Tuple;
 
@@ -16,16 +16,36 @@ pub trait StartDetached {
 
 impl<T> StartDetached for T
 where
-    T: TypedSenderConnect<'static, ScopeImpl<ScopeDataSendPtr>, NeverStopToken, DiscardingReceiver>,
+    T: StartDetachedWithStopToken<NeverStopToken>,
 {
     fn start_detached(self) {
+        self.start_detached_with_stop_token(NeverStopToken)
+    }
+}
+
+/// The [StartDetached] operation, but with an associated [StopToken] to allow for stopping the operation.
+pub trait StartDetachedWithStopToken<StopTokenImpl>
+where
+    StopTokenImpl: StopToken,
+{
+    /// Start an operation, but don't wait for its completion.
+    ///
+    /// If the operation completes with an error signal, the code will panic.
+    /// Otherwise (value or done signal), the code will complete normally.
+    ///
+    /// The provided [StopToken] can be used to request the operation to stop early.
+    fn start_detached_with_stop_token(self, stop_token: StopTokenImpl);
+}
+
+impl<StopTokenImpl, T> StartDetachedWithStopToken<StopTokenImpl> for T
+where
+    StopTokenImpl: StopToken,
+    T: TypedSenderConnect<'static, ScopeImpl<ScopeDataSendPtr>, StopTokenImpl, DiscardingReceiver>,
+{
+    fn start_detached_with_stop_token(self, stop_token: StopTokenImpl) {
         detached_scope(move |scope: &ScopeImpl<ScopeDataSendPtr>| {
-            self.connect(
-                scope,
-                NeverStopToken,
-                DiscardingReceiver { completed: false },
-            )
-            .start();
+            self.connect(scope, stop_token, DiscardingReceiver { completed: false })
+                .start();
         })
     }
 }

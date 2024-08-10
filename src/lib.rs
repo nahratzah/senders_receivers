@@ -278,7 +278,7 @@ pub use let_error::LetError;
 pub use let_value::LetValue;
 pub use scheduler::{ImmediateScheduler, Scheduler, WithScheduler};
 pub use split::{SharedError, Split, SplitSend};
-pub use start_detached::StartDetached;
+pub use start_detached::{StartDetached, StartDetachedWithStopToken};
 pub use stop_if_requested::StopIfRequested;
 pub use sync_wait::{SyncWait, SyncWaitSend};
 pub use then::Then;
