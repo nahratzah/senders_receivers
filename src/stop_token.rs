@@ -39,7 +39,7 @@ pub use stoppable::{StopSource, StoppableToken};
 
 /// A stop-token keeps track of if a sender-chain has been requested to stop.
 ///
-/// Stop-tokens allow two ways of checking if an operation has been canceled:
+/// Stop-tokens allow two ways of checking if an operation has been stopped:
 /// - by inspecting the [StopToken::stop_requested] method
 /// - by installing a callback that'll be invoked once a stop is requested
 pub trait StopToken: Send + Clone {
@@ -52,7 +52,7 @@ pub trait StopToken: Send + Clone {
     /// Callback type, that holds on to the callback function.
     ///
     /// A callback wraps a function that is invoked when the stop-token is marked as stopped.
-    /// Dropping the callback will deregister it, but if a cancelation is requested on a different thread,
+    /// Dropping the callback will deregister it, but if a stopped is requested on a different thread,
     /// the callback invocation may happen anyway.
     type CallbackType: StopCallback;
 

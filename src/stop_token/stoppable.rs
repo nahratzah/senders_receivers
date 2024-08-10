@@ -20,8 +20,25 @@ impl Default for StopSource {
     }
 }
 
+impl<StopTokenImpl> From<StopTokenImpl> for StopSource
+where
+    StopTokenImpl: StopToken,
+{
+    /// Create a new [StopSource], and make it so it'll be stopped when the [StopToken] is stopped.
+    fn from(stop_token: StopTokenImpl) -> Self {
+        let new_stop_source = Self::default();
+        if StopTokenImpl::STOP_POSSIBLE {
+            let new_stop_source = new_stop_source.clone();
+            if let Err(f) = stop_token.detached_callback(move || new_stop_source.request_stop()) {
+                f(); // stop_token is already stopped, so just stop the new stop source (by running the function).
+            };
+        }
+        new_stop_source
+    }
+}
+
 impl StopSource {
-    /// Request that any sender-chains be canceled.
+    /// Request that any sender-chains be stopped.
     pub fn request_stop(&self) {
         self.state.request_stop()
     }
@@ -59,7 +76,7 @@ impl StopToken for StoppableToken {
 
 pub struct StoppableCallback {
     state: Weak<StopSourceState>,
-    cancelation_slot: usize,
+    callback_slot: usize,
 }
 
 impl StoppableCallback {
@@ -68,9 +85,9 @@ impl StoppableCallback {
         F: 'static + Send + FnOnce(),
     {
         let stacktrace = Backtrace::capture();
-        state.register(f, stacktrace).map(|cancelation_slot| Self {
+        state.register(f, stacktrace).map(|callback_slot| Self {
             state: Arc::downgrade(state),
-            cancelation_slot,
+            callback_slot,
         })
     }
 }
@@ -78,7 +95,7 @@ impl StoppableCallback {
 impl StopCallback for StoppableCallback {
     fn detach(&mut self) {
         self.state = Weak::new();
-        self.cancelation_slot = usize::MAX;
+        self.callback_slot = usize::MAX;
     }
 }
 
@@ -86,7 +103,7 @@ impl Default for StoppableCallback {
     fn default() -> Self {
         Self {
             state: Weak::new(),
-            cancelation_slot: usize::MAX,
+            callback_slot: usize::MAX,
         }
     }
 }
@@ -94,7 +111,7 @@ impl Default for StoppableCallback {
 impl Drop for StoppableCallback {
     fn drop(&mut self) {
         if let Some(state) = self.state.upgrade() {
-            state.deregister(self.cancelation_slot);
+            state.deregister(self.callback_slot);
         }
     }
 }
@@ -131,9 +148,9 @@ impl StopSourceState {
         Ok(index)
     }
 
-    fn deregister(&self, cancelation_slot: usize) {
+    fn deregister(&self, callback_slot: usize) {
         let mut callbacks = self.callbacks.lock().unwrap();
-        callbacks[cancelation_slot].clear();
+        callbacks[callback_slot].clear();
     }
 }
 
@@ -228,7 +245,7 @@ mod tests {
         assert!(get_stop_possible(&token));
         assert!(!token.stop_requested(), "source should not be stopped");
 
-        req_cancel_in_thread(&source);
+        req_stop_in_thread(&source);
         assert!(
             token.stop_requested(),
             "source should be marked stopped, now that we've requested it"
@@ -253,7 +270,7 @@ mod tests {
             "should not yet be called, because the source isn't stopped"
         );
 
-        req_cancel_in_thread(&source);
+        req_stop_in_thread(&source);
         assert!(
             cb_state.is_called(),
             "should have been called, because we requested stop"
@@ -281,12 +298,12 @@ mod tests {
         );
         drop(cb); // Drop the callback. This should deregister it.
 
-        req_cancel_in_thread(&source);
+        req_stop_in_thread(&source);
         assert!(!cb_state.is_called(), "should not be called at all, because we deregistered the callback prior to requesting stop");
     }
 
     /// Request the stop in another thread, so that Send will complain if we lack it.
-    fn req_cancel_in_thread(source: &StopSource) {
+    fn req_stop_in_thread(source: &StopSource) {
         let source = source.clone();
         thread::spawn(move || source.request_stop())
             .join()
