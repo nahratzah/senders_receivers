@@ -1,8 +1,8 @@
-use super::{StopToken, StopTokenCallback};
+use super::{StopCallback, StopToken};
 use std::backtrace::Backtrace;
 use std::fmt;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, Weak};
 
 /// A source for a [StopToken].
 ///
@@ -46,21 +46,19 @@ impl StopToken for StoppableToken {
     fn stop_requested(&self) -> bool {
         self.state.stop_requested()
     }
-}
 
-impl<F> StopTokenCallback<F> for StoppableToken
-where
-    F: 'static + Send + FnOnce(),
-{
     type CallbackType = StoppableCallback;
 
-    fn callback(&self, f: F) -> Result<Self::CallbackType, F> {
+    fn callback<F>(&self, f: F) -> Result<Self::CallbackType, F>
+    where
+        F: 'static + Send + FnOnce(),
+    {
         StoppableCallback::new(&self.state, f)
     }
 }
 
 pub struct StoppableCallback {
-    state: Arc<StopSourceState>,
+    state: Weak<StopSourceState>,
     cancelation_slot: usize,
 }
 
@@ -71,15 +69,33 @@ impl StoppableCallback {
     {
         let stacktrace = Backtrace::capture();
         state.register(f, stacktrace).map(|cancelation_slot| Self {
-            state: state.clone(),
+            state: Arc::downgrade(state),
             cancelation_slot,
         })
     }
 }
 
+impl StopCallback for StoppableCallback {
+    fn detach(&mut self) {
+        self.state = Weak::new();
+        self.cancelation_slot = usize::MAX;
+    }
+}
+
+impl Default for StoppableCallback {
+    fn default() -> Self {
+        Self {
+            state: Weak::new(),
+            cancelation_slot: usize::MAX,
+        }
+    }
+}
+
 impl Drop for StoppableCallback {
     fn drop(&mut self) {
-        self.state.deregister(self.cancelation_slot);
+        if let Some(state) = self.state.upgrade() {
+            state.deregister(self.cancelation_slot);
+        }
     }
 }
 
@@ -200,7 +216,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::{StopSource, StopToken, StopTokenCallback};
+    use super::{StopSource, StopToken};
     use std::sync::{Arc, Mutex};
     use std::thread;
 

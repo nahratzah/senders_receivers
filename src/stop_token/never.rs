@@ -1,4 +1,4 @@
-use super::{StopToken, StopTokenCallback};
+use super::{StopCallback, StopToken};
 
 /// A [StopToken] that cannot be marked `stopped`.
 #[derive(Clone, Debug)]
@@ -10,25 +10,40 @@ impl StopToken for NeverStopToken {
     fn stop_requested(&self) -> bool {
         false
     }
-}
 
-impl<F> StopTokenCallback<F> for NeverStopToken
-where
-    F: 'static + FnOnce(),
-{
     type CallbackType = NeverStopCallback;
 
-    fn callback(&self, _: F) -> Result<Self::CallbackType, F> {
+    fn callback<F>(&self, _: F) -> Result<Self::CallbackType, F>
+    where
+        F: 'static + Send + FnOnce(),
+    {
         Ok(NeverStopCallback)
+    }
+
+    fn detached_callback<F>(&self, _: F) -> Result<(), F>
+    where
+        F: 'static + Send + FnOnce(),
+    {
+        Ok(())
     }
 }
 
 #[derive(Debug)]
 pub struct NeverStopCallback;
 
+impl Default for NeverStopCallback {
+    fn default() -> Self {
+        NeverStopCallback
+    }
+}
+
+impl StopCallback for NeverStopCallback {
+    fn detach(&mut self) {}
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{NeverStopToken, StopToken, StopTokenCallback};
+    use super::{NeverStopToken, StopToken};
 
     #[test]
     #[allow(clippy::assertions_on_constants)]

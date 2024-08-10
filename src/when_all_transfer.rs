@@ -1,6 +1,7 @@
 use crate::errors::Error;
 use crate::scheduler::Scheduler;
 use crate::stop_token::{NeverStopToken, StopToken};
+use crate::stop_token::{StopSource, StoppableToken};
 use crate::traits::{
     BindSender, OperationState, Receiver, ReceiverOf, TypedSender, TypedSenderConnect,
 };
@@ -16,8 +17,10 @@ use std::sync::{Arc, Mutex};
 ///
 /// If any of the senders yields an error, the returned [TypedSender] will also yield an error-signal.
 /// The first received error is forwarded, it's non-deterministic which happens to win the race.
+/// In this case, the [StopToken] passed to the wrapped sender-chains is marked as `stopped`, so that the other sender-chains can terminate early.
 ///
 /// If no sender yields an error, and any sender completes with the done signal, the returned [TypedSender] will also yield a done-signal.
+/// In this case, the [StopToken] passed to the wrapped sender-chains is marked as `stopped`, so that the other sender-chains can terminate early.
 ///
 /// Only if all senders complete with a value, will the returned [TypedSender] yield a value.
 ///
@@ -89,9 +92,11 @@ macro_rules! when_all_transfer {
     ($scheduler:expr, $typed_sender_0:expr, $($senders:expr),* $(,)?) => {{
         use senders_receivers;
         use senders_receivers::NoSchedulerSenderValue;
-        senders_receivers::NoSchedulerSenderImpl::from($typed_sender_0)
-            $(.cat(senders_receivers::NoSchedulerSenderImpl::from($senders)))*
-            .schedule($scheduler)
+
+        let stop_source = senders_receivers::stop_token::StopSource::default();
+        senders_receivers::NoSchedulerSenderImpl::new(stop_source.clone(), $typed_sender_0)
+            $(.cat(senders_receivers::NoSchedulerSenderImpl::new(stop_source.clone(), $senders)))*
+            .schedule(stop_source, $scheduler)
     }};
 }
 
@@ -114,41 +119,32 @@ pub trait NoSchedulerSenderValue {
     }
 
     /// Attach the scheduler type.
-    fn schedule<Sch>(self, sch: Sch) -> SchedulerTS<Sch, Self>
+    fn schedule<Sch>(self, stop_source: StopSource, sch: Sch) -> SchedulerTS<Sch, Self>
     where
         Self: Sized,
         Sch: Scheduler,
     {
-        SchedulerTS::new(sch, self)
+        SchedulerTS::new(sch, stop_source, self)
     }
 }
 
 /// A [TypedSenderConnect] trait, except it lacks a [Scheduler](TypedSender::Scheduler) type.
-pub trait NoSchedulerSender<'a, ScopeImpl, StopTokenImpl, ReceiverType>:
-    NoSchedulerSenderValue
+pub trait NoSchedulerSender<'a, ScopeImpl, ReceiverType>: NoSchedulerSenderValue
 where
     ReceiverType: NoSchedulerReceiver<<Self as NoSchedulerSenderValue>::Value>,
-    StopTokenImpl: StopToken,
 {
     /// The [OperationState] returned by [NoSchedulerSender::connect()].
     type Output<'scope>: 'scope + OperationState<'scope>
     where
         'a: 'scope,
         ScopeImpl: 'scope,
-        StopTokenImpl: 'scope,
         ReceiverType: 'scope;
 
     /// Connect a [NoSchedulerReceiver] to this sender.
-    fn connect<'scope>(
-        self,
-        scope: &ScopeImpl,
-        stop_token: StopTokenImpl,
-        rcv: ReceiverType,
-    ) -> Self::Output<'scope>
+    fn connect<'scope>(self, scope: &ScopeImpl, rcv: ReceiverType) -> Self::Output<'scope>
     where
         'a: 'scope,
         ScopeImpl: 'scope,
-        StopTokenImpl: 'scope,
         ReceiverType: 'scope;
 }
 
@@ -172,15 +168,23 @@ pub struct NoSchedulerSenderImpl<TS>
 where
     TS: TypedSender,
 {
+    stop_source: StopSource,
     sender: TS,
 }
 
-impl<TS> From<TS> for NoSchedulerSenderImpl<TS>
+impl<TS> NoSchedulerSenderImpl<TS>
 where
     TS: TypedSender,
 {
-    fn from(sender: TS) -> Self {
-        Self { sender }
+    /// Instantiate a [NoSchedulerSenderImpl].
+    ///
+    /// The [StopSource] is used to [StopSource::request_stop] if a `done` or `error` signal is emitted by the wrapped [TypedSender].
+    /// The [StopSource.token] is used passed to the [TypedSenderConnect::connect] method.
+    pub fn new(stop_source: StopSource, sender: TS) -> Self {
+        Self {
+            stop_source,
+            sender,
+        }
     }
 }
 
@@ -191,38 +195,34 @@ where
     type Value = TS::Value;
 }
 
-impl<'a, ScopeImpl, StopTokenImpl, ReceiverType, TS>
-    NoSchedulerSender<'a, ScopeImpl, StopTokenImpl, ReceiverType> for NoSchedulerSenderImpl<TS>
+impl<'a, ScopeImpl, ReceiverType, TS> NoSchedulerSender<'a, ScopeImpl, ReceiverType>
+    for NoSchedulerSenderImpl<TS>
 where
     ReceiverType: NoSchedulerReceiver<<Self as NoSchedulerSenderValue>::Value>,
     TS: TypedSender
         + TypedSenderConnect<
             'a,
             ScopeImpl,
-            StopTokenImpl,
+            StoppableToken,
             Wrap<ReceiverType, <TS as TypedSender>::Value>,
         >,
     <TS as TypedSender>::Value: 'a,
-    StopTokenImpl: StopToken,
 {
     type Output<'scope> = TS::Output<'scope>
-    where 'a:'scope,ScopeImpl:'scope,
-	StopTokenImpl:'scope,
-        ReceiverType:'scope;
-
-    fn connect<'scope>(
-        self,
-        scope: &ScopeImpl,
-        stop_token: StopTokenImpl,
-        rcv: ReceiverType,
-    ) -> Self::Output<'scope>
     where
         'a: 'scope,
         ScopeImpl: 'scope,
-        StopTokenImpl: 'scope,
+        ReceiverType: 'scope;
+
+    fn connect<'scope>(self, scope: &ScopeImpl, rcv: ReceiverType) -> Self::Output<'scope>
+    where
+        'a: 'scope,
+        ScopeImpl: 'scope,
         ReceiverType: 'scope,
     {
-        self.sender.connect(scope, stop_token, Wrap::from(rcv))
+        let stop_token = self.stop_source.token();
+        self.sender
+            .connect(scope, stop_token, Wrap::new(self.stop_source, rcv))
     }
 }
 
@@ -233,17 +233,19 @@ where
     Value: Tuple,
 {
     phantom: PhantomData<fn(Value)>,
+    stop_source: StopSource,
     rcv: Rcv,
 }
 
-impl<Rcv, Value> From<Rcv> for Wrap<Rcv, Value>
+impl<Rcv, Value> Wrap<Rcv, Value>
 where
     Rcv: NoSchedulerReceiver<Value>,
     Value: Tuple,
 {
-    fn from(rcv: Rcv) -> Self {
+    fn new(stop_source: StopSource, rcv: Rcv) -> Self {
         Self {
             phantom: PhantomData,
+            stop_source,
             rcv,
         }
     }
@@ -255,10 +257,12 @@ where
     Value: Tuple,
 {
     fn set_error(mut self, error: Error) {
+        self.stop_source.request_stop();
         self.rcv.set_error(error)
     }
 
     fn set_done(mut self) {
+        self.stop_source.request_stop();
         self.rcv.set_done()
     }
 }
@@ -308,15 +312,13 @@ where
     type Value = <(X::Value, Y::Value) as TupleCat>::Output;
 }
 
-impl<'a, ScopeImpl, StopTokenImpl, ReceiverType, X, Y>
-    NoSchedulerSender<'a, ScopeImpl, StopTokenImpl, ReceiverType> for PairwiseTS<X, Y>
+impl<'a, ScopeImpl, ReceiverType, X, Y> NoSchedulerSender<'a, ScopeImpl, ReceiverType>
+    for PairwiseTS<X, Y>
 where
-    StopTokenImpl: StopToken,
     X: NoSchedulerSenderValue
         + NoSchedulerSender<
             'a,
             ScopeImpl,
-            StopTokenImpl,
             XSplitReceiver<
                 ReceiverType,
                 <X as NoSchedulerSenderValue>::Value,
@@ -327,7 +329,6 @@ where
         + NoSchedulerSender<
             'a,
             ScopeImpl,
-            StopTokenImpl,
             YSplitReceiver<
                 ReceiverType,
                 <X as NoSchedulerSenderValue>::Value,
@@ -348,26 +349,17 @@ where
     where
         'a: 'scope,
         ScopeImpl: 'scope,
-        StopTokenImpl: 'scope,
         ReceiverType: 'scope;
 
-    fn connect<'scope>(
-        self,
-        scope: &ScopeImpl,
-        stop_token: StopTokenImpl,
-        rcv: ReceiverType,
-    ) -> Self::Output<'scope>
+    fn connect<'scope>(self, scope: &ScopeImpl, rcv: ReceiverType) -> Self::Output<'scope>
     where
         'a: 'scope,
         ScopeImpl: 'scope,
-        StopTokenImpl: 'scope,
         ReceiverType: 'scope,
     {
         let rcv = Arc::new(Mutex::new(SplitReceiver::from(rcv)));
-        let x_opstate =
-            self.x
-                .connect(scope, stop_token.clone(), XSplitReceiver::from(rcv.clone()));
-        let y_opstate = self.y.connect(scope, stop_token, YSplitReceiver::from(rcv));
+        let x_opstate = self.x.connect(scope, XSplitReceiver::from(rcv.clone()));
+        let y_opstate = self.y.connect(scope, YSplitReceiver::from(rcv));
         WhenAllOperationState::new(x_opstate, y_opstate)
     }
 }
@@ -586,6 +578,7 @@ where
     Sender: NoSchedulerSenderValue,
 {
     sch: Sch,
+    stop_source: StopSource,
     sender: Sender,
 }
 
@@ -594,8 +587,12 @@ where
     Sch: Scheduler,
     Sender: NoSchedulerSenderValue,
 {
-    fn new(sch: Sch, sender: Sender) -> Self {
-        Self { sch, sender }
+    fn new(sch: Sch, stop_source: StopSource, sender: Sender) -> Self {
+        Self {
+            sch,
+            stop_source,
+            sender,
+        }
     }
 }
 
@@ -619,7 +616,7 @@ where
         WrapValue<<Sender as NoSchedulerSenderValue>::Value, Rcv>,
     >,
     Sender: NoSchedulerSenderValue
-        + NoSchedulerSender<'a, ScopeImpl, StopTokenImpl, SchedulerReceiver<ScopeImpl, Sch, Rcv>>,
+        + NoSchedulerSender<'a, ScopeImpl, SchedulerReceiver<ScopeImpl, Sch, Rcv>>,
     ScopeImpl: Clone,
     StopTokenImpl: StopToken,
     Rcv: ReceiverOf<Sch::LocalScheduler, Sender::Value>,
@@ -643,8 +640,16 @@ where
         StopTokenImpl: 'scope,
         Rcv: 'scope,
     {
+        if StopTokenImpl::STOP_POSSIBLE {
+            let stop_source = self.stop_source;
+            if let Err(f) = stop_token.detached_callback(move || stop_source.request_stop()) {
+                // Already canceled, so just cancel the stop_source now.
+                f();
+            }
+        }
+
         let rcv = SchedulerReceiver::new(scope.clone(), self.sch, rcv);
-        self.sender.connect(scope, stop_token, rcv)
+        self.sender.connect(scope, rcv)
     }
 }
 
@@ -809,35 +814,53 @@ mod tests {
     use crate::just_done::JustDone;
     use crate::just_error::JustError;
     use crate::scheduler::ImmediateScheduler;
+    use crate::stop_token::StopSource;
     use crate::sync_wait::{SyncWait, SyncWaitSend};
     use threadpool::ThreadPool;
 
     #[test]
     fn it_works() {
-        let sender = NoSchedulerSenderImpl::from(Just::from((1, 2)))
-            .cat(NoSchedulerSenderImpl::from(Just::from((3, 4))))
-            .schedule(ImmediateScheduler);
+        let stop_source = StopSource::default();
+        let sender = NoSchedulerSenderImpl::new(stop_source.clone(), Just::from((1, 2)))
+            .cat(NoSchedulerSenderImpl::new(
+                stop_source.clone(),
+                Just::from((3, 4)),
+            ))
+            .schedule(stop_source, ImmediateScheduler);
         assert_eq!((1, 2, 3, 4), sender.sync_wait().unwrap().unwrap());
     }
 
     #[test]
     fn it_works_with_threadpool() {
+        let stop_source = StopSource::default();
         let pool = ThreadPool::with_name("it_works_with_threadpool".into(), 2);
-        let sender = NoSchedulerSenderImpl::from(Just::from((1, 2)))
-            .cat(NoSchedulerSenderImpl::from(Just::from((3, 4))))
-            .schedule(pool);
+        let sender = NoSchedulerSenderImpl::new(stop_source.clone(), Just::from((1, 2)))
+            .cat(NoSchedulerSenderImpl::new(
+                stop_source.clone(),
+                Just::from((3, 4)),
+            ))
+            .schedule(stop_source, pool);
         assert_eq!((1, 2, 3, 4), sender.sync_wait_send().unwrap().unwrap());
     }
 
     #[test]
     fn errors_are_propagated() {
-        match NoSchedulerSenderImpl::from(JustError::<ImmediateScheduler, (i32, i32)>::from(
-            new_error(ErrorForTesting::from("error")),
+        let stop_source = StopSource::default();
+
+        let outcome = NoSchedulerSenderImpl::new(
+            stop_source.clone(),
+            JustError::<ImmediateScheduler, (i32, i32)>::from(new_error(ErrorForTesting::from(
+                "error",
+            ))),
+        )
+        .cat(NoSchedulerSenderImpl::new(
+            stop_source.clone(),
+            Just::from((3, 4)),
         ))
-        .cat(NoSchedulerSenderImpl::from(Just::from((3, 4))))
-        .schedule(ImmediateScheduler)
-        .sync_wait()
-        {
+        .schedule(stop_source, ImmediateScheduler)
+        .sync_wait();
+
+        match outcome {
             Ok(_) => panic!("expected an error"),
             Err(e) => {
                 assert_eq!(
@@ -850,11 +873,20 @@ mod tests {
 
     #[test]
     fn done_is_propagated() {
-        match NoSchedulerSenderImpl::from(JustDone::<ImmediateScheduler, (i32, i32)>::new())
-            .cat(NoSchedulerSenderImpl::from(Just::from((3, 4))))
-            .schedule(ImmediateScheduler)
-            .sync_wait()
-        {
+        let stop_source = StopSource::default();
+
+        let outcome = NoSchedulerSenderImpl::new(
+            stop_source.clone(),
+            JustDone::<ImmediateScheduler, (i32, i32)>::new(),
+        )
+        .cat(NoSchedulerSenderImpl::new(
+            stop_source.clone(),
+            Just::from((3, 4)),
+        ))
+        .schedule(stop_source, ImmediateScheduler)
+        .sync_wait();
+
+        match outcome {
             Ok(None) => {}
             _ => {
                 panic!("expected cancelation");
@@ -864,16 +896,22 @@ mod tests {
 
     #[test]
     fn errors_are_propagated_even_when_done_signal_is_present() {
-        match NoSchedulerSenderImpl::from(JustDone::<ImmediateScheduler, (i32, i32)>::new())
-            .cat(NoSchedulerSenderImpl::from(JustError::<
-                ImmediateScheduler,
-                (i32, i32),
-            >::from(new_error(
-                ErrorForTesting::from("error"),
-            ))))
-            .schedule(ImmediateScheduler)
-            .sync_wait()
-        {
+        let stop_source = StopSource::default();
+
+        let outcome = NoSchedulerSenderImpl::new(
+            stop_source.clone(),
+            JustDone::<ImmediateScheduler, (i32, i32)>::new(),
+        )
+        .cat(NoSchedulerSenderImpl::new(
+            stop_source.clone(),
+            JustError::<ImmediateScheduler, (i32, i32)>::from(new_error(ErrorForTesting::from(
+                "error",
+            ))),
+        ))
+        .schedule(stop_source, ImmediateScheduler)
+        .sync_wait();
+
+        match outcome {
             Ok(_) => panic!("expected an error"),
             Err(e) => {
                 assert_eq!(

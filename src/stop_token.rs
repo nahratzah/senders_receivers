@@ -48,24 +48,40 @@ pub trait StopToken: Send + Clone {
 
     /// Indicate if a stop has been requested.
     fn stop_requested(&self) -> bool;
-}
 
-/// This trait allows us to wrap callback functions for the [StopToken].
-///
-/// A callback is invoked when the [StopToken] transitions from not-stopped, to stopped.
-pub trait StopTokenCallback<F>: StopToken
-where
-    F: 'static + FnOnce(),
-{
     /// Callback type, that holds on to the callback function.
     ///
     /// A callback wraps a function that is invoked when the stop-token is marked as stopped.
     /// Dropping the callback will deregister it, but if a cancelation is requested on a different thread,
     /// the callback invocation may happen anyway.
-    type CallbackType;
+    type CallbackType: StopCallback;
 
     /// Create and register a new callback.
     ///
     /// If the stop-token has already completed, an error will be returned.
-    fn callback(&self, f: F) -> Result<Self::CallbackType, F>;
+    fn callback<F>(&self, f: F) -> Result<Self::CallbackType, F>
+    where
+        F: 'static + Send + FnOnce();
+
+    /// Create and register a new callback.
+    ///
+    /// Contrary to [StopToken::callback], this callback won't be detached ever.
+    fn detached_callback<F>(&self, f: F) -> Result<(), F>
+    where
+        F: 'static + Send + FnOnce(),
+    {
+        self.callback(f).map(|mut cb| cb.detach())
+    }
+}
+
+/// Callback implementation.
+///
+/// This holds on to the callback function, and deregisters it when this [StopCallback] goes out of scope (unless you call [StopCallback::detach].
+///
+/// Callbacks implement [Default], which creates a callback without an associated function.
+pub trait StopCallback: Send + Default {
+    /// Detach the callback function.
+    ///
+    /// This function detaches this [StopCallback] from the function, leaving it registered.
+    fn detach(&mut self);
 }
